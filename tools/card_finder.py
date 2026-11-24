@@ -13,6 +13,14 @@ no per-page code; it reads everything from the markup rendered here:
     data-finder-text      selector for the parts of a card that are searched
     data-finder-skip      on anything inside a card that must not be searched
     data-finder-noun(s)   words for the status line ("Showing 3 of 40 decks.")
+    data-finder-query     on a filter button: what it puts in the search field
+    data-finder-filter    selector for the part of a card a button filters on;
+                          while the field holds exactly a button's query, only
+                          that part is matched, as a whole word
+    data-finder-synonyms  "word=term" pairs: typing the word also finds the term
+
+Filter buttons sit inside the search bar, so like the field they stay hidden
+for a reader without scripts, who could not use them.
 
 Every visible word in the box sits in a link or a `no-glossary` span, so
 tools/crosslink_pages.py never links a glossary term inside it; each tool's
@@ -25,6 +33,7 @@ from __future__ import annotations
 
 import html as htmllib
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 
@@ -84,23 +93,53 @@ def render_finder(
     nouns: str,
     text_selector: str,
     min_group: int = 3,
+    filters: Sequence[str] = (),
+    filter_label: str = "",
+    synonyms: Mapping[str, str] | None = None,
+    filter_selector: str = "",
 ) -> list[str]:
     """The finder's lines, before indentation.
+
+    `filters` become buttons under the field, in the order given, each
+    putting its own text in the field; `filter_label` names the row.
+    `filter_selector` names the part of a card the buttons filter on, so a
+    pressed "Crypto" finds the cards tagged Crypto and not a card whose
+    summary says "cryptographically".
+    `synonyms` maps a folded word a reader might type to the folded term it
+    should also find.
 
     The index is a <div> with the navigation role rather than a <nav>:
     style.css styles bare `nav ul` and `nav a` for the site header, and those
     rules would lay the index out as a header menu. Being a <div>, it is not a
     cross-linker skip zone either, which is why the labels carry
     `no-glossary`."""
+    syn_attr = ""
+    if synonyms:
+        pairs = " ".join(f"{w}={t}" for w, t in sorted(synonyms.items()))
+        syn_attr = f' data-finder-synonyms="{_attr(pairs)}"'
+    if filter_selector:
+        syn_attr = f' data-finder-filter="{_attr(filter_selector)}"' + syn_attr
     lines = [
         f'<div class="card-finder" data-finder-text="{_attr(text_selector)}"'
-        f' data-finder-noun="{_attr(noun)}" data-finder-nouns="{_attr(nouns)}">',
+        f' data-finder-noun="{_attr(noun)}" data-finder-nouns="{_attr(nouns)}"{syn_attr}>',
         '    <div class="card-finder-filter is-hidden" role="search">',
         f'        <label for="{input_id}" class="visually-hidden"><span class="no-glossary">{_text(label)}</span></label>',
         '        <div class="search-wrapper">',
         f'            <input type="text" class="card-finder-input" id="{input_id}" placeholder="{_attr(placeholder)}"'
         ' autocomplete="off" spellcheck="false">',
         "        </div>",
+    ]
+    if filters:
+        label_id = f"{id_prefix}-filter-label"
+        lines += [
+            f'        <div class="card-finder-buttons" role="group" aria-labelledby="{label_id}">',
+            f'            <span class="card-finder-buttons-label" id="{label_id}"><span class="no-glossary">'
+            f"{_text(filter_label)}</span></span>",
+            *[f'            <button type="button" class="filter-btn card-finder-btn" data-finder-query="{_attr(f)}"'
+              f' aria-pressed="false"><span class="no-glossary">{_text(f)}</span></button>' for f in filters],
+            "        </div>",
+        ]
+    lines += [
         '        <p class="card-finder-status"><span class="card-finder-count" role="status"></span>'
         ' <button class="clear-search-btn card-finder-clear is-hidden" type="button">Clear the search</button></p>',
         "    </div>",

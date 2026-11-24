@@ -15,8 +15,9 @@ page's two marker comments:
 Each card takes its title, promise and as-of date from the deck's outline,
 its slide count from the outline plus the slides the renderer generates (the
 cover, "how to use this deck" and the closing), its presentation id from the
-mapping, and its incident year and platform from the deck's card on
-breach-timeline.html. Cards follow the timeline's order, newest incident
+mapping, and its incident year, platform and "Industries hit" line from the
+deck's card on breach-timeline.html. The finder offers a button for each
+industry the listed decks carry (tools/breach_industries.py). Cards follow the timeline's order, newest incident
 first, so the list reads like the hub it comes from. Above the cards sits a
 card finder (tools/card_finder.py, card-finder.js): a search field and an
 index of the decks by incident year, each entry linking its card. The slide
@@ -66,6 +67,7 @@ from build_breach_decks import (  # noqa: E402
     PRES_ID_RE,
     parse_outline_text,
 )
+from breach_industries import INDUSTRIES, read_line, render_line, synonym_map  # noqa: E402
 from card_finder import Entry, render_finder  # noqa: E402
 from card_finder import splice as splice_region  # noqa: E402
 
@@ -97,12 +99,15 @@ class Deck:
     pres_id: str
     year: str
     provider: str
+    industries: tuple[str, ...] = ()
 
 
-def timeline_order(timeline_html: str) -> dict[str, tuple[int, str, str]]:
-    """slug -> (position, incident year, platform), in the order the hub
-    lists them. The platform is the card's plain text, unescaped."""
-    order: dict[str, tuple[int, str, str]] = {}
+def timeline_order(timeline_html: str) -> dict[str, tuple[int, str, str, tuple[str, ...]]]:
+    """slug -> (position, incident year, platform, industries), in the order
+    the hub lists them. The platform is the card's plain text, unescaped. The
+    industries are whatever the card's line names that the vocabulary knows;
+    a wrong line is sync_breach_timeline_index.py's to report."""
+    order: dict[str, tuple[int, str, str, tuple[str, ...]]] = {}
     for m in TIMELINE_CARD_RE.finditer(timeline_html):
         card = m.group(1)
         href = CARD_HREF_RE.search(card)
@@ -110,7 +115,8 @@ def timeline_order(timeline_html: str) -> dict[str, tuple[int, str, str]]:
         prov = CARD_PROV_RE.search(card)
         provider = " ".join(htmllib.unescape(re.sub(r"<[^>]+>", "", prov.group(1))).split()) if prov else ""
         if href and href.group(1) not in order:
-            order[href.group(1)] = (len(order), year.group(1) if year else "", provider)
+            order[href.group(1)] = (len(order), year.group(1) if year else "", provider,
+                                    tuple(read_line(card)[0]))
     return order
 
 
@@ -161,7 +167,7 @@ def collect(root: Path) -> tuple[list[Deck], list[str], int]:
         if slug not in order:
             findings.append(f"{slug}: no card links {page} on {TIMELINE}, so the deck has no place in the list")
             continue
-        position, year, provider = order[slug]
+        position, year, provider, industries = order[slug]
         placed.append((position, Deck(
             slug=slug,
             title=deck.title,
@@ -171,6 +177,7 @@ def collect(root: Path) -> tuple[list[Deck], list[str], int]:
             pres_id=pres_id,
             year=year,
             provider=provider,
+            industries=industries,
         )))
     placed.sort(key=lambda p: p[0])
     decks = [d for _, d in placed]
@@ -197,6 +204,7 @@ def render_card(d: Deck) -> list[str]:
         f'<div class="resource-card resource-card--deck" id="deck-{d.slug}" data-icon="📑">',
         f"    <h3>{_text(d.title)}</h3>",
         f'    <p><span class="no-glossary">{_text(d.promise)}</span></p>',
+        *(["    " + render_line(d.industries)] if d.industries else []),
         '    <div class="resource-tags">',
         *[f'        <span class="tag no-glossary"{"" if searched else " data-finder-skip"}>{_text(t)}</span>'
           for t, searched in tags],
@@ -216,17 +224,22 @@ def render_card(d: Deck) -> list[str]:
 
 
 def render_index(decks: list[Deck]) -> list[str]:
-    """The card finder: a search field and the decks by incident year."""
+    """The card finder: a search field, a button per industry the listed
+    decks carry, and the decks by incident year."""
     return render_finder(
         [Entry(f"deck-{d.slug}", d.title, d.year) for d in decks],
         input_id="deckSearch",
         id_prefix="deck-index",
         label="Search the decks",
-        placeholder="Search by company, actor or platform",
+        placeholder="Search by company, actor, platform or industry",
         index_label="Deck index",
         noun="deck",
         nouns="decks",
         text_selector="h3, p, .tag",
+        filters=sorted({x for d in decks for x in d.industries}),
+        filter_label="Industries",
+        filter_selector=".industries-hit",
+        synonyms=synonym_map(),
     )
 
 
@@ -306,15 +319,17 @@ PAGE_SKELETON = f"""<main>
 """
 
 
-def _fixture(tmp: Path, mapping: dict, timeline: list[tuple[str, str]], titles: dict[str, str] | None = None) -> Path:
+def _fixture(tmp: Path, mapping: dict, timeline: list[tuple], titles: dict[str, str] | None = None) -> Path:
+    """`timeline` entries are (slug, year) or (slug, year, industries)."""
     root = tmp / "root"
     (root / DECKS_DIR).mkdir(parents=True)
     (root / "breaches").mkdir()
     (root / DECKS_DIR / "published.json").write_text(json.dumps(mapping), encoding="utf-8")
     cards = "".join(
-        f'<li class="breach-card" id="{s}"><a class="breach-card-link" href="breaches/{s}.html">'
-        f'<span class="inc-year">{y}</span><span class="prov-tag prov-aws">AWS &amp; {s} · Cloud</span></a></li>\n'
-        for s, y in timeline
+        f'<li class="breach-card" id="{t[0]}"><a class="breach-card-link" href="breaches/{t[0]}.html">'
+        f'<span class="inc-year">{t[1]}</span><span class="prov-tag prov-aws">AWS &amp; {t[0]} · Cloud</span>'
+        f'{render_line(t[2]) if len(t) > 2 else ""}</a></li>\n'
+        for t in timeline
     )
     (root / TIMELINE).write_text(f"<ol>\n{cards}</ol>\n", encoding="utf-8")
     for slug in mapping:
@@ -426,7 +441,31 @@ def self_test() -> int:
         order = timeline_order('<li data-x="1" class="breach-card" id="q"><a href="breaches/q.html">'
                                '<span class="inc-year">2023</span>'
                                '<span data-y="2" class="prov-tag prov-gcp">GCP</span></a></li>')
-        expect(order == {"q": (0, "2023", "GCP")}, "timeline cards with other attributes are still read")
+        expect(order == {"q": (0, "2023", "GCP", ())}, "timeline cards with other attributes are still read")
+
+        # Industries come from the timeline cards. bbb carries Finance and
+        # Retail; aaa carries none; zzz carries Legal but has no deck.
+        root = _fixture(tmp / "10", {"aaa": {"id": ID_A}, "bbb": {"id": ID_B}},
+                        [("bbb", "2026", ["Retail", "Finance"]), ("zzz", "2025", ["Legal"]), ("aaa", "2024")])
+        expect(sync(root, check=False) == 0, "decks whose chains carry industries rewrite cleanly")
+        page = (root / PAGE).read_text(encoding="utf-8")
+        card_b = page[page.index('id="deck-bbb"'):page.index('id="deck-aaa"')]
+        card_a = page[page.index('id="deck-aaa"'):]
+        line = render_line(["Finance", "Retail"])
+        expect(line in card_b and card_b.index('<p><span class="no-glossary">What')
+               < card_b.index(line) < card_b.index('<div class="resource-tags">'),
+               "a deck card carries its chain's industries line, after the promise and before the tags")
+        expect("industries-hit" not in card_a[:card_a.index("</iframe>")],
+               "a deck whose chain has no line gets none")
+        expect(re.findall(r'data-finder-query="([^"]+)"', page) == ["Finance", "Retail"],
+               "buttons cover the listed decks' industries only, alphabetical")
+        expect('placeholder="Search by company, actor, platform or industry"' in page,
+               "the placeholder names industries")
+        expect('data-finder-synonyms="' in page and "bank=finance" in page, "the synonym map is rendered")
+        expect('data-finder-filter=".industries-hit"' in page,
+               "a pressed industry matches only the cards' industries lines")
+        expect(sync(root, check=False) == 0 and (root / PAGE).read_text(encoding="utf-8") == page,
+               "a second run with industries changes nothing")
 
         # No decks: the region says so rather than rendering an empty grid.
         root = _fixture(tmp / "9", {}, [("aaa", "2026")])
@@ -443,9 +482,11 @@ def self_test() -> int:
         patterns = cl.build_term_regexes(keys)
         words = " ".join(keys)
         probe = Deck(slug="probe", title=words, promise=words, as_of=words,
-                     slides=99, pres_id=ID_A, year=words, provider=words)
+                     slides=99, pres_id=ID_A, year=words, provider=words, industries=tuple(INDUSTRIES))
         region = "\n".join(render_region([probe, probe], missing=1))
         expect("not listed yet" in region, "the probe region includes the 'still being written' note")
+        expect(region.count("data-finder-query=") == len(INDUSTRIES) and "industries-hit" in region,
+               "the probe region includes every industry's button and the industries lines")
         masked, placeholders = cl.mask_skip_zones(region)
         linked, linked_words = cl.link_text_segments(masked, patterns, keys_to_slug, "")
         expect(not linked_words, "no glossary key is linked inside the generated list")

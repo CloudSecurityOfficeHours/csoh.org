@@ -214,7 +214,7 @@ csoh.org/
 ├── 403.html / 404.html              # Custom error pages (404.js powers "did you mean")
 │
 │  ── Per-breach pages and meeting recaps ──
-├── breaches/                        # 60 per-breach kill chain pages (split from breach-timeline.html)
+├── breaches/                        # 67 per-breach kill chain pages (split from breach-timeline.html)
 ├── meetings/                        # 122 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                       # 7 per-project portfolio walkthroughs
 ├── homelab/                         # 4 command-line home-lab walkthroughs (search-indexed as guide; not cross-linked)
@@ -232,8 +232,9 @@ csoh.org/
 ├── chat-resources.js                # Chat-resources page-specific JS
 ├── meetings.js                      # Meeting recaps filtering + speaker filter
 ├── glossary.js                      # Glossary page live search
-├── card-finder.js                   # Search field + index above the cards on the deck list
-│                                    #   and breach timeline pages (tools/card_finder.py)
+├── card-finder.js                   # Search field, filter buttons + index above the cards on
+│                                    #   the deck list and breach timeline pages
+│                                    #   (tools/card_finder.py, tools/check_card_finder_js.py)
 ├── breach-timeline.css              # Breach timeline page-specific styles
 ├── countdown.css / .js              # countdown.html page-specific assets
 ├── vendor/                          # Self-hosted third-party JS (MiniSearch, GoatCounter),
@@ -849,7 +850,10 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `tools/sync_calendar.py` | Renders the next twelve occurrences from the CSOH Google Calendar's public feed into the cards between the markers on `calendar.html`, scrubbing Zoom join links and dial-in details | Changing the calendar, the horizon, or the private-host list; otherwise **don't edit** -- runs every 6 hours in `update-calendar.yml` |
 | `tools/crosslink_glossary.py` | Adds `id="term-..."` to glossary `<dt>`s and hyperlinks every term mention in `<dd>`s | Run after adding/editing glossary entries |
 | `tools/crosslink_pages.py` | Hyperlinks first occurrence of each glossary term across all content pages | Run after adding/editing glossary entries (or after adding a new content page) |
-| `tools/sync_breach_timeline_index.py` | Renders the card finder (search field and kill chain index by year) between the `breach-index` markers on `breach-timeline.html`, from the page's own breach cards, through `tools/card_finder.py` | **Don't edit** the finder -- run after adding or renaming a timeline card; gated by `--check` in `validate-html.yml` |
+| `tools/sync_breach_timeline_index.py` | Renders the card finder (search field, industry buttons and kill chain index by year) between the `breach-index` markers on `breach-timeline.html`, from the page's own breach cards and their "Industries hit" lines, through `tools/card_finder.py` | **Don't edit** the finder -- run after adding or renaming a timeline card or editing its industries line; gated by `--check` in `validate-html.yml` |
+| `tools/breach_industries.py` | The industries a kill chain can be tagged with, their synonyms, and the exact markup of a card's "Industries hit" line, which both breach index tools read and validate | Edit to add an industry or synonym; its `--self-test` runs in `validate-html.yml` |
+| `tools/register_kill_chain.py` | Writes what follows from the timeline's card order (the timeline ItemList, every breach page's prev/next pager, a sitemap entry for each breach page) and checks that every page in `breaches/` is registered everywhere: card, ItemList, pager, sitemap, preview image, README row, breach-lessons entry and row, a year-in-review link (2021 on), and a published deck | Run `--fix` after adding or reordering a timeline card, then `--check`; gated by `--self-test` and `--check` in `validate-html.yml` |
+| `tools/check_card_finder_js.py` | Runs `card-finder.js` in a real browser on a fixture page built by the generators: buttons, synonyms, the skipped label, Escape | Run by hand (needs Playwright) after changing `card-finder.js` or what the generators render into the finder; not in CI |
 | `tools/sync_breach_deck_index.py` | Renders the search field, a year-grouped index and one card per published breach deck between the markers on `breach-kill-chain-decks.html`, from `tools/decks/breaches/published.json`, each deck's outline and the order of `breach-timeline.html` | **Don't edit** the list -- run after `build_breach_decks.py --record`; gated by `--check` in `validate-html.yml` |
 | `tools/sync_glossary_usage.py` | Writes the "Used on N pages" list under each glossary entry from the glossary links on every page | **Don't edit** the lists -- run after `crosslink_pages.py`, after adding or renaming an entry, or after changing a linking page's heading; gated by `--check` in `validate-html.yml` |
 | `glossary.html` | Cloud-security glossary (<!--count:glossary_terms-->331<!--/count--> terms) with live search and cross-linked definitions | Adding/editing terms; run `crosslink_glossary.py` *and* `crosslink_pages.py` after |

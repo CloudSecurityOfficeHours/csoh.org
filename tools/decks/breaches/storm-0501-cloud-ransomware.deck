@@ -1,0 +1,563 @@
+title: Storm-0501 Cloud-Based Ransomware in Azure
+page: breaches/storm-0501-cloud-ransomware.html
+as-of: 2026-11-23
+promise: Per Microsoft, Storm-0501 turned domain admin rights on premises into Owner of every Azure subscription, then copied, deleted and encrypted cloud data; how it first got in is not disclosed.
+
+== At a glance
+layout: stats
+stat: 2 | Entra Connect servers compromised | The second tied to a different tenant and AD domain
+stat: 1 | tenant with Defender for Endpoint deployed | And one compromised domain with significant coverage, per Microsoft
+stat: 2021 | Storm-0501 active since at least this year | Financially motivated, per Microsoft; MITRE ATT&CK G1053
+The intrusion is undated: Microsoft reported "a recent campaign" on August 27, 2025, with no data volume, ransom amount or dwell time.
+notes:
+Start with what the page leads with, and notice how little of it is a count.
+
+Microsoft Threat Intelligence described this intrusion on August 27, 2025, as "a recent campaign." It gives no date for the intrusion itself, so the deck has no timeline.
+
+The actor compromised two Entra Connect servers. The second was tied to a different Entra ID tenant and a different Active Directory domain. Entra Connect is the server that synchronizes on-premises Active Directory with Entra ID, Microsoft's cloud identity service. A tenant is a separate instance of that service; this victim's subsidiaries each kept their own.
+
+Only one of the victim's tenants had Defender for Endpoint deployed, and only one of the compromised domains had significant deployment, "leaving portions of the network unmonitored," per Microsoft.
+
+Microsoft calls Storm-0501 a financially motivated threat actor, active since at least 2021. MITRE ATT&CK tracks it as group G1053.
+
+Microsoft gives no data volume, ransom amount or dwell time. This is one vendor's account, and the slide after next sets out what it leaves out.
+
+== What happened
+layout: text
+Microsoft's account starts with Storm-0501 already domain admin in one victim AD domain.
+- Through Entra Connect Sync, it took a synced Global Administrator with no MFA.
+- As Owner of every subscription, it copied, deleted and encrypted data, then demanded ransom.
+notes:
+Here is the page's summary in brief.
+
+The victim, which Microsoft does not name, is "a large enterprise composed of multiple subsidiaries, each operating its own Active Directory domain." The subsidiaries kept separate Azure tenants with varying Microsoft Defender coverage.
+
+Microsoft's account starts after the actor already held domain administrator rights on premises, so how it got in is not disclosed. From there it moved through Entra Connect Sync servers into a second tenant, where a synced, non-human account held Global Administrator and had no MFA method registered. It reset that account's password on premises, let Password Hash Synchronization carry it to the cloud, registered its own MFA method, and signed in from a hybrid-joined server to satisfy Conditional Access.
+
+As Global Administrator it added a federated-domain backdoor and made itself Owner of every subscription. It copied storage data out with AzCopy, deleted backups and storage accounts, removed resource locks and immutability policies in its way, encrypted what immutability still protected with a key from a new Key Vault, deleted the key, and demanded ransom over Microsoft Teams.
+
+== What Microsoft describes, and what it does not say
+layout: compare
+col: What Microsoft describes | Domain admin on premises when its account begins | Two Entra Connect servers; a synced Global Administrator with no MFA | Owner of every subscription; data copied, deleted, encrypted; ransom demanded
+col: What Microsoft does not say | How the actor got in, or when | Data volume, ransom amount or dwell time | Whether the key was purged, the data recovered or the victim paid
+Dark Reading: "Microsoft did not say whether the victim paid."
+notes:
+Everything about the incident comes from one account, Microsoft Threat Intelligence's post of August 27, 2025. The page sorts what that account says from what it leaves out, and this slide does the same.
+
+Microsoft describes where the actor stood when its account begins, the two Entra Connect servers, the synced Global Administrator with no MFA, the climb to Owner of every subscription, and what the actor did to the data.
+
+It does not say how the actor got in or when. Its earlier reporting on Storm-0501, from 2024, covers other victims, and the 2025 post does not tie any of those entry routes to this one. It gives no data volume, ransom amount or dwell time, and it does not say whether the encryption key was purged, whether the data was recovered, or whether the victim paid. Dark Reading made the last point explicit.
+
+Microsoft also hedges inside the chain. It assesses that an unmonitored Entra Connect Sync server served as a pivot point, and it assesses that the actor used AzureHound to locate critical assets. Keep those words when you present the stages.
+
+== The kill chain, stages 01 to 05
+layout: flow
+step: 01 | Initial Access | Domain admin, route not disclosed | T1078.002
+step: 02 | Lateral Movement | Unmonitored hosts, DCSync | T1021.006
+step: 03 | Discovery | Tenant 1 mapped, sign-ins blocked | T1087.004
+step: 04 | Credential Access | A second Entra Connect | T1552.001
+step: 05 | Privilege Escalation | On-premises reset, cloud sign-in | T1098
+Arrows show the page's stage order. Microsoft gives no date for any step.
+notes:
+The page has ten stages, so the chain takes two slides. Each step shows its phase and one ATT&CK technique the page maps to it.
+
+Stage 01 is the starting position: domain administrator in one of the victim's domains, by a route Microsoft does not describe. Stage 02 is lateral movement on premises: checks for Defender, Evil-WinRM, a likely pivot through an Entra Connect Sync server that Defender did not cover, and DCSync. Stage 03 is discovery in the first tenant through the sync account and AzureHound, and the privileged sign-ins that Conditional Access blocked. Stage 04 is a second Entra Connect server, tied to a second tenant, where the actor extracted the sync account and found a synced Global Administrator with no MFA method. Stage 05 turns an on-premises password reset into a cloud sign-in as that Global Administrator.
+
+Read the arrows as the page's stage order, not as a timeline.
+
+== The kill chain, stages 06 to 10
+layout: flow
+step: 06 | Persistence | Federated domain backdoor | T1484.002
+step: 07 | Privilege Escalation | Owner of every subscription | T1098.003
+step: 08 | Exfiltration | Storage opened and copied | T1530
+step: 09 | Impact | Backups and locks deleted | T1490
+step: 10 | Impact | Encrypted, key deleted, ransom | T1486
+From stage 06 on, the actor works in Azure: as Global Administrator, then as Owner.
+notes:
+The second half runs in the cloud, as Global Administrator.
+
+Stage 06 is persistence: a tenant the actor owned, registered as a trusted federated domain. Stage 07 is elevate access, then Owner of every subscription. Stage 08 is exfiltration: storage accounts opened, their keys listed, and data copied out with AzCopy. Stage 09 deletes backups and storage, and removes the locks and immutability policies in the way. Stage 10 encrypts what immutability still protected, with a key from a new Key Vault, deletes the key, and demands ransom over Microsoft Teams.
+
+The page files stages 05 and 07 both under Privilege Escalation, and stages 09 and 10 both under Impact.
+
+The next slides take each stage in turn.
+
+== Already domain admin, by an undisclosed route
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1078.002 | Valid Accounts: Domain Accounts
+fact: Initial access | not disclosed by Microsoft
+fact: Starting position | domain administrator in the targeted domain
+fact: Date | not given; "a recent campaign"
+fact: EDR coverage | one tenant; significant in one compromised domain
+Microsoft: the fragmented Defender for Endpoint deployment "created visibility gaps across the environment."
+notes:
+Microsoft says it focused its analysis "on the post-compromise phase," and that at that point the actor "had already achieved domain administrator privileges in the targeted domain." Its overview diagram compresses everything before that into one box, with no method attached. The page maps only the position Microsoft describes, a valid domain administrator account: T1078.002, Valid Accounts: Domain Accounts.
+
+The intrusion carries no date. Microsoft calls it "a recent campaign" in a post published August 27, 2025. Its earlier reporting on Storm-0501 covers other victims, and the 2025 post does not tie any of those entry routes to this one, so do not fill the gap with them.
+
+The victim's monitoring was uneven from the start. Only one tenant had Defender for Endpoint deployed, with devices from several Active Directory domains onboarded under that tenant's license, and only one of the compromised domains had significant deployment, "leaving portions of the network unmonitored." Microsoft says this fragmented deployment created visibility gaps, and the next stage shows the actor checking for them.
+
+Microsoft's account gives nothing to detect at this stage, because it starts after this point.
+
+== Hosts Defender could not see
+layout: stage
+stage: 02
+phase: Lateral Movement
+technique: T1518.001 | Software Discovery: Security Software Discovery
+technique: T1021.006 | Remote Services: Windows Remote Management
+technique: T1003.006 | OS Credential Dumping: DCSync
+fact: Defender checks | sc query sense; sc query windefend
+fact: Movement | Evil-WinRM; a likely pivot through an unmonitored sync server
+fact: Credentials | DCSync; which hashes were taken is not stated
+Microsoft: the checks suggest "a deliberate effort to avoid detection."
+notes:
+On the few onboarded devices where Microsoft saw activity, the actor first ran sc query sense and sc query windefend, which ask for the Defender for Endpoint and Microsoft Defender Antivirus services. Microsoft reads this as "suggesting a deliberate effort to avoid detection by targeting non-onboarded systems." It also ran discovery with quser.exe and net.exe.
+
+It moved laterally with Evil-WinRM, a post-exploitation tool that uses PowerShell over Windows Remote Management. Earlier it had compromised an Entra Connect Sync server that was not onboarded to Defender for Endpoint. "We assess that this server served as a pivot point," Microsoft writes, with the actor tunneling through it, which the page tags T1572. Keep the word assess.
+
+Then DCSync, which uses directory replication to ask a domain controller for credential data. By impersonating a domain controller, Microsoft says, the actor could request password hashes for any user in the domain. Microsoft does not say which hashes were taken or whether any were used later.
+
+Defender for Endpoint's detections here include "Suspicious remote PowerShell execution", "Possibly malicious use of proxy or tunneling tool" and "Possible source of DCSync attack". The page maps the stage to T1518.001, T1021.006 and T1003.006.
+
+== Tenant 1 mapped, and Conditional Access holds
+layout: stage
+stage: 03
+phase: Discovery
+technique: T1087.004 | Account Discovery: Cloud Account
+technique: T1580 | Cloud Infrastructure Discovery
+fact: Identity | Directory Synchronization Account; how obtained: not stated
+fact: Tool | AzureHound: users, roles, Azure resources
+fact: Sign-ins | privileged users, blocked by Conditional Access and MFA
+fact: Detect | Defender for Cloud Apps "Suspicious use of AzureHound"
+The control that worked. Microsoft says this "suggests" valid credentials, but a second factor or policy condition unmet.
+notes:
+Entra Connect Sync works in Entra ID through its Directory Synchronization Account. The actor used that account, with AzureHound, "to enumerate users, roles, and Azure resources within the tenant." Microsoft does not say how the actor obtained the account's credential in this tenant.
+
+Then the actor "attempted to sign in as several privileged users." In Microsoft's words, these attempts were blocked by Conditional Access policies and MFA requirements. Its reading is hedged: this suggests that the actor had valid credentials but lacked the necessary second factor or was unable to satisfy policy conditions. Microsoft does not say where those credentials came from.
+
+This is the control in the chain that worked, and Microsoft's own diagram marks it. The actor's next moves were in a different domain and a different tenant.
+
+Microsoft's detections here: Defender for Cloud Apps "Suspicious sign-in to Microsoft Entra Connect Sync account" and "Suspicious use of AzureHound", and Defender for Resource Manager "AzureHound tool invocation detected". The page maps the stage to T1087.004 and T1580.
+
+== A second Entra Connect server
+layout: stage
+stage: 04
+phase: Credential Access
+technique: T1552.001 | Unsecured Credentials: Credentials In Files
+technique: T1087.004 | Account Discovery: Cloud Account
+fact: Second server | Entra Connect, for a different tenant and AD domain
+fact: Extracted | the Directory Synchronization Account; method not stated
+fact: Found | a synced, non-human Global Administrator with no MFA method
+fact: Detect | Defender: "Entra Connect Sync credentials extraction attempt"
+ASD-led guide: "Do not synchronise privileged user objects from AD DS to Microsoft Entra ID."
+notes:
+Microsoft says the actor "traversed between Active Directory domains" and compromised a second Entra Connect server, associated with a different Entra ID tenant and AD domain. It does not say how. The actor then extracted the Directory Synchronization Account to repeat its reconnaissance in the second tenant. Microsoft names no tool or method for the extraction. ATT&CK's entry for AADInternals files theft of Entra Connect credentials under Credentials In Files, and the page maps the stage to T1552.001.
+
+The reconnaissance found "a non-human synced identity" holding Global Administrator in Entra ID, and "this account lacked any registered MFA method." Microsoft does not say what the account was for.
+
+A synced account is managed from on-premises Active Directory. The guide from ASD's ACSC, CISA, NSA and partners spells out the consequence, and its rule is on the slide.
+
+Detections: Defender for Endpoint "Entra Connect Sync credentials extraction attempt" and "Potential Entra Connect Tampering", and the Defender Antivirus signature Behavior:Win32/DumpADConnectCreds.A!EntraConnect.
+
+The next slide draws how these pieces connect.
+
+== How on-premises AD reaches Entra ID
+layout: layers
+layer: On-premises AD | Manages the synced account | Actor: reset its password
+layer: Entra Connect Sync | Second server: Password Hash Synchronization | Both servers compromised
+layer: Sync account | Entra Connect's identity | Abused in each tenant
+layer: Entra ID | Synced Global Administrator | Non-human; no MFA registered
+ASD-led guide: compromising AD DS and reaching a privileged synced user object gives access to Entra ID.
+notes:
+This slide draws only the hybrid identity path the page describes, from the top layer down.
+
+On-premises Active Directory manages the synced account, password included, and the actor reset that account's password there; Microsoft places its domain admin rights in the first domain.
+
+Entra Connect Sync is the server that synchronizes on-premises Active Directory with Entra ID. The actor used both Entra Connect servers in this chain, and the first was not onboarded to Defender for Endpoint. The second ran Password Hash Synchronization, which Microsoft calls "the most common mode."
+
+Entra Connect works in Entra ID through its Directory Synchronization Account. The actor used it for reconnaissance in the first tenant, then extracted the second server's to repeat the process in the second tenant.
+
+At the bottom sits the account that mattered: a synced, non-human identity holding Global Administrator, with no MFA method registered.
+
+The guide from ASD's ACSC, CISA, NSA and partners says an attacker who compromises AD DS and reaches a privileged user object that synchronizes to Entra ID gains access to Entra ID. It also notes that Microsoft classifies Entra Connect servers as Tier 0 assets. The next stage shows the actor using that path.
+
+== An on-premises reset becomes a cloud sign-in
+layout: stage
+stage: 05
+phase: Privilege Escalation
+technique: T1098 | Account Manipulation
+technique: T1098.005 | Account Manipulation: Device Registration
+technique: T1078.004 | Valid Accounts: Cloud Accounts
+fact: Password reset | on premises; Password Hash Synchronization carried it
+fact: MFA | none registered, so the actor registered its own
+fact: Device condition | hybrid joined: met from a compromised server
+Microsoft describes the actor meeting the policies, not changing them.
+notes:
+The actor reset the synced Global Administrator's on-premises password, which Entra Connect Sync then "legitimately synced" to the cloud identity shortly afterwards. In Entra ID the change appears as made by the Directory Synchronization Account.
+
+Microsoft's 2024 post lists two routes for a synced account: reset its on-premises password and let sync carry it, or use a stolen sync account to set the cloud password with AADInternals. The 2025 post describes the first. The ASD-led guide warns that the sync account "could also be used to set the password for a user object with the Global Administrator role."
+
+The password alone was not enough. With no MFA method registered, the actor "was redirected to simply register a new MFA method under their control"; Microsoft does not say which type. Conditional Access also required a hybrid-joined device, so the actor moved between devices until Microsoft saw a successful Azure portal sign-in as Global Administrator from a hybrid-joined server. A signal from Microsoft's account: failed sign-ins that "did not meet the Conditional Access condition," before one succeeded.
+
+MITRE's group page maps this to Modify Authentication Process: Conditional Access Policies, which covers changing policies, so the page maps it to T1078.004 instead, with T1098 and T1098.005.
+
+Sync account activity off its pattern is a signal too: Microsoft says it "is typically repetitive."
+
+== Conditional Access stopped the actor in one tenant, not the next
+layout: compare
+col: Tenant 1: blocked | Sign-ins as several privileged users | Blocked by Conditional Access and MFA | Microsoft: "suggests" valid credentials, but a second factor or policy condition unmet
+col: Tenant 2: satisfied | The Global Administrator had no MFA method registered | The actor "was redirected to simply register a new MFA method" | A hybrid-joined device was required; a compromised server met it
+For admin roles, the page reads a device condition as a complement to phishing-resistant MFA, not a substitute for it.
+notes:
+Two tenants, the same actor, and two different outcomes at Conditional Access.
+
+In the first tenant, the actor tried to sign in as several privileged users and was blocked by Conditional Access policies and MFA requirements. Microsoft's reading is hedged: this suggests the actor had valid credentials but lacked the necessary second factor or was unable to satisfy policy conditions.
+
+In the second tenant, the Global Administrator had no MFA method registered, so the first sign-in with its password could enroll one, and the actor enrolled its own. A Conditional Access policy also required a hybrid-joined device, and the actor met it from a compromised hybrid-joined server after moving between devices. Microsoft describes the actor meeting the policies, not changing them.
+
+The page draws the lesson in its defenses: register phishing-resistant MFA on every privileged account before anyone else can. The hybrid-joined device condition here was met from a compromised server, so for admin roles the page reads a device condition as a complement to phishing-resistant MFA rather than a substitute for it.
+
+== A federated domain the attacker owns
+layout: stage
+stage: 06
+phase: Persistence
+technique: T1484.002 | Domain or Tenant Policy Modification: Trust Modification
+technique: T1606.002 | Forge Web Credentials: SAML Tokens
+fact: Via AADInternals | an attacker-owned tenant became a trusted federated domain
+fact: Capability | SAML tokens for "almost any user", by ImmutableId
+fact: Forged tokens | not tied to a later step by Microsoft
+Resetting the Global Admin's password would leave this trust in place.
+notes:
+With its Global Administrator rights, the actor used AADInternals "to register a threat actor-owned Entra ID tenant as a trusted federated domain." Microsoft says the backdoor let it craft SAML tokens and sign in "as almost any user, according to the ImmutableId user property." SAML, security assertion markup language, is the standard behind many federated sign-ins.
+
+Microsoft's table of observed activity lists crafting access tokens and acting against the cloud with them, but its narrative does not tie a forged token to a particular later step. Keep that distinction.
+
+Resetting that Global Administrator's password would leave the backdoor in place. Microsoft Incident Response's recovery playbook for Octo Tempest, a different actor that also plants federation backdoors, tells responders to "Change federation authentication from Federated to Managed" during eviction. The SolarWinds intruders also added trusted federated identity providers in Azure AD.
+
+Microsoft's hardening step is to set validatingDomains in federatedTokenValidationPolicy to 'all'. Detections: Defender for Cloud Apps "Backdoor creation using AADInternals tool" and Defender for Endpoint "Suspicious cmdlets launch using AADInternals". The page maps this to T1484.002 and T1606.002.
+
+The next slide explains trust modification in general terms.
+
+== What ATT&CK calls trust modification
+layout: background
+source: MITRE ATT&CK T1484.002 | https://attack.mitre.org/techniques/T1484/002/
+ATT&CK describes adversaries adding or changing trust relationships between domains and tenants. Adding a federated identity provider to an identity tenant may let an adversary authenticate as any user of that tenant.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK describes Trust Modification, T1484.002, as adversaries adding new domain trusts, modifying the properties of existing ones, or otherwise changing the configuration of trust relationships between domains and tenants, to evade defenses or elevate privileges. Trust details, such as whether user identities are federated, let authentication and authorization apply between domains or tenants so that they can share resources.
+
+In Microsoft Active Directory environments, ATT&CK says, an adversary can manipulate domain trusts to add its own signing certificate, and so forge SAML tokens without compromising the real signing certificate. An adversary may also convert an AD domain to a federated domain using Active Directory Federation Services and alter the claim issuance rules.
+
+In an identity tenant such as Okta or AWS IAM Identity Center, adding a new federated identity provider may let the adversary authenticate as any user of the tenant, and so reach the cloud services that rely on that tenant.
+
+== Global Admin to Owner of every subscription
+layout: stage
+stage: 07
+phase: Privilege Escalation
+technique: T1098.003 | Account Manipulation: Additional Cloud Roles
+technique: T1580 | Cloud Infrastructure Discovery
+fact: Elevate | elevateAccess: User Access Administrator, all subscriptions
+fact: Assign | roleAssignments/write: Owner on all subscriptions
+fact: Mapped (assessed) | Azure policies, resource locks, immutability policies
+fact: Detect | Defender "Suspicious elevate access operation"
+Here an Entra role became Azure Owner through two operations. In Storm-2949 the identities already held privileged Azure RBAC.
+notes:
+Entra ID roles do not grant access to Azure resources, Microsoft Learn explains, but a Global Administrator can elevate across that boundary. The actor invoked Microsoft.Authorization/elevateAccess/action and gained the User Access Administrator role "over all the organization's Azure subscriptions"; Microsoft Learn says elevation assigns that role "at root scope (/)". It then assigned itself Owner over all the subscriptions with Microsoft.Authorization/roleAssignments/write.
+
+Microsoft assesses that the actor then used AzureHound to locate the organization's critical assets, mapping Azure policies, resource locks and Azure Storage immutability policies: the protections the next stages ran into.
+
+Compare Storm-2949, another chain on the site, where the compromised identities already held privileged Azure RBAC. RBAC is role-based access control.
+
+Microsoft Learn records each elevation in the Entra directory audit logs, in preview, and in the Directory Activity view of the Azure activity log. Detections: Defender for Resource Manager "Suspicious elevate access operation" and "Suspicious Azure role assignment detected (Preview)", and Defender XDR "Possibly compromised user elevated access to Azure resources". The page maps this to T1098.003 and T1580.
+
+The next slide explains elevate access in general terms.
+
+== What elevate access does
+layout: background
+source: Microsoft Learn, elevate access to manage all Azure subscriptions | https://learn.microsoft.com/en-us/azure/role-based-access-control/elevate-access-global-admin
+Entra ID role assignments do not grant access to Azure resources. A Global Administrator can elevate: that assigns User Access Administrator at root scope (/), to assign access in any subscription or management group.
+notes:
+Background, from Microsoft Learn, in general terms.
+
+Microsoft Entra ID and Azure resources are secured independently. Entra role assignments do not grant access to Azure resources, and Azure role assignments do not grant access to Entra ID. So a Global Administrator might not have access to every subscription and management group in the tenant.
+
+A Global Administrator can assign themselves that access. Elevating assigns the User Access Administrator role in Azure at root scope, written as a slash, which allows viewing all resources and assigning access in any subscription or management group in the tenant. In the portal it is a per-user toggle, Access management for Azure resources, available only to Global Administrators; through the API it is a call to elevateAccess.
+
+Microsoft lists legitimate reasons: regaining access when a user has lost it, granting access, seeing all subscriptions, or letting an automation app reach them all. It says to remove elevated access once the root-scope changes are made.
+
+Elevation and its removal are logged in the Microsoft Entra directory audit logs, in preview, and in the Azure activity log under Directory Activity. Microsoft Sentinel has a rule template for it, Azure RBAC (Elevate Access).
+
+== Storage opened, keys listed, data copied
+layout: stage
+stage: 08
+phase: Exfiltration
+technique: T1686.001 | Disable or Modify System Firewall: Cloud Firewall
+technique: T1552 | Unsecured Credentials
+technique: T1530 | Data from Cloud Storage
+fact: Exposure | storageAccounts/write, opening accounts to the internet
+fact: Keys | listkeys, on accounts with key access enabled
+fact: Copy | AzCopy, to "their own infrastructure"; volume not given
+Microsoft does not say if AzCopy used the keys. A key needs no Entra ID sign-in.
+notes:
+Storm-0501 "exposed non-remotely accessible accounts to the internet and to their own infrastructure" with Microsoft.Storage/storageAccounts/write. Microsoft files this under defense evasion; in ATT&CK v19 a cloud firewall change sits under Defense Impairment, and the page maps it to T1686.001.
+
+For storage accounts with key access enabled, the actor used its Owner role to read the access keys through the listkeys action, and exfiltrated the data to its own infrastructure with the AzCopy command-line tool.
+
+Microsoft gives no data volume and does not say what kind of infrastructure received the data. So the page maps collection from cloud storage, T1530, and leaves the exfiltration technique open: Transfer Data to Cloud Account and Exfiltration to Cloud Storage would each fit one reading.
+
+Microsoft ties the AzCopy copy to the exposure step and does not say whether it used the stolen keys. An account key works without any Entra ID sign-in, which is why listkeys matters. In Storm-3168, Microsoft noted that the same key collection could enable future data access.
+
+Detections: Defender for Storage "Unusual amount of data extracted from a storage account", and its alert that a blob container's access level "was changed to allow unauthenticated public access".
+
+== Backups, storage, and the locks in the way
+layout: stage
+stage: 09
+phase: Impact
+technique: T1490 | Inhibit System Recovery
+technique: T1485 | Data Destruction
+technique: T1685 | Disable or Modify Tools
+fact: Deleted | snapshots, VM restore point collections, storage accounts
+fact: Also deleted | Recovery Services protection containers; no vaults named
+fact: In the way | resource locks; Azure Storage immutability policies
+fact: Then removed | "multiple" of each, with the Owner role
+Owner can delete locks and unlocked policies. Microsoft does not say whether any were locked.
+notes:
+The deletions covered recovery and data alike: snapshots, VM restore point collections, storage accounts, and Recovery Services protection containers. Microsoft names protection containers, not whole vaults. Across the Storm-0501 Azure campaigns it investigated, Microsoft says, this is "where they mainly focused, deleting as many Azure Storage account resources as possible."
+
+Some deletions failed "due to the existing protections": resource locks and Azure Storage immutability policies. The Owner role could remove them. The actor called Microsoft.Authorization/locks/delete and the immutability policy delete operation, succeeded for multiple locks and policies, and went on erasing resources in various Azure subscriptions.
+
+Microsoft does not say whether any of the policies were locked. Microsoft Learn draws the line that matters: an unlocked time-based retention policy can be deleted, and a locked one cannot. In Storm-3168, by contrast, attempts to remove recovery locks failed.
+
+Detections: Defender for Resource Manager "Suspicious backup resource deletion (Preview)" and Defender for Storage "Unusual deletion in a storage account". The page maps the stage to T1490, T1485 and T1685.
+
+== Encrypted with the actor's own Key Vault key, then the key deleted
+layout: stage
+stage: 10
+phase: Impact
+technique: T1486 | Data Encrypted for Impact
+technique: T1657 | Financial Theft
+fact: Created | a new Azure Key Vault and customer-managed key
+fact: Applied | encryption scopes, on data immutability still protected
+fact: Then | the key deleted; ransom demanded over Microsoft Teams
+fact: Not stated | if the key was purged, data recovered or ransom paid
+The deleted key stayed recoverable for 7 to 90 days, a window the actor set.
+notes:
+"For resources that remained protected by immutability policies, the actor resorted to cloud-based encryption." It created a new Azure Key Vault and a new customer-managed key, and applied it through storage encryption scopes. Encryption alone "wasn't sufficient, as the organization could still access the data," Microsoft notes, so the actor deleted the key.
+
+Microsoft adds, as a general point, that Key Vault keys used for encryption are protected by soft delete, "with a default period of 90 days," so a deleted key or vault can be retrieved. Microsoft Learn adds that a vault holding an encryption scope's customer-managed key must have purge protection enabled, so the key could not be purged before its retention period ended, and that the period is set when the vault is created, from 7 to 90 days.
+
+Microsoft does not say whether the key was purged or whether the data was recovered.
+
+The demand came last: the actor contacted the victim over Microsoft Teams, using one of the previously compromised users, demanding ransom. Microsoft gives no amount and does not say whether anyone paid.
+
+Detection: Defender for Key Vault "Unusual operation pattern in a key vault". The page maps this to T1486 and T1657.
+
+== Cloud-based ransomware: an Azure feature, not a binary
+layout: compare
+col: Storm-0501, Azure | Encryption was an Azure feature run at the actor's request | The key sat in a Key Vault the actor created | Soft delete and purge protection kept it recoverable for a time
+col: Codefinger, S3 | Used the same idea | Encrypting with keys AWS never stores
+The actor still used tools: Evil-WinRM and AzureHound on the way in, AADInternals once it held Global Administrator.
+notes:
+Microsoft's title calls this cloud-based ransomware, and its introduction says Storm-0501 runs such attacks "without relying on traditional malware deployment." Here the encryption was an Azure feature run at the actor's request, with no ransomware binary involved.
+
+The actor still used tools: Evil-WinRM and AzureHound on the way in, and AADInternals once it held Global Administrator.
+
+The page sets this beside Codefinger, another chain on the site, which used the same idea in S3, encrypting with keys AWS never stores. Here the key lived in Key Vault, where soft delete and the purge protection that encryption scopes require kept a deleted key recoverable until the retention period ran out. The actor created the vault, so the actor set that period, anywhere from 7 to 90 days.
+
+That makes the response a race against a clock the attacker set: find vaults created during the intrusion and recover their soft-deleted keys before the period ends. Microsoft does not say whether that happened here.
+
+== Identity: four defenses against stages 01 to 05
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05
+row: Run Entra Connect servers as Tier 0, with EDR | 01 | 02 | 04
+row: Keep Global Administrators in the cloud only | 04 | 05
+row: Register phishing-resistant MFA on every privileged account | 04 | 05
+row: Put the sync account behind Conditional Access | 03 | 04 | 05
+A cell is marked where the defense's own words name something from that stage. None of these four names a stage after 05.
+notes:
+The page gives nine defenses. This matrix sets the four that protect hybrid identity against the first five stages; the next slide covers the other five.
+
+Running Entra Connect as Tier 0 names the limited Defender for Endpoint deployment from stage 01, the unmonitored Entra Connect server and the users with DCSync permissions from stage 02, and the credential extraction on the second server at stage 04.
+
+Keeping Global Administrators in the cloud names the synced account found at stage 04 and the on-premises reset that became a cloud credential at stage 05.
+
+Registering MFA names the Global Administrator with no method from stage 04, and the enrollment and the device condition met from a compromised server at stage 05.
+
+Putting the sync account behind Conditional Access names the Directory Synchronization Account used at stage 03 and extracted at stage 04, the Defender for Cloud Apps alerts from stage 03, and the sync account activity that breaks its pattern from stage 05.
+
+Every column here has a mark.
+
+== Cloud and response: five defenses against stages 06 to 10
+layout: matrix
+columns: 06 | 07 | 08 | 09 | 10
+row: Limit the federated-domain backdoor | 06
+row: Alert on elevate access; remove it after use | 07
+row: Backup protection the Owner cannot remove | 09
+row: Watch for new Key Vaults and encryption scopes | 10
+row: Responding: start the eviction in the cloud | 06
+No defense on the page names stage 08. None of these five names a stage before 06.
+notes:
+These five defenses cover the cloud half of the chain.
+
+Limiting the federated-domain backdoor names stage 06. Alerting on elevate access names the elevateAccess call and the new Owner assignments of stage 07. Protecting backups from the Owner names the locks and immutability policies the actor deleted at stage 09. Watching for new Key Vaults and encryption scopes names stage 10's vault and its deleted key.
+
+The response defense, Microsoft Incident Response's playbook for hybrid identity compromise, names the federated domains of stage 06. The whole playbook, cloud and on-premises steps alike, is general practice for hybrid compromise; the page says it is not a record of what this victim did.
+
+Now look at the empty column. No defense on the page names stage 08: storage opened to the internet, access keys listed, data copied out with AzCopy. That gap is the second discussion question.
+
+== Entra Connect as Tier 0, and Global Administrators in the cloud
+layout: compare
+col: Entra Connect servers as Tier 0 | The first server was not onboarded to Defender for Endpoint | ASD-led guide: "the same security as Domain Controllers" | Microsoft: TPM, tamper protection, EDR in block mode | Find domains, tenants and servers with no EDR, Tier 0 first
+col: Global Administrators in the cloud only | Microsoft: "cloud-native accounts with no ties to on-premises Active Directory" | ASD-led guide: "Use separate privileged accounts for AD DS and Microsoft Entra ID." | Review synced accounts with Entra admin roles, non-human ones included
+notes:
+Two defenses for the identity layer.
+
+Run Entra Connect servers as Tier 0, with EDR. The actor used both Entra Connect servers in this chain, and the first was not onboarded to Defender for Endpoint. The guide from ASD's ACSC, CISA, NSA and partners says these servers "need to be afforded the same security as Domain Controllers," notes that Microsoft classifies them as Tier 0 assets, and adds single-purpose servers and administration only through jump servers and secure admin workstations. Microsoft recommends enabling TPM on the server to protect stored credentials against Storm-0501's extraction techniques, along with tamper protection and EDR in block mode, and using Exposure Management to mark the Entra Connect server, users with DCSync permissions and Global Administrators as critical assets. On the devices Microsoft could see, the actor checked for Defender before acting, so find the domains, tenants and servers with no EDR, starting with Tier 0.
+
+Keep Global Administrators in the cloud only. Microsoft says Global Administrator and other privileged accounts "should be cloud-native accounts with no ties to on-premises Active Directory," and the ASD-led guide agrees. In this chain a password reset on premises became a Global Administrator credential in the cloud. A review of synced accounts holding Entra admin roles, non-human ones included, finds accounts like this one first.
+
+== Register MFA before an attacker can, and fence in the sync account
+layout: compare
+col: Phishing-resistant MFA, registered first | With no method registered, the first sign-in could enroll one | Microsoft: privileged users need "an already registered MFA method" | Require phishing-resistant authentication strength for administrators
+col: Fence in the sync account | Conditional Access: block it from untrusted IP addresses | Move Entra Connect to application-based authentication | Connect Defender for Cloud Apps; hunt off-pattern activity
+notes:
+Two defenses for stages 03 to 05: one closes the MFA registration gap, the other fences in the sync account.
+
+Register phishing-resistant MFA on every privileged account before anyone else can. The Global Administrator had no method registered, so the first sign-in with its password could enroll one. Microsoft's advice is to "Ensure all existing privileged users have an already registered MFA method to protect against malicious MFA registrations," and to require phishing-resistant authentication strength for administrators. Microsoft also recommends Entra ID Protection with risk-based Conditional Access.
+
+Put the sync account behind Conditional Access. Microsoft recommends limiting the Directory Synchronization Accounts' access from untrusted IP addresses to all cloud apps, and, once Entra Connect uses application-based authentication, Conditional Access for workload identities. Application-based authentication arrived as a public preview in Entra Connect 2.5.3.0 on May 27, 2025, and Microsoft's version history requires Entra Connect Sync 2.6.84.0 or later with it by April 7, 2027. Microsoft has also restricted the role's permissions; Tenable dates that change to August 2024 and notes that "the role is still privileged," able among other things to reset passwords. Turn on the Defender for Cloud Apps connectors so the sync account alerts can fire, and hunt for sync account activity that leaves its usual pattern.
+
+== Limit the federation backdoor, and alert on elevate access
+layout: compare
+col: Federated-domain backdoor | Microsoft: set validatingDomains in federatedTokenValidationPolicy to 'all' | Blocks SAML sign-ins to non-federated domains such as .onmicrosoft.com | Where only Entra ID performs MFA: rejectMfaByFederatedIdp | The page: alert on any new federated domain or federation change
+col: Elevate access | One call gave an Entra role control of Azure role assignments at root scope | Microsoft Learn: remove it once root-scope changes are made | Logged under Directory Activity, easy to miss (the page's reading) | Alert on new Owner assignments at subscription scope
+notes:
+Two defenses for the control plane.
+
+Limit what a federated-domain backdoor can reach. Microsoft recommends setting the validatingDomains property of federatedTokenValidationPolicy to 'all', which blocks SAML sign-ins to non-federated domains such as .onmicrosoft.com; Microsoft Graph documents that Entra ID then rejects a federated token whose account's root domain does not match the mapped account. Where only Entra ID performs MFA for a federated domain, Microsoft also recommends setting federatedIdpMfaBehavior to rejectMfaByFederatedIdp. A Global Administrator can add a domain or change these settings, and adding a federated domain is rare, so the page suggests alerting on any new federated domain or change to federation settings, alongside Microsoft's "Backdoor creation using AADInternals tool" detection.
+
+Alert on elevate access, and remove it after use. Microsoft Learn says to remove elevated access once the root-scope changes are made, records each elevation in the Entra directory audit logs, in preview, and the Directory Activity view of the Azure activity log, and points to a Microsoft Sentinel rule template, "Azure RBAC (Elevate Access)". Because the entry sits under Directory Activity, the page reads it as easy to miss for a pipeline that collects only subscription activity logs. Pair it with Defender for Resource Manager's "Suspicious elevate access operation" and an alert on new Owner assignments at subscription scope.
+
+== Protect backups from the Owner, and recover deleted keys in time
+layout: compare
+col: Backups the Owner cannot remove | Owner deleted locks and immutability policies here | Microsoft Learn: "You can't delete a locked time-based retention policy" | Locked immutable vault can't be disabled; not for operational blob, file or disk backups | Locking is irreversible: test first
+col: New Key Vaults and encryption scopes | The actor's own vault: the victim's settings did not govern it | Purge protection required; the creator sets retention, 7 to 90 days | Find vaults created in the intrusion; recover keys before retention ends | The page: alert on vaults or scopes made outside the pipeline
+notes:
+Two defenses for recovery.
+
+Give backups a protection the subscription Owner cannot remove. Owner rights deleted resource locks and immutability policies here, so a lock or an unlocked policy guards against mistakes and gives way to an attacker holding Owner. Microsoft's post recommends immutable blob storage, Resource Manager locks, blob backup and Azure Backup for VMs, and does not discuss locked policies. Microsoft Learn does: "You can't delete a locked time-based retention policy," a container under a locked policy can be deleted only when it is empty, and the unlocked state is recommended only for short-term testing. An Azure Backup immutable vault set to "Enabled and locked" can't be disabled, though Microsoft Learn notes it "doesn't apply to operational backups for resources like blobs, files, and disks." Locking is irreversible in both cases, so test the retention settings first.
+
+Watch for new Key Vaults and encryption scopes. The key here sat in a vault the actor created, so the victim's own vault settings did not govern it. A responder should find vaults created during the intrusion and recover their soft-deleted keys before the retention period ends. The page adds an alert on new vaults or encryption scopes created outside the deployment pipeline. For vaults you own, Microsoft recommends purge protection with the default 90-day retention.
+
+== Check your own environment
+layout: checklist
+check: Is every Entra Connect server run as Tier 0, with EDR in block mode?
+check: Does any synced account, human or not, hold an Entra admin role?
+check: Does every privileged account already have a phishing-resistant method registered?
+check: Is your sync account limited by Conditional Access, with its alerts connected?
+check: Would a new federated domain, or an elevate access call, raise an alert?
+check: Could a subscription Owner delete the locks and policies guarding your backups?
+check: Would a new Key Vault or encryption scope outside your pipeline alert anyone?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether every Entra Connect server is treated as Tier 0, with EDR in block mode, and which domains, tenants and servers have no EDR at all. Ask whether any synced account, human or non-human, holds an Entra admin role.
+
+Ask whether every privileged account already has a phishing-resistant method registered, so no one else can enroll one first. Ask whether Conditional Access limits the sync account, and whether the Defender for Cloud Apps connectors are on so its alerts can fire.
+
+Ask whether a new federated domain, a change to federation settings, or an elevate access call would reach your alerts, including one logged only under Directory Activity.
+
+Ask whether a subscription Owner could delete the locks and immutability policies guarding your backups, which means asking whether any of them are locked. Finally, ask whether a Key Vault or encryption scope created outside your deployment pipeline would alert anyone.
+
+== You find the actor's federated domain. Where does eviction start?
+layout: question
+The actor holds a federated-domain backdoor, Owner on every subscription and domain admin on premises. Resetting the Global Administrator's password would leave the backdoor in place. In what order would you evict it?
+notes:
+Give the room a minute with this one.
+
+Remind the group what the actor holds by the end of the chain: domain administrator rights on premises, an Entra ID tenant of its own registered as a trusted federated domain, and Owner on every Azure subscription through elevate access.
+
+A federation trust does not depend on the account that created it, so resetting that Global Administrator's password would leave the backdoor in place.
+
+Microsoft did not publish this victim's recovery steps, so there is no record to compare against. Ask each person where they would start, and what they would do on premises and in the cloud, before you show the answer slide.
+
+== Microsoft's hybrid playbook starts the eviction in the cloud
+layout: answer
+General practice from Microsoft IR's Octo Tempest playbook, not this victim's record:
+- In the cloud: change federated domains back to managed authentication.
+- Revoke old admin accounts' permissions; create new ones.
+- Then reset KRBTGT and built-in Administrator passwords, twice each.
+notes:
+The page's answer is general practice, and it says so.
+
+Microsoft did not publish this victim's recovery steps. Microsoft Incident Response's playbook for hybrid identity compromise, written for Octo Tempest, begins "with the cloud eviction process": change federated domains back to managed authentication, revoke permissions from the old admin accounts and create new ones. Then, on premises, reset the KRBTGT and built-in Administrator passwords twice each, reset inter-domain trust and DSRM passwords, and finish with a mass password reset.
+
+That is general practice for hybrid compromise, not a record of what this victim did. Keep that framing when you present it.
+
+Bring the group's answers back to the order. The page's reason sits at stage 06: a federation trust does not depend on the account that created it, and Microsoft says the backdoor let the actor sign in as almost any user. One of the page's other defenses bears on eviction too: find any Key Vault created during the intrusion and recover its soft-deleted keys before the retention period ends.
+
+== What would you add for stage 08?
+layout: question
+No defense on the page names stage 08: storage accounts opened to the internet, access keys listed, data copied out with AzCopy. What would you add, and which reported detail would it catch?
+notes:
+This question comes from the empty column in the second defense matrix.
+
+At stage 08 the actor, holding Owner, exposed storage accounts that were not remotely accessible to the internet and to its own infrastructure. For accounts with key access enabled, it read the access keys through the listkeys action, and copied the data to its own infrastructure with AzCopy. Microsoft gives no data volume and does not say what kind of infrastructure received it, or whether the copy used the stolen keys.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught: the change to the storage account, the key listing, or the copy itself.
+
+== The page ties no defense to stage 08
+layout: answer
+Your proposals are your own. The page's stage 08 facts come near:
+- Defender for Storage alerts on unusual data extraction, and on a container opened to public access.
+- An account key works without any Entra ID sign-in.
+notes:
+Be clear that the page stops here. No defense on the page names stage 08, and this deck adds none of its own.
+
+The page's stage 08 facts give detections: Defender for Storage "Unusual amount of data extracted from a storage account", and its alert that a blob container's access level "was changed to allow unauthenticated public access".
+
+They also give the reason the key listing matters: an account key works without any Entra ID sign-in. In Storm-3168, Microsoft noted that the same key collection could enable future data access.
+
+The group may argue for a control on storage key access, or on who can open a storage account to the internet. That argument is the group's own: no defense on the page says it. Test each proposal against what the actor held at this point, which was Owner on every subscription.
+
+== Primary sources
+layout: links
+link: Microsoft, cloud-based ransomware (2025) | https://www.microsoft.com/en-us/security/blog/2025/08/27/storm-0501s-evolving-techniques-lead-to-cloud-based-ransomware/
+link: Microsoft, hybrid cloud attacks (2024) | https://www.microsoft.com/en-us/security/blog/2024/09/26/storm-0501-ransomware-attacks-expanding-to-hybrid-cloud-environments/
+link: ASD's ACSC, CISA, NSA and partners: AD compromises | https://www.cyber.gov.au/publication/detecting-and-mitigating-active-directory-compromises
+link: Microsoft IR, Octo Tempest recovery | https://techcommunity.microsoft.com/blog/microsoftsecurityexperts/octo-tempest-hybrid-identity-compromise-recovery/4166783
+link: Tenable, Entra ID synchronization | https://www.tenable.com/blog/despite-recent-security-hardening-entra-id-synchronization-feature-remains-open-for-abuse
+link: Microsoft Learn, immutable blob storage | https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview
+link: Microsoft Learn, Key Vault soft-delete | https://learn.microsoft.com/en-us/azure/key-vault/general/soft-delete-overview
+link: Dark Reading, Storm-0501 | https://www.darkreading.com/cloud-security/storm-0501-cloud-based-ransomware-attack
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Microsoft Threat Intelligence's 2025 post is the account of this intrusion; its 2024 post covers earlier Storm-0501 victims. The guide from ASD's ACSC, CISA, NSA and partners covers Entra Connect and synced privileged accounts, and Microsoft Incident Response's Octo Tempest playbook covers eviction. Tenable covers the sync account's role. The Microsoft Learn pages cover immutability policies and Key Vault soft delete. Dark Reading noted that Microsoft did not say whether the victim paid.
+
+The page also cites Microsoft Learn on elevate access, immutable vaults for Azure Backup, encryption scopes and the Entra Connect version history, Microsoft Graph on federatedTokenValidationPolicy, and MITRE ATT&CK's pages for Storm-0501, group G1053, and four of the chain's techniques. They are left off this slide for space.
+
+The background slides name their own sources, MITRE ATT&CK and Microsoft Learn.
+
+== Related kill chains
+layout: links
+link: Storm-2949 | breaches/storm-2949-entra-sspr.html
+link: Storm-3168 | breaches/storm-3168-jadepuffer-azure.html
+link: Codefinger | breaches/codefinger-s3.html
+link: SolarWinds | breaches/solarwinds.html
+The page sets each of these beside a stage of this chain.
+notes:
+The page links four other kill chains, each beside the stage it compares.
+
+At stage 07 it compares Storm-2949, where the compromised identities already held privileged Azure RBAC; here an Entra role became Azure Owner through two operations.
+
+At stages 08 and 09 it cites Storm-3168: Microsoft noted there that the same key collection could enable future data access, and there attempts to remove recovery locks failed.
+
+At stage 10 it compares Codefinger, which used the same idea in S3, encrypting with keys AWS never stores.
+
+At stage 06 it notes that the SolarWinds intruders also added trusted federated identity providers in Azure AD.
+
+The page's related defense topics are Azure security, IAM and cloud identity, non-human identity, backup and disaster recovery, detection engineering, and incident response.

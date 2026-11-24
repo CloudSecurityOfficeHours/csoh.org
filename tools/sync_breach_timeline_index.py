@@ -15,10 +15,18 @@ each entry linking its card's id.
 An entry's name is the card title up to its first " - ", the part before the
 chain of stages. Entries follow the cards' order, newest incident first.
 
+Each card may carry an "Industries hit" line (tools/breach_industries.py,
+which has the vocabulary and the line's exact markup). The finder offers one
+button per industry that at least one card carries, alphabetical, so no
+button finds nothing, and the synonym map that lets "bank" find Finance. A
+card with no line is reported as a note, not a finding: a chain whose page
+names no victim industry has none.
+
 A card that the index leaves out is one that searching cannot find, so
 `--check` (in validate-html.yml) fails when the finder is out of step with the
-cards, and also when a card has no id or no title, two cards share an id, or
-no cards can be read at all.
+cards (including its buttons), and also when a card has no id or no title,
+two cards share an id, a card's industries line names an unknown industry,
+repeats one, or is not in its exact form, or no cards can be read at all.
 
 The generated text sits in links and `no-glossary` spans, where
 tools/crosslink_pages.py does not link glossary terms, so a cross-linking run
@@ -37,13 +45,16 @@ from __future__ import annotations
 
 import argparse
 import html as htmllib
+import io
 import re
 import sys
 import tempfile
+from contextlib import redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from breach_industries import INDUSTRIES, read_line, render_line, synonym_map  # noqa: E402
 from card_finder import Entry, group_by_year, render_finder, splice  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -65,11 +76,14 @@ def plain(fragment: str) -> str:
     return " ".join(htmllib.unescape(re.sub(r"<[^>]+>", "", fragment)).split())
 
 
-def collect(page_html: str) -> tuple[list[Entry], list[str]]:
-    """One entry per card, in page order, and a finding for each card that
-    cannot be indexed."""
+def collect(page_html: str) -> tuple[list[Entry], list[str], list[str], list[str]]:
+    """One entry per card, in page order; a finding for each card that cannot
+    be indexed or whose industries line is wrong; every industry the cards
+    carry, alphabetical; and the ids of cards with no industries line."""
     entries: list[Entry] = []
     findings: list[str] = []
+    industries: set[str] = set()
+    untagged: list[str] = []
     seen: set[str] = set()
     for n, m in enumerate(CARD_RE.finditer(page_html), 1):
         attrs, body = m.group(1), m.group(2)
@@ -89,25 +103,35 @@ def collect(page_html: str) -> tuple[list[Entry], list[str]]:
         name = plain(title.group(1)).split(" - ", 1)[0].strip()
         year = YEAR_RE.search(body)
         entries.append(Entry(cid.group(1), name, year.group(1) if year else ""))
+        labels, line_findings = read_line(body)
+        findings += [f"{where}: {f}" for f in line_findings]
+        industries.update(labels)
+        if not labels and not line_findings:
+            untagged.append(cid.group(1))
     if not entries and not findings:
         # A parse that sees no cards would otherwise render an empty index
         # and pass.
         findings.append(f"{PAGE}: no breach cards found; the card markup changed")
-    return entries, findings
+    return entries, findings, sorted(industries), untagged
 
 
-def render_region(entries: list[Entry]) -> list[str]:
-    """The lines between the markers, before indentation."""
+def render_region(entries: list[Entry], industries: list[str]) -> list[str]:
+    """The lines between the markers, before indentation. `industries` are
+    the ones the cards carry, so no button finds nothing."""
     return render_finder(
         entries,
         input_id="breachSearch",
         id_prefix="breach-index",
         label="Search the kill chains",
-        placeholder="Search by company, actor or technique",
+        placeholder="Search by company, actor, technique or industry",
         index_label="Kill chain index",
         noun="kill chain",
         nouns="kill chains",
-        text_selector=".breach-card-meta, .breach-card-title, .breach-card-summary",
+        text_selector=".breach-card-meta, .breach-card-title, .breach-card-summary, .industries-hit",
+        filters=industries,
+        filter_label="Industries",
+        filter_selector=".industries-hit",
+        synonyms=synonym_map(),
     )
 
 
@@ -118,11 +142,14 @@ def sync(root: Path, check: bool) -> int:
     except OSError as e:
         print(f"FINDING: {e}")
         return 1
-    entries, findings = collect(raw)
+    entries, findings, industries, untagged = collect(raw)
     for f in findings:
         print(f"FINDING: {f}")
+    if untagged:
+        # Not a finding: a chain whose page names no victim industry has no line.
+        print(f"note: {len(untagged)} card(s) have no industries line: {', '.join(untagged)}")
     try:
-        new = splice(raw, START, END, render_region(entries), PAGE)
+        new = splice(raw, START, END, render_region(entries, industries), PAGE)
     except ValueError as e:
         print(f"FINDING: {e}")
         return 1
@@ -140,11 +167,15 @@ def sync(root: Path, check: bool) -> int:
 
 # --- self-test -------------------------------------------------------------
 
-def _card(cid: str | None, year: str, title: str) -> str:
+def _card(cid: str | None, year: str, title: str, industries: str | list[str] | None = None) -> str:
+    """A card as the timeline writes it. `industries` is a list for a
+    canonical line, or a string of raw markup for a planted bad one."""
     id_attr = f' id="{cid}"' if cid else ""
+    line = render_line(industries) + "\n" if isinstance(industries, list) else (industries or "")
     return (f'<li class="breach-card"{id_attr}>\n<a class="breach-card-link" href="breaches/{cid}.html">\n'
             f'<div class="breach-card-meta"><span class="inc-year">{year}</span></div>\n'
-            f'<h2 class="breach-card-title">{title}</h2>\n<p class="breach-card-summary">x</p>\n</a>\n</li>\n')
+            f'<h2 class="breach-card-title">{title}</h2>\n<p class="breach-card-summary">x</p>\n'
+            f'{line}</a>\n</li>\n')
 
 
 def _page(cards: str) -> str:
@@ -180,7 +211,8 @@ def self_test() -> int:
         expect('<a href="#new">A &amp; &lt;B&gt;</a>' in first, "the name stops at the first ' - ' and is escaped once")
         expect('<a href="#old">No Stages Here</a>' in first, "a title with no stages is used whole")
         expect('<div class="card-finder-filter is-hidden"' in first and 'id="breachSearch"' in first
-               and 'data-finder-text=".breach-card-meta, .breach-card-title, .breach-card-summary"' in first,
+               and 'data-finder-text=".breach-card-meta, .breach-card-title, .breach-card-summary, .industries-hit"'
+               in first,
                "the finder ships its field hidden and tells the script what to search")
 
         # Adding a card makes the index stale until the tool runs again.
@@ -203,9 +235,53 @@ def self_test() -> int:
         (root / PAGE).write_text("<main></main>\n", encoding="utf-8")
         expect(sync(root, check=False) == 1, "a page without the markers is a finding")
 
+    # Industries: read from each card's line, offered as buttons, and
+    # validated. Cards here: Finance on one, Crypto and Finance on another,
+    # none on a third.
+    with tempfile.TemporaryDirectory() as t:
+        root = Path(t)
+        cards = (_card("a", "2026", "A - S", ["Finance"]) + _card("b", "2026", "B - S", ["Crypto", "Finance"])
+                 + _card("c", "2025", "C - S"))
+        (root / PAGE).write_text(_page(cards), encoding="utf-8")
+        expect(sync(root, check=False) == 0, "cards with industries lines, and one without, rewrite cleanly")
+        page = (root / PAGE).read_text(encoding="utf-8")
+        queries = re.findall(r'data-finder-query="([^"]+)"', page)
+        expect(queries == ["Crypto", "Finance"], "one button per industry a card carries, alphabetical")
+        expect('data-finder-query="Legal"' not in page, "no button for an industry no card carries")
+        expect('data-finder-synonyms="' in page and "bank=finance" in page, "the synonym map is rendered")
+        expect('data-finder-filter=".industries-hit"' in page,
+               "a pressed industry matches only the cards' industries lines")
+        expect('placeholder="Search by company, actor, technique or industry"' in page,
+               "the placeholder names industries")
+        expect('data-finder-text=".breach-card-meta, .breach-card-title, .breach-card-summary, .industries-hit"'
+               in page, "the industries line is searched")
+        expect(sync(root, check=False) == 0 and (root / PAGE).read_text(encoding="utf-8") == page,
+               "a second run changes nothing")
+        (root / PAGE).write_text(page.replace(render_line(["Finance"]), render_line(["Finance", "Retail"])),
+                                 encoding="utf-8")
+        expect(sync(root, check=True) == 1, "a card that gains an industry fails --check until the tool runs")
+        sync(root, check=False)
+        expect(re.findall(r'data-finder-query="([^"]+)"', (root / PAGE).read_text(encoding="utf-8"))
+               == ["Crypto", "Finance", "Retail"], "a rewrite adds the new industry's button")
+
+        bad_name = render_line(["Finance"]).replace("Finance", "Fintech")
+        (root / PAGE).write_text(_page(_card("u", "2026", "U - S", bad_name)), encoding="utf-8")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = sync(root, check=False)
+        expect(code == 1 and "card 1 (u)" in out.getvalue() and '"Fintech" is not an industry' in out.getvalue(),
+               "an unknown industry is a finding that names the card")
+        unsorted = render_line(["Finance", "Retail"]).replace("Finance, Retail", "Retail, Finance")
+        (root / PAGE).write_text(_page(_card("o", "2026", "O - S", unsorted)), encoding="utf-8")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = sync(root, check=False)
+        expect(code == 1 and "card 1 (o)" in out.getvalue() and "should read" in out.getvalue(),
+               "an out-of-order line is a finding that names the card")
+
     # A card with other attributes, in another order, is still read.
-    entries, _ = collect('<li data-x="1" id="q" class="breach-card"><span class="inc-year">2023</span>'
-                         '<h2 data-y="2" class="breach-card-title">Q - S</h2></li>')
+    entries, _, _, _ = collect('<li data-x="1" id="q" class="breach-card"><span class="inc-year">2023</span>'
+                               '<h2 data-y="2" class="breach-card-title">Q - S</h2></li>')
     expect(entries == [Entry("q", "Q", "2023")], "cards with other attributes are still read")
 
     # Grouping (tools/card_finder.py), shared with the deck list page.
@@ -231,7 +307,9 @@ def self_test() -> int:
         keys_to_slug, keys = cl.load_glossary_terms()
         patterns = cl.build_term_regexes(keys)
         words = " ".join(keys)
-        region = "\n".join(render_region([Entry("p", words, words), Entry("q", words, "")]))
+        region = "\n".join(render_region([Entry("p", words, words), Entry("q", words, "")], list(INDUSTRIES)))
+        expect(region.count("data-finder-query=") == len(INDUSTRIES),
+               "the probe region includes a button for every industry")
         masked, _ = cl.mask_skip_zones(region)
         _, linked_words = cl.link_text_segments(masked, patterns, keys_to_slug, "")
         expect(not linked_words, "no glossary key is linked inside the generated finder")

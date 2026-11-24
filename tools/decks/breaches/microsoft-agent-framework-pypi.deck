@@ -1,0 +1,579 @@
+title: Microsoft agent-framework PyPI Hijack
+page: breaches/microsoft-agent-framework-pypi.html
+as-of: 2026-11-23
+promise: Two credential-stealing releases reached PyPI; Wiz (disclosure: the site's author works at Wiz) assesses a compromised Microsoft release-service certificate, which Microsoft has not confirmed.
+
+== At a glance
+layout: stats
+stat: 31 min | on PyPI before quarantine for 1.26.1, per JFrog | 1.26.2: 8 minutes, per StepSecurity
+stat: 2m 23s | from PyPI quarantining 1.26.1 to the upload of 1.26.2 | Per StepSecurity
+stat: 3 | victims Wiz found in the 50 requests the webhook stored | Wiz withholds their names
+Wiz assesses a compromised release-service certificate; Microsoft has not confirmed it, and how it was obtained is not yet known. Disclosure: this and the victim count are Wiz's; the site's author works at Wiz.
+notes:
+Start with the page's headline figures, and with who stands behind each one.
+
+Version 1.26.1 of agent-framework was on PyPI for 31 minutes before quarantine, by JFrog's figure, and 1.26.2 for 8 minutes, by StepSecurity's. agent-framework is the meta-package of Microsoft Agent Framework, which Wiz says gets almost 200,000 downloads a month. That figure counts the whole package, not the bad versions. No source gives the number of installs of the two bad versions.
+
+StepSecurity measured 2 minutes 23 seconds between PyPI quarantining 1.26.1 and the upload of 1.26.2.
+
+Wiz found three victims whose data reached the webhook among the 50 requests it stored, and withholds their names. The count covers only what the webhook stored.
+
+The threat actor is not attributed. JFrog and the OpenSSF malicious-package advisory say so explicitly, and Wiz names only the tooling, which identified itself as Cairn, an open-source AI penetration-testing framework.
+
+Say the disclosure aloud as the page gives it. The root-cause assessment and the victim count come from Wiz Research, and the site's author works at Wiz. Microsoft has not confirmed the assessment. Every source is linked so you can read it directly.
+
+== What happened on November 17
+layout: timeline
+event: 20:25 UTC | The tooling's ESRP probe reports from Microsoft IP space (Wiz)
+event: 20:28 | ESRP's IP filtering rejects a publish attempt from AWS (Wiz)
+event: 20:33 | Resubmitted from Microsoft IP space, auto-approved and scanned (Wiz)
+event: 20:35 | 1.26.1 is live on PyPI under Microsoft's project
+event: 21:06 | PyPI quarantines 1.26.1 (StepSecurity)
+event: 21:08 to 21:16 | 1.26.2 is uploaded, then quarantined (StepSecurity)
+All times UTC, November 17, 2026; spacing is not to scale. ESRP is, in Wiz's words, the internal service Microsoft uses to sign and publish this package. Its steps are Wiz's account; Microsoft has not confirmed the root cause.
+notes:
+Every time here is one the page gives, on November 17, 2026, in UTC. The ESRP steps come from Wiz's chart, which Wiz built from the attacker's own progress reports to the webhook.
+
+At 20:25:06 a connectivity probe named CAIRN_ESRP_PROBE2 reached the webhook from Microsoft IP space. At 20:28:56 a publish attempt from AWS was rejected by ESRP's IP filtering with HTTP 403. At 20:33:00 the release was submitted again from Microsoft IP space, and ESRP auto-approved it at 20:33:08. Its malware scan passed, and 1.26.1 was live on PyPI at 20:35:20.
+
+By StepSecurity's timeline, PyPI quarantined 1.26.1 at 21:06:16, the attacker uploaded 1.26.2 at 21:08:39, and PyPI quarantined that at 21:16:44. PyPI says both versions have been removed.
+
+Wiz first published on November 17 and added the ESRP finding on November 18. Microsoft has not confirmed or explained the root cause.
+
+The markers are evenly spaced, so do not read the gaps between them as durations.
+
+== Who reported what
+layout: table
+row: Source | What the page takes from it
+row: Wiz Research | Assessed ESRP root cause, publish chart, three victims
+row: PyPI's advisory | Both versions unauthorized; both since removed
+row: JFrog | Repack from ZIP headers; "a local script"; not attributed
+row: StepSecurity | Quarantine and upload times; access vector not established
+row: Others | SafeDep, Socket, Aikido, Orca, Chainguard: payload analyses
+row: Microsoft | Some repositories made private; no root cause confirmed
+Disclosure: the root-cause assessment and the victim count come from Wiz Research, and the site's author works at Wiz.
+notes:
+The page draws on many sources and says which one stands behind each claim. This table sorts the main ones.
+
+Wiz Research is the source of the root-cause assessment, the chart of the publish through ESRP, and the count of three victims. Say the disclosure as the page gives it: those come from Wiz Research, and the site's author works at Wiz.
+
+PyPI's advisory says versions 1.26.1 and 1.26.2 were uploaded without authorization, as wheel-only releases repackaged from the legitimate 1.26.0 wheel, and that both have been removed. PyPI says it worked with Microsoft to review the project's accounts and complete remediation steps, without naming a mechanism.
+
+JFrog read the repack from the wheel's ZIP headers and says the wheel came from a local script. It has not attributed the attack to a known threat group. StepSecurity gives the quarantine and upload times, and wrote that the evidence does not establish the initial access vector, the credential used, or the uploader's identity.
+
+SafeDep, Socket, Aikido, Orca and Chainguard published their own analyses of the payload.
+
+A Microsoft spokesperson's statement says the company has made some repositories private while it investigates malicious content. Microsoft has not confirmed or explained the root cause.
+
+== The root cause is one team's assessment
+layout: compare
+col: What Wiz assesses | The attacker "appears to have compromised" an ESRP client certificate and key | Evidence: the attacker's own reports to the webhook | Chart label: "Root cause (assessed)"
+col: Not known, or not confirmed | How they were obtained: "not yet known" (Wiz) | Microsoft has not confirmed or explained the root cause | Whether the certificate was revoked: nobody has said
+ESRP is, in Wiz's words, the internal service Microsoft uses to sign and publish this package. Read every ESRP step in this deck as Wiz's account.
+notes:
+Be precise on this slide, because the rest of the chain rests on it.
+
+The attacker's tooling reported its progress to the same public webhook it used for exfiltration. From those reports, Wiz Research says the attacker "appears to have compromised a client certificate and private key for Microsoft ESRP," the Engineering System Release Pipeline, which Wiz calls the internal service Microsoft uses to sign and publish this package. Wiz's chart labels this "Root cause (assessed)". The reports included a probe named CAIRN_ESRP_PROBE2 and, after the release, what Wiz's chart calls a "full ESRP release record".
+
+What is not known: how the certificate and key were obtained, which Wiz says "is not yet known." Microsoft had not answered BleepingComputer's question about the point of breach by publication time, and the page found no Microsoft advisory on the incident as of November 23. StepSecurity wrote that the evidence does not establish the initial access vector, the credential used, or the uploader's identity. Nobody has said whether the certificate has been revoked.
+
+So keep the hedge whenever you speak about stage 01 or stage 04: Wiz assesses, and Microsoft has not confirmed.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Initial Access | Assessed ESRP cert | T1078
+step: 02 | Resource Development | Cairn tooling | T1588.007
+step: 03 | Stealth | Wheel repacked | T1036
+step: 04 | Initial Access | ESRP publish | T1195.002
+step: 05 | Execution | .pth hook | T1546.018
+step: 06 | Credential Access | Secrets, tokens | T1552.001
+step: 07 | Exfiltration | Webhook POST | T1567.004
+step: 08 | Initial Access | 1.26.2 upload | T1195.002
+Stages 01 and 04 are Wiz's account, which Microsoft has not confirmed.
+notes:
+Here is the whole chain on one slide: the page's eight stages, each with its phase and its first-listed ATT&CK technique.
+
+Stage 01 is the credential: what Wiz assesses was a client certificate and private key for ESRP, obtained in a way nobody has explained. Stage 02 is the attacker's tooling, which identified itself as Cairn, and its two hosts, one in AWS and one in Microsoft-owned IP space. Stage 03 is the clean 1.26.0 wheel unpacked, given a startup hook and zipped back up outside Microsoft's build. Stage 04 is the publish through ESRP, by Wiz's account. Stage 05 is the .pth hook running the stealer on every Python start. Stage 06 is what it collected: environments, credential files and fresh Azure tokens. Stage 07 is one POST to a webhook.site URL. Stage 08 is 1.26.2, uploaded two minutes after PyPI quarantined 1.26.1.
+
+The page files three stages, 01, 04 and 08, under Initial Access.
+
+Read the arrows as the page's stage order, not as a timeline. The next slides take each stage in turn.
+
+== An ESRP credential Wiz assesses was compromised; how is not known
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1078 | Valid Accounts
+fact: Service | ESRP, which signs and publishes the package (Wiz)
+fact: Attacker, per Wiz | "appears to have compromised" a client certificate and key
+fact: How obtained | "not yet known" (Wiz); Microsoft has not confirmed
+fact: Detect | a published version with no matching tag or commit
+The page maps only what Wiz saw: a credential ESRP accepted.
+notes:
+ESRP is, in Wiz's words, the internal service Microsoft uses to sign and publish this package. Wiz assesses that the attacker appears to have compromised a client certificate and private key for it. The evidence is the attacker's own status reports to the exfiltration webhook. The page maps this to T1078, Valid Accounts.
+
+Wiz is plain about the gap: how the credentials were obtained is not yet known. StepSecurity wrote that the available evidence does not establish the initial access vector, the specific account or credential used, or the uploader's identity.
+
+What can be seen from outside points away from a poisoned build workflow. On November 17 Wiz found no python-1.26.1 tag or release in microsoft/agent-framework, and the main branch did not contain the malicious code. No source reports a compromised workflow.
+
+Wiz reports that Microsoft's durabletask package was compromised in May 2026 after its PyPI token was stolen, a different vector, and says it has not linked the two incidents.
+
+The theft itself is unknown, so the page maps no credential-access technique for it. StepSecurity wrote that the evidence does not establish whether that access remains available now. As of November 23, 1.26.0 is again the latest release on PyPI.
+
+== Tooling that called itself Cairn, from AWS and Microsoft IP space
+layout: stage
+stage: 02
+phase: Resource Development
+technique: T1588.007 | Obtain Capabilities: Artificial Intelligence
+technique: T1583.003 | Virtual Private Server
+fact: Tooling | called itself Cairn, an AI penetration-testing framework (Wiz)
+fact: Agent config | appears to be the Pi harness, model pi_glm53 (Wiz)
+fact: AWS host | 13.215.157.103, Singapore (Wiz)
+fact: Second host | "Microsoft-owned IP space"; what kind, Wiz does not say
+Nobody has attributed the attack.
+notes:
+Wiz could watch part of the operation because, in its words, the attacker's tooling reported its own progress to the same publicly accessible webhook it used for exfiltration. That tooling identified itself as Cairn, an open-source AI penetration-testing framework: the probe was named CAIRN_ESRP_PROBE2, and the package was staged at /tmp/cairn_pkg.
+
+At 20:28:07 UTC the attacker ran the stealer on its own machine, which Wiz places in AWS in Singapore at 13.215.157.103. The capture included an AI coding agent's configuration that Wiz says appears to be the open-source Pi harness, backed by a GLM-family model, pi_glm53, through a local proxy.
+
+The attacker also had a host in what Wiz calls Microsoft-owned IP space, which decided the publish step. Wiz does not say whether that was capacity rented from Azure or a Microsoft machine the attacker controlled.
+
+Nobody has attributed the attack. The OpenSSF malicious-package advisory says it has not attributed this to a known campaign, and JFrog says it has not attributed the attack to a known threat group.
+
+The page maps this stage to T1588.007, Obtain Capabilities: Artificial Intelligence, and T1583.003, Acquire Infrastructure: Virtual Private Server.
+
+== The clean 1.26.0 wheel, repacked with a startup hook outside the build
+layout: stage
+stage: 03
+phase: Stealth
+technique: T1036 | Masquerading
+technique: T1027 | Obfuscated Files or Information
+fact: Added | agent_framework_meta.pth, _telemetry.py, a hook in __init__.py
+fact: Repacked | Info-ZIP 3.0, 20:26:19 UTC, host clock UTC+8 (JFrog)
+fact: Disguise | "Lightweight runtime diagnostics hook"; base64-encoded URL
+fact: Detect | a release adding a .pth file, with no matching tag
+The agent-framework-core 1.26.0 dependency was left alone, so the framework worked.
+notes:
+The 1.26.1 wheel is the legitimate 1.26.0 wheel with a new agent_framework_meta.pth, a new agent_framework_meta/_telemetry.py, and a hook added to agent_framework_meta/__init__.py. The page maps this stage to T1036, Masquerading, and T1027, Obfuscated Files or Information, and files it under Stealth.
+
+JFrog reads the ZIP headers as a repack with Info-ZIP 3.0 at 20:26:19 UTC, under uid 1000, on a host whose clock was set to UTC+8, while the WHEEL file still claimed Generator: flit 4.2.0. The dependency on agent-framework-core[all]==1.26.0 was left alone, so the framework kept working. SafeDep notes the wheel grew from 6,681 to 10,402 bytes.
+
+The names were chosen to pass as SDK diagnostics. Wiz quotes the hook's description, "Lightweight runtime diagnostics hook", and its user-agent, af-runtime-diagnostics/1, and the exfiltration URL was base64-encoded. Aikido reads it as someone who unpacked a legitimate wheel, edited it by hand, and uploaded the repacked file with valid publishing credentials.
+
+As with LiteLLM / TeamPCP, the release had no matching tag in the project's repository, the cheapest check a consumer can run against a direct upload.
+
+== Built outside the pipeline, or released through it?
+layout: compare
+col: JFrog | Wheel: "from a local script rather than Microsoft's Azure DevOps and ESRP release pipeline" | Read alone, that sounds as if ESRP was bypassed
+col: Wiz | The release went through ESRP: refused, resubmitted, approved, scanned | From the attacker's own reports
+col: The page's reading | Both can hold: built outside the pipeline, then submitted to ESRP | Neither source puts it that way
+notes:
+Two sources describe the publish path in words that seem to conflict, and the page keeps both.
+
+JFrog says the wheel came "from a local script rather than Microsoft's Azure DevOps and ESRP release pipeline." Read alone, that sounds as if ESRP was bypassed.
+
+Wiz says the release went through ESRP. Its chart, built from the attacker's own reports, shows the publish refused from AWS, submitted again from Microsoft IP space, approved automatically and passed by ESRP's malware scan.
+
+Both can hold if the wheel was built outside the pipeline and then submitted to ESRP. That is the page's reading, and neither source puts it that way. Present it as the page's reconciliation, not as a finding by JFrog or Wiz.
+
+On either reading, the repository had no python-1.26.1 tag and the main branch did not contain the malicious code, by Wiz's check on November 17.
+
+== By Wiz's account: refused from AWS, then auto-approved and scanned
+layout: stage
+stage: 04
+phase: Initial Access
+technique: T1195.002 | Supply Chain Compromise: Compromise Software Supply Chain
+fact: 20:28:56 UTC | from AWS: rejected by ESRP IP filtering, HTTP 403
+fact: 20:33:00 | resubmitted from Microsoft IP space; "auto-approved"
+fact: 20:33:09 | malware scan starts; it "passed"
+fact: 20:35:20 | 1.26.1 live on PyPI, wheel only
+The IP filter was the only control that refused anything, per Wiz's chart.
+notes:
+Wiz's chart of the publish reads like a release log, and every ESRP step on this slide is by Wiz's account. The page maps the stage to T1195.002, Compromise Software Supply Chain, with T1078 as a tag.
+
+At 20:25:06 UTC the probe reached the webhook from Microsoft IP space. At 20:28:56 a publish attempt from AWS was rejected by ESRP's IP filtering with HTTP 403, and the tooling reported "publish rejected". At 20:33:00 the release was submitted again from Microsoft IP space, and ESRP auto-approved it at 20:33:08. Its malware scan ran from 20:33:09 to 20:35:15 and passed, and 1.26.1 was live on PyPI at 20:35:20, 2 minutes 20 seconds after submission. At 20:37:12 the tooling sent the webhook what Wiz's chart calls a "full ESRP release record".
+
+On PyPI, StepSecurity reports, both malicious wheels carried the uploader user-agent RestSharp/106.13.0.0, a .NET HTTP client, and no provenance attestation. Neither did the legitimate 1.26.0, SafeDep found, so there was no attested release to compare against. StepSecurity adds that the absence of an attestation alone does not identify the upload mechanism, and no source says what user-agent Microsoft's legitimate uploads carry.
+
+== Three controls in the release path, as Wiz's chart shows them
+layout: layers
+layer: IP filter | Refused the publish from AWS, HTTP 403 | Admitted Microsoft IP space four minutes later
+layer: Approval | Automatic: "auto-approved"
+layer: Malware scan | "Passed" a wheel carrying an executable .pth file
+Microsoft has said nothing about how ESRP authenticates clients.
+notes:
+The page says three controls sat in the path, and Wiz's chart shows each one. This slide stacks them in the order a release met them, and every row is by Wiz's account.
+
+The IP filter was the only one that refused anything. It turned away the publish from AWS with HTTP 403, and it gave way four minutes later when the request came from Microsoft's address space. Wiz does not say whether that address space was rented Azure capacity or a Microsoft machine the attacker controlled.
+
+Approval was automatic. The malware scan passed a wheel carrying an executable .pth file.
+
+Past ESRP, on PyPI, StepSecurity reports that neither malicious wheel carried a provenance attestation, and SafeDep found that neither did the legitimate 1.26.0, so there was no attested release to compare a bad one against. That finding is not on Wiz's chart.
+
+Keep the framing honest. These are the controls Wiz's chart shows, and Microsoft has said nothing about how ESRP authenticates clients.
+
+== The .pth hook ran the stealer on every Python start, pip included
+layout: stage
+stage: 05
+phase: Execution
+technique: T1546.018 | Event Triggered Execution: Python Startup Hooks
+technique: T1059.006 | Python
+fact: Files | agent_framework_meta.pth and _telemetry.py
+fact: Trigger | every Python start in that environment, pip included (JFrog)
+fact: First victim | about 5 minutes after 1.26.1 went live (Wiz's chart)
+fact: Persistence | none outside site-packages (JFrog)
+JFrog saw Renovate open upgrade pull requests within six minutes.
+notes:
+Python's site module processes .pth files in site-packages at interpreter startup and executes lines that begin with import. So, as JFrog points out, pip, pytest, IDE language servers and container entrypoints all fired the hook, whether or not anything imported agent-framework. The page maps this to T1546.018, Python Startup Hooks, and T1059.006, Python.
+
+The hook forked a detached process with os.setsid(), or started a daemon thread on Windows, was guarded by an _AF_TEL=1 environment variable, and silenced every error. The same startup trick carried the LiteLLM / TeamPCP and LiteLLM 1.107.0 payloads.
+
+Automation moved quickly. JFrog saw Renovate open upgrade pull requests downstream within six minutes of 1.26.1 landing on PyPI, and Wiz's chart puts the first victim's data at the webhook about five minutes after the release went live.
+
+The payload had no second stage and no worm, and JFrog reports no persistence outside site-packages. Deleting the files stops new runs. StepSecurity warns that removing a hook alone does not terminate an existing collector, and any Python started before the files are gone runs the stealer again.
+
+The page's hunt command searches the filesystem for agent_framework_meta.pth and af_runtime_diag.pth.
+
+== What ATT&CK calls Python startup hooks
+layout: background
+source: MITRE ATT&CK T1546.018 | https://attack.mitre.org/techniques/T1546/018/
+Python processes path configuration (.pth) files when the interpreter starts. If one sits in site-packages or dist-packages, lines beginning with import run on every Python invocation. ATT&CK says adversaries may abuse this for persistence.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK lists Python Startup Hooks, T1546.018, as a sub-technique of Event Triggered Execution. It describes path configuration files, which end in .pth, and the sitecustomize.py and usercustomize.py modules. These are processed automatically when the Python interpreter initializes.
+
+Path configuration files are designed to extend Python's module search paths through import statements. If a .pth file sits in Python's site-packages or dist-packages directory, any line in it that begins with import is executed automatically on Python invocation. If sitecustomize.py or usercustomize.py is on the Python path, it is imported during interpreter startup and its code runs.
+
+ATT&CK describes these mechanisms as a way to establish persistence on systems where Python is widely used. The page files stage 05 under Execution, and JFrog reports no persistence outside site-packages.
+
+== Environments and credential files, then fresh Azure tokens
+layout: stage
+stage: 06
+phase: Credential Access
+technique: T1552.001 | Unsecured Credentials: Credentials In Files
+technique: T1552.005 | Cloud Instance Metadata API
+technique: T1528 | Steal Application Access Token
+fact: Environment | 31 name substrings (JFrog); up to 300 /proc/*/environ files
+fact: Files | up to 60: ~/.azure, .npmrc, .git-credentials and more
+fact: Azure | managed identity tokens for 12 resources (Wiz, JFrog, Orca)
+AWS keys in environment or .env files were in scope, but not AWS credential files.
+notes:
+It took the host name, user, working directory and the first 20 command-line arguments, then every environment variable whose name contained one of 31 case-insensitive substrings, by JFrog's count. It read up to 300 /proc/*/environ files, which hold other processes' environments, and up to 60 credential files, among them ~/.azure, .npmrc, pip.conf, .netrc, .git-credentials, .docker/config.json, Hugging Face tokens and the Azure DevOps agent's .credentials.
+
+Then it asked for new tokens. From the instance metadata service at 169.254.169.254, or the App Service IDENTITY_ENDPOINT, it requested managed identity tokens for 12 Azure resources by the count of Wiz, JFrog and Orca; Chainguard counts nine resource types. Wiz and JFrog say such tokens can stay valid for up to 24 hours. Whether its Azure DevOps OIDC request worked is disputed: JFrog says real endpoints answer HTTP 400, though SYSTEM_ACCESSTOKEN still leaked through the environment; StepSecurity says static analysis cannot confirm any token was issued. The page maps this stage to T1552.001, T1552.005 and T1528.
+
+AWS is only partly out. None of Wiz, JFrog, StepSecurity, SafeDep, Socket or Orca lists AWS credential files or AWS metadata credential paths among the targets, but all six list AWS among the environment variable name substrings, and JFrog lists AWS among the keys to rotate. Wiz, JFrog, Socket and Orca list no GCP, Kubernetes or SSH targets.
+
+== How a workload asks Azure for a managed identity token
+layout: background
+source: Microsoft Learn, use a VM's managed identity to acquire an access token | https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/how-to-use-vm-token
+credit: Also from Microsoft Learn, managed identities in Azure App Service
+On a VM, code asks the metadata endpoint at 169.254.169.254 for a token, naming one resource. App Service apps call the URL in IDENTITY_ENDPOINT. Microsoft says all code on a VM can request tokens for its managed identities.
+notes:
+Background, from Microsoft Learn, in general terms.
+
+A managed identity gives an Azure service an automatically managed identity in Microsoft Entra ID, which it can use to authenticate to any service that supports Entra authentication without having credentials in its code.
+
+On a virtual machine, any client that can make HTTP calls requests a token from the Instance Metadata Service endpoint, http://169.254.169.254/metadata/identity/oauth2/token. The resource parameter names the App ID URI of the target resource, such as Azure Resource Manager, and also appears in the token's audience claim. The request must carry the header Metadata: true, which Microsoft describes as a mitigation against server-side request forgery. The response holds a bearer token: the resource can give access to whoever bears it.
+
+Microsoft states the security boundary plainly: all code running on a virtual machine can request and retrieve tokens for any managed identities available on it.
+
+App Service and Azure Functions provide a local endpoint for the same purpose. Its URL is in the IDENTITY_ENDPOINT environment variable, and requests carry a header value taken from IDENTITY_HEADER.
+
+Also from Microsoft Learn, managed identities in Azure App Service: https://learn.microsoft.com/en-us/azure/app-service/overview-managed-identity
+
+== One compressed POST to the webhook the tooling also reported to
+layout: stage
+stage: 07
+phase: Exfiltration
+technique: T1567.004 | Exfiltration Over Web Service: Exfiltration Over Webhook
+fact: Endpoint | a webhook.site URL with a unique UUID path
+fact: Encoding | JSON, zlib, base64; one POST, no retry
+fact: Stored | 50 requests, 20:25 to 20:49 UTC (Wiz)
+fact: Detect | the UUID path in proxy logs, not only the domain
+Wiz saw the ESRP steps because the tooling reported to this URL.
+notes:
+The stealer packed its findings into one JSON document, compressed it with zlib at level 9, base64-encoded it, and sent it in a single HTTPS POST to a webhook.site URL ending in ?t=telemetry, with no retry and no fallback channel. The page maps this to T1567.004, Exfiltration Over Webhook, with T1560.002 as a tag.
+
+The attacker's tooling sent its own progress reports to the same URL. That is how Wiz could see the ESRP steps, and why this deck can show them at all.
+
+StepSecurity and Orca give two user-agents, af-runtime-diagnostics/1 and runtime-diagnostics/1.
+
+webhook.site is a shared service, so the page's detection is the UUID path in proxy logs, not the domain alone. The hunting slide gives the full path. For reading your own proxy logs, Wiz says a 200 means that host's data was accepted, and a 410 or 429 suggests it was rejected. JFrog later received HTTP 429 from the endpoint.
+
+The next slide sets out what Wiz counted from the stored requests.
+
+== Three victims among the 50 requests the free webhook stored
+layout: bars
+bar: 50 | requests stored, 20:25 to 20:49 UTC
+bar: 10 | Azure DevOps build pool
+bar: 4 | GitHub Actions job
+bar: 3 | Azure App Service
+Every bar counts requests. Wiz sets aside the attacker's own and those from sandboxes, scanners and tests; the remaining 17 came from these three victims, names withheld. The page reads the count as a floor.
+notes:
+Wiz analyzed "the 50 requests that were stored by webhook[.]site's free tier," which span 20:25 to 20:49 UTC. Its chart marks the last one "endpoint likely hit 50-request cap".
+
+Wiz sets aside the attacker's own requests and those from sandboxes, scanners and tests, and says the remaining 17 "represent only three unique, successful cases of exfiltration of victim data." They are an Azure DevOps build pool, with 10 requests; a GitHub Actions job in an open-source repository, with 4; and an Azure App Service, with 3. "Victim identities withheld," the chart says. All three are build or cloud workloads.
+
+Because the count rests on stored requests alone, the page reads it as a floor. JFrog later received HTTP 429 from the endpoint. No source gives the number of installs of the two bad versions, and none reports the stolen credentials being used.
+
+Every bar counts requests, on one scale from zero, so their lengths are drawn true to size. The three victims' 10, 4 and 3 requests are the 17 Wiz kept.
+
+== Two minutes after quarantine, 1.26.2 with renamed files and OIDC theft
+layout: stage
+stage: 08
+phase: Initial Access
+technique: T1195.002 | Supply Chain Compromise: Compromise Software Supply Chain
+technique: T1036 | Masquerading
+fact: 21:06:16 UTC | 1.26.1 quarantined (StepSecurity)
+fact: 21:08:39 UTC | 1.26.2 uploaded (StepSecurity)
+fact: Path to PyPI | no source describes it; same uploader user-agent (StepSecurity)
+fact: 21:16:44 UTC | 1.26.2 quarantined; both since removed (PyPI)
+Quarantine removes a version and leaves the credential that published it (JFrog).
+notes:
+PyPI quarantined 1.26.1 at 21:06:16 UTC, 31 minutes after it went live. At 21:08:39, "just 2 minutes 23 seconds after the first quarantine" in StepSecurity's words, 1.26.2 appeared.
+
+It restored __init__.py byte for byte and moved the hook to af_runtime_diag.pth and af_runtime_diag.py, which defeats a search for 1.26.1's file names and a diff of __init__.py. It added GitHub Actions OIDC token requests for api://AzureADTokenExchange and https://management.azure.com/ in jobs with id-token: write, runner paths, and the name substrings ACTIONS, OIDC, RUNNER and ARM_. The file cap rose from 60 to 80.
+
+PyPI quarantined 1.26.2 at 21:16:44, eight minutes after upload. JFrog says PyPI removed both releases by 21:16; sources that checked later give about 21:20 (Aikido, Orca) and 21:30 (Wiz). The page maps this stage to T1195.002 and T1036, with T1528 as a tag.
+
+No source describes the path 1.26.2 took to PyPI; StepSecurity notes only that both wheels carried the same uploader user-agent. JFrog names the gap: "Quarantining a single version on PyPI does not revoke the compromised publishing credential." OpenSourceMalware wrote the next morning that the attacker is believed to still have publishing access. Microsoft has made repositories private, which The Hacker News identifies as microsoft/agent-framework and microsoft/onnxruntime; The Register notes that nobody has linked the ONNX repository's pull to the campaign.
+
+== Respond: five defenses against eight stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08
+row: Stop running Python there before you clean up | 03 | 04 | 05 | 08
+row: Find every place the versions could have landed | 03 | 04 | 05 | 07 | 08
+row: Rotate from a clean machine; mind tokens already issued | 06
+row: GitHub Actions jobs with id-token: write | 08
+row: Revoke the credential, not only the versions | 01 | 08
+A cell is marked where the defense's own words name something from that stage.
+notes:
+The page gives nine defenses. This matrix sets the five that respond to an intrusion against the eight stages; the next slide covers the four that harden a release path.
+
+Stopping Python names the hook that every interpreter start re-runs and the collector it leaves running, both from stage 05; JFrog's four payload files, which stage 03 added and stage 08 renamed; and blocking 1.26.1 and 1.26.2, the releases from stages 04 and 08.
+
+Finding every place names the files stage 03 added, the versions published at stages 04 and 08, the _AF_TEL variable and Renovate pull requests from stage 05, the renamed files from stage 08, and the UUID path and user-agents from stage 07.
+
+Rotating names the secrets, ~/.azure caches, runner credential files and issued tokens of stage 06.
+
+The GitHub Actions defense names the OIDC theft that 1.26.2 added at stage 08.
+
+Revoking the credential names the re-publish at stage 08, and the ESRP certificate from stage 01, which Wiz assesses was compromised and Microsoft has not said it revoked.
+
+== Harden: four defenses against eight stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08
+row: Treat a release-service credential as the publisher's identity | 01 | 04
+row: Allow-list the build system, not the company's address space | 01 | 02 | 04
+row: Refuse a release that no commit or tag explains | 01 | 03 | 04
+row: Publish attestations; hold new versions before adopting them | 04 | 05 | 08
+Every stage gets a mark across the two matrices. Only one defense, a search, names stage 07.
+notes:
+These four defenses harden a release path before anything happens.
+
+Treating the release-service credential as the publisher's identity names the certificate and key from stage 01, by Wiz's assessment, and the release Microsoft's own service approved, scanned and published at stage 04.
+
+Allow-listing the build system names the AWS host and the Microsoft-owned IP space from stage 02, the IP filter that refused one and admitted the other at stage 04, and a stolen certificate failing from anywhere else, which is stage 01's credential.
+
+Refusing a release that no commit or tag explains names the missing python-1.26.1 tag from stage 01, the repackaged wheel and its new .pth file from stage 03, and the automatic approval and passing scan from stage 04.
+
+Publishing attestations names the missing provenance from stage 04. Holding new versions names Renovate's pull requests from stage 05 and both versions being gone within an hour, by stage 08.
+
+Across both matrices, every stage has a mark. Stage 07, the exfiltration, is marked only by the search in the respond matrix. That gap is a discussion question at the end.
+
+== If either version ran: stop Python, then find every copy
+layout: compare
+col: Stop running Python there first | Isolate hosts, containers and runners; run no pip or Python there | Terminate any collector still running (StepSecurity) | JFrog's procedure differs: set _AF_TEL=1 first, then delete the files | Rebuild pinned to 1.26.0, with the whole tree hash-locked
+col: Find every place they landed | Lockfiles, CI logs, environments, images, mirrors and caches | Both versions' file names, and the _AF_TEL variable | Renovate and Dependabot pull requests from November 17 (JFrog) | Proxy and DNS logs: the UUID path and both user-agents
+notes:
+Two response defenses, in the order the page gives them.
+
+If either version ran, stop running Python there before you clean up. Every interpreter start re-runs the hook, so StepSecurity and BleepingComputer both say to isolate affected hosts, containers and runners and not to run pip or Python there. StepSecurity also says to terminate any collector process still running. JFrog's procedure differs: set _AF_TEL=1 first, delete the four payload files and __pycache__, and avoid a bare pip uninstall, or use uv pip uninstall followed by uv cache clean. Then rebuild from a clean base pinned to agent-framework==1.26.0, and lock the whole dependency tree with hashes: SafeDep notes that a pin on agent-framework alone leaves its four sibling dependencies free to update. Block both versions and evict them from mirrors and caches.
+
+Find every place the versions could have landed. Search lockfiles, requirements, CI logs, virtual environments, container images, mirrors and caches for 1.26.1 and 1.26.2, and hosts for both versions' payload files and the _AF_TEL variable. JFrog adds Renovate and Dependabot pull requests from November 17. In proxy and DNS logs, search for the UUID path rather than the shared domain, and for both user-agents.
+
+== Rotate, revoke, and treat the job's federation as exposed
+layout: compare
+col: Rotate from a clean machine | Every secret on an affected host or runner | Issued tokens outlive rotation; Wiz and JFrog say up to 24 hours | Review Entra ID sign-in logs for the identities involved
+col: Actions jobs: 1.26.2, id-token: write | Treat OIDC tokens for both Azure audiences as exposed (Wiz) | Review Entra federated credentials that trust those repositories | Rotate secrets the job could read
+col: Publishers: revoke the credential | Quarantine does not revoke it (JFrog) | Revoke every credential that can publish | Wiz assesses ESRP's certificate was compromised; Microsoft has not said if revoked
+notes:
+Three defenses deal with credentials.
+
+Rotate from a clean machine, then deal with the tokens rotation cannot reach. Wiz, JFrog, StepSecurity, SafeDep and PyPI's advisory all say to rotate every secret present on an affected host or runner: Azure CLI sessions, Azure DevOps tokens and service connections, npm, PyPI, NuGet, Docker and Hugging Face tokens, git credentials and LLM API keys. JFrog adds revoking Entra ID user sessions wherever ~/.azure token caches existed. Rotation does not touch tokens already issued, as SafeDep and StepSecurity point out, and Wiz and JFrog put their lifetime at up to 24 hours. Review Entra ID sign-in and activity logs for the managed identities and federated credentials involved.
+
+For GitHub Actions jobs that installed 1.26.2 with id-token: write, Wiz advises treating OIDC tokens for api://AzureADTokenExchange and https://management.azure.com/ as exposed, reviewing the Entra federated credentials that trust those repositories, and rotating the repository and organization secrets the job could read.
+
+For a publisher, revoke every credential that can release the project, including registry tokens, trusted publisher bindings and any release-service credential, alongside pulling the versions. JFrog says quarantining a version does not revoke the publishing credential. 1.26.2 followed two minutes later; no source describes its path to PyPI. Wiz assesses the ESRP certificate was compromised; Microsoft has neither confirmed that nor said whether it was revoked.
+
+== Guard the release credential, and allow-list the build system
+layout: compare
+col: The release credential is an identity | By Wiz's assessment, one certificate and key was enough to publish | The page's suggestion: hardware, or bound to workload identity | Alert on any use from outside the build pipeline
+col: Name build agents, not address space | The filter refused AWS, then admitted Microsoft-owned IP space (Wiz) | If that was rented Azure, a provider-range filter admits its customers | The page's reading: name build agents; check workload identity
+notes:
+Two defenses harden the release path. Both rest on Wiz's assessment and carry the page's own suggestions.
+
+Treat a release-service credential as the publisher's identity. By Wiz's assessment, one client certificate and key let the attacker submit a release that Microsoft's own service approved, scanned and published under Microsoft's name. Most PyPI chains on this site turn on a registry token or the project's own build workflow. If Wiz is right, this one sits further along, in the vendor's internal release service. In 3CX the attacker had to reach the vendor's build environments; here, by Wiz's account, a credential for the service at the end of the pipeline was enough. The page's suggestion: keep any credential that can submit releases in hardware or bound to the build system's workload identity rather than in a file that can be copied, and alert on any use of it from outside the build pipeline.
+
+Allow-list the build system, not the company's address space. Wiz does not say whether the Microsoft-owned address space was rented Azure capacity or a Microsoft machine. The page's reading is that a release service's network rule should name the build agents allowed to call it, paired with a check on the caller's workload identity, so that a stolen certificate fails from anywhere else.
+
+== Refuse releases no commit explains; attest, and hold new versions
+layout: compare
+col: Refuse what no commit explains | The page suggests: compare each artifact with its claimed commit | Hold for a human any release adding a new .pth file | Consumers: fail a build when a version has no tag
+col: Attest, and hold new versions | No attestation on the bad wheels or 1.26.0 (StepSecurity, SafeDep) | The page's reading: one would show no commit behind 1.26.1 | A cooldown until a release has aged (StepSecurity, Chainguard)
+Attestations do not stop a release that comes through the official path. A cooldown check on pull requests alone misses unpinned installs (StepSecurity).
+notes:
+Two more defenses, for release services and their consumers.
+
+Refuse a release that no commit or tag explains. Approval was automatic and the malware scan passed a repackaged wheel with a new .pth file, while the repository had no python-1.26.1 tag and no malicious code on main. The page suggests two checks for a release service: compare each artifact with the source commit it claims, which here would have found nothing to match, and hold for a human any Python release that adds a .pth file the previous release did not have. Consumers can fail a build when a new version has no matching tag. Codecov is the older lesson: an artifact swapped outside the build ran for two months until one customer compared a published hash with what they had downloaded.
+
+Publish attestations so a bad release has something to be compared with. PyPI shows none for any release of the project, by the page's own check on November 23. Downstream, Renovate opened upgrade pull requests within six minutes, and both versions were gone within an hour. Chainguard says a cooldown keeps a same-day compromise out of reach; StepSecurity adds that a cooldown check on dependency pull requests does not protect every install path, because an unpinned dependency can resolve to the newest release without one.
+
+== Markers the page gives
+layout: table
+row: Where | What the page names
+row: Lockfiles, caches | agent-framework 1.26.1 or 1.26.2
+row: Hosts | agent_framework_meta.pth, _telemetry.py, af_runtime_diag.pth and .py
+row: Proxy, DNS logs | path d381fd80-ec62-42ad-8f5c-d1b15103c9bb, not the domain
+row: Proxy logs | af-runtime-diagnostics/1 and runtime-diagnostics/1
+row: Entra sign-in logs | one managed identity requesting tokens for many resources in seconds
+row: Your releases | a version with no matching tag, or a new .pth file
+notes:
+These are the markers the page names, gathered in one place.
+
+Search lockfiles, requirements, CI logs, virtual environments, container images, mirrors and caches for agent-framework 1.26.1 and 1.26.2. On hosts, 1.26.1 left agent_framework_meta.pth and agent_framework_meta/_telemetry.py, and 1.26.2 left af_runtime_diag.pth and af_runtime_diag.py. Look for the _AF_TEL variable too. The page's hunt command is find / -name 'agent_framework_meta.pth' -o -name 'af_runtime_diag.pth' 2>/dev/null.
+
+In proxy and DNS logs, search for the UUID path, because webhook.site is a shared service. Search too for the user-agents af-runtime-diagnostics/1 and runtime-diagnostics/1. Wiz's reading of your proxy logs: a 200 means that host's data was accepted, and a 410 or 429 suggests it was rejected.
+
+In Entra sign-in logs, the page's detection for stage 06 is one managed identity requesting tokens for many resources within seconds.
+
+On the release side, the page's detections are a published version with no matching tag or commit in the source repository, and a release that adds a .pth file the previous release did not have.
+
+== Check your own environment
+layout: checklist
+check: If either version ran here, would anyone stop Python before cleaning up?
+check: Could you find every lockfile, image, mirror and cache holding 1.26.1 or 1.26.2?
+check: Would your proxy logs show a POST to one webhook.site path?
+check: Do bots open upgrade pull requests within minutes of a release, with no cooldown?
+check: Which CI jobs hold id-token: write, and which Azure federated credentials trust them?
+check: Could anything submit your releases from outside your build pipeline?
+check: Would a release with no matching tag, or a new .pth file, be held?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether your response plan stops Python on an affected host before cleanup starts, since every interpreter start re-runs the hook. Ask whether you could find every lockfile, image, mirror and cache that holds 1.26.1 or 1.26.2, and whether your proxy logs would show a POST to one webhook.site path.
+
+Ask whether bots such as Renovate or Dependabot open upgrade pull requests within minutes of a release, and whether anything holds a new release until it has aged.
+
+Ask which CI jobs hold id-token: write, and which Azure federated credentials trust their repositories.
+
+If you publish packages, ask whether any credential that can submit your releases could be used from outside your build pipeline, and whether a release with no matching tag, or one that adds a .pth file the previous release did not have, would be held for a human.
+
+== The filter refused AWS. What should it have checked instead?
+layout: question
+ESRP's IP filter refused the attacker's publish from AWS, then let the same credential through four minutes later from Microsoft-owned IP space, by Wiz's account. What should a release service's network rule check?
+notes:
+Give the room a minute with this one.
+
+Remind the group of the facts, all by Wiz's account. At 20:28:56 UTC a publish attempt from AWS was rejected by ESRP's IP filtering with HTTP 403. At 20:33:00 the release was submitted again from Microsoft IP space, and it was approved automatically. Wiz does not say whether that address space was rented Azure capacity or a Microsoft machine the attacker controlled. Microsoft has said nothing about how ESRP authenticates clients.
+
+Ask each person to describe the network rule on a release or deploy service they know, and say whether this caller would have passed it. Then show the answer slide.
+
+== Name the build agents, and check the caller's workload identity
+layout: answer
+The page's reading, not Wiz's or Microsoft's:
+- The rule names the build agents allowed to call the release service.
+- It is paired with a check on the caller's workload identity.
+- Then a stolen certificate fails from anywhere else.
+notes:
+The page's answer is its own reading, and it says so.
+
+A release service's network rule should name the build agents allowed to call it, paired with a check on the caller's workload identity, so that a stolen certificate fails from anywhere else.
+
+The reasoning starts from what Wiz's chart shows. The filter turned away the attempt from AWS and let the same credential through four minutes later from Microsoft-owned IP space. If that space was rented Azure capacity, a filter keyed to a cloud provider's ranges admits that provider's customers. Wiz does not say which it was.
+
+The page pairs this with a second suggestion: keep any credential that can submit releases in hardware or bound to the build system's workload identity rather than in a file that can be copied, and alert on any use of it from outside the build pipeline.
+
+Bring the group's answers back to these two suggestions, and keep the hedge: the certificate theft is Wiz's assessment, which Microsoft has not confirmed.
+
+== What would you add for stage 07?
+layout: question
+In this deck's mapping, only one of the page's nine defenses touches stage 07: a search of proxy and DNS logs. The stealer sent one POST, with no retry. What would you add, and which detail would it catch?
+notes:
+This question comes from this deck's defense matrices, not from the page, which does not tie its defenses to stage numbers. By the matrices' rule, only one of the page's nine defenses touches stage 07's details, and it finds the exfiltration after the fact.
+
+At stage 07 the stealer packed its findings into one JSON document, compressed and base64-encoded it, and sent it in a single HTTPS POST to a webhook.site URL ending in ?t=telemetry, with no retry and no fallback channel. It used the user-agents af-runtime-diagnostics/1 and runtime-diagnostics/1. The attacker's tooling reported to the same URL. By Wiz's chart, the first victim's data reached it about five minutes after 1.26.1 went live.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught, and whether it would have worked for each kind of victim Wiz counted: a build pool, a GitHub Actions job and an App Service.
+
+== For stage 07, the page gives a log search and a reading
+layout: answer
+Any proposal is your own. The page gives a detection and a reading:
+- Search proxy logs for the UUID path, not only the domain.
+- Wiz: a 200 means the data was accepted; 410 or 429 suggests rejected.
+notes:
+Be clear that the page stops here. In this deck's mapping, the only defense touching stage 07 is the search in the second respond defense: the UUID path rather than the domain, a shared service, and the two user-agents. This deck adds no defense of its own.
+
+The page's stage 07 facts give the detection: the UUID path in proxy logs, not only the domain. Wiz's reading of the result: a 200 means that host's data was accepted, and a 410 or 429 suggests it was rejected. JFrog later received HTTP 429 from the endpoint, and Wiz's chart marks the last stored request as likely hitting the 50-request cap.
+
+The group may argue for a control on outbound traffic from build runners and cloud workloads. That argument is the group's own: no defense on the page says it. Test it against the three victims Wiz counted, an Azure DevOps build pool, a GitHub Actions job in an open-source repository and an Azure App Service.
+
+== Primary sources
+layout: links
+link: Wiz, agent-framework compromised, updated with the assessed root cause | https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi
+link: Wiz, the original November 17 version (Wayback Machine) | https://web.archive.org/web/20261117234238/https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi
+link: PyPI Security, PYSEC-2026-4388 | https://osv.dev/vulnerability/PYSEC-2026-4388
+link: JFrog, agent-framework hijacked via a .pth startup hook | https://research.jfrog.com/post/agent-framework-hijack/
+link: StepSecurity, agent-framework PyPI package compromised | https://www.stepsecurity.io/blog/microsoft-agent-framework-pypi-package-compromised
+link: SafeDep, agent-framework compromised twice on PyPI | https://safedep.io/blog/microsoft-agent-framework-pypi-compromise
+link: Socket, compromised with a stealer | https://socket.dev/blog/agent-framework-pypi-package-compromised-with-credential-stealer
+link: Aikido, two malicious agent-framework releases | https://aikido.dev/blog/two-malicious-agent-framework-releases-hit-pypi-in-33-minutes
+Disclosure: the site's author works at Wiz.
+notes:
+These are the primary sources the csoh.org kill chain cites, over two slides. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Wiz's post is the source of the assessed ESRP root cause, the chart of the publish and the victim count; Wiz added the ESRP finding on November 18, and the Wayback Machine holds the original November 17 version. As the page discloses, the root-cause assessment and the victim count come from Wiz Research, and the site's author works at Wiz. Microsoft has not confirmed the assessment.
+
+PyPI's advisory, PYSEC-2026-4388, is the registry's own account. JFrog read the repack and the payload, StepSecurity gives the timeline of quarantines and uploads, and SafeDep, Socket and Aikido published their own analyses.
+
+== Primary sources, continued
+layout: links
+link: Chainguard, agent-framework compromised on PyPI | https://www.chainguard.dev/unchained/microsoft-agent-framework-compromised-on-pypi-november-2026
+link: OpenSourceMalware, official agent-framework package compromised | https://opensourcemalware.com/blog/agent-framework-pypi-compromised
+link: Orca Security, versions 1.26.1 and 1.26.2 steal cloud credentials | https://orca.security/resources/research/microsoft-agent-framework-pypi-supply-chain-attack-versions-1-26-1-and-1-26-2-steal-cloud-credentials/
+link: OpenSSF malicious packages, MAL-2026-20101 | https://osv.dev/vulnerability/MAL-2026-20101
+link: GitHub Advisory Database, GHSA-764m-3ppc-5m73 | https://github.com/advisories/GHSA-764m-3ppc-5m73
+link: The Register, with Microsoft's statement | https://www.theregister.com/2026/11/18/microsoft_onnx_runtime_github/5310858
+link: The Hacker News, with the repositories made private | https://thehackernews.com/2026/11/attackers-compromise-microsofts-agent.html
+link: BleepingComputer, reporting | https://www.bleepingcomputer.com/news/security/microsofts-agent-framework-pypi-package-compromised-to-steal-credentials/
+notes:
+Chainguard, OpenSourceMalware and Orca published their own analyses. The OpenSSF malicious-package advisory, mirrored in the GitHub Advisory Database, says it has not attributed this to a known campaign.
+
+The Register carries Microsoft's statement that it has made some repositories private while it investigates malicious content. The Hacker News identifies those repositories, and BleepingComputer reported on the incident.
+
+The page also cites the PyPA advisory database pull request, Wiz's post on the durabletask compromise of May 2026 as context, and the MITRE pages for six of its techniques. They are left off these slides for space.
+
+The background slides name their own sources, MITRE ATT&CK and Microsoft Learn.
+
+== Related kill chains
+layout: links
+link: Storm-0558, a Microsoft signing key | breaches/storm-0558.html
+link: LiteLLM / TeamPCP | breaches/litellm-pypi-teampcp.html
+link: LiteLLM 1.107.0 | breaches/litellm-1-107-release-hijack.html
+link: Mini Shai-Hulud | breaches/mini-shai-hulud-tanstack.html
+link: 3CX | breaches/3cx-x-trader.html
+link: Ultralytics | breaches/ultralytics-cache-poisoning.html
+link: Codecov | breaches/codecov-bash-uploader.html
+The page calls Storm-0558 the closest chain on the site.
+notes:
+The page links seven other kill chains.
+
+It calls Storm-0558 the closest chain on this site: a Microsoft signing key was used to forge access tokens, and the Cyber Safety Review Board concluded that Microsoft does not know how the key was obtained.
+
+The same .pth startup trick carried the LiteLLM / TeamPCP and LiteLLM 1.107.0 payloads, and LiteLLM / TeamPCP also had no matching tag for its release. GitHub Actions OIDC tokens were also the target in Mini Shai-Hulud, there scraped from runner memory to publish packages.
+
+In 3CX the attacker had to reach the vendor's build environments. Ultralytics and LiteLLM 1.107.0 show that attestations do not stop a release that comes through the official path. Codecov is the older lesson of an artifact swapped outside the build.
+
+The page's related defense topics are CI/CD security, GitHub Actions security, Azure security, non-human identity, AI/ML security and incident response.

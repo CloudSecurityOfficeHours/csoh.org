@@ -88,7 +88,7 @@ The comment is invisible in rendered HTML *and* in GitHub-rendered Markdown, so 
 
 **5. `llms.txt`** - plain text, so regex rather than markers. Markdown docs get the same treatment via `MD_PROSE_RULES`, for counts that sit inside a fenced code block where a marker would render as literal text - README.md's directory tree is the case that forced this. Same discipline as the HTML rules: each pattern is anchored to the words around the number, never generic.
 
-**6. OG-card subtitles in `generate_og_images.py`.** Meetings use the exact count; resources and glossary terms use a floored `N+`. `sync_counts.py` only edits the script; `update-counts.yml` notices that edit and re-renders the three count-bearing cards (`index.html`, `resources.html`, `meetings.html`) rather than rebuilding every OG card.
+**6. OG-card text in `generate_og_images.py`.** Meetings, breaches and news sources use the exact count; resources and vendors use a floored `N+`. Glossary terms are left hand-written on purpose. `sync_counts.py` only edits the script; `update-counts.yml` notices that edit and re-renders the count-bearing cards (`index.html`, `resources.html`, `meetings.html`, `breach-lessons.html`, `news.html`, `rss.html`, `vendor-landscape.html`) rather than rebuilding every OG card. A new rule in `og_rules()` needs its page added to that `--pages` list, or the image keeps the old number while the script's text moves on.
 
 ## When to run it
 

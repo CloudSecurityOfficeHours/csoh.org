@@ -15,9 +15,10 @@ What it manages
    list enumerates the category sections. numberOfItems follows automatically.
 2. Every other ItemList on the site: enforces the invariant
    numberOfItems == number of enumerated ListItems, so no count can lie.
-3. generate_og_images.py: updates the count-bearing OG-card subtitles
-   (meetings = exact; resources / glossary terms = a "N+" floor rounded down
-   to the nearest ten). The weekly workflow then regenerates those images.
+3. generate_og_images.py: updates the count-bearing OG-card text (meetings,
+   breaches and news sources = exact; resources and vendors = a "N+" floor
+   rounded down to the nearest ten). The weekly workflow then regenerates
+   those images.
 
 Usage
 -----
@@ -292,15 +293,31 @@ def og_rules(counts: dict) -> list[tuple[str, str]]:
     """(regex, replacement) pairs for count-bearing OG-card strings."""
     meetings = counts["meetings"]
     res_floor = floor10(counts["resources"])
-    # Note: glossary "N+ terms" OG-card strings are deliberately NOT managed
-    # here. glossary_terms_floor is honest (the markers on glossary.html and
-    # about.html use it); these strings stay hand-authored only because
-    # regenerating a card is an image build, not a text edit.
+    breaches = counts["breaches"]
+    feeds = counts["feeds"]
+    vendors_floor = floor10(counts["vendors"])
+    vendor_categories = counts["vendor_categories"]
+    # A rule here rewrites a card's text, not its image. update-counts.yml
+    # re-renders only the pages named in its `--pages` list, so every page
+    # whose card a rule can change must be in that list, or the text moves
+    # and the published image keeps the old number.
+    #
+    # Glossary "N+ terms" OG-card strings are deliberately NOT managed here.
+    # glossary_terms_floor is honest (the markers on glossary.html and
+    # about.html use it), and the card's "300+" is still true as a floor.
     return [
         (r'(\d+)\+ resources', f'{res_floor}+ resources'),
         (r'"(\d+)\+ Cloud Security Resources"', f'"{res_floor}+ Cloud Security Resources"'),
         (r'(\d+) Weekly Cloud Security Recaps', f'{meetings} Weekly Cloud Security Recaps'),
         (r'(\d+) meetings searchable', f'{meetings} meetings searchable'),
+        # breach-lessons.html
+        (r'Lessons From \d+ Cloud Breaches', f'Lessons From {breaches} Cloud Breaches'),
+        (r'\d+ real cloud breach kill chains', f'{breaches} real cloud breach kill chains'),
+        # news.html and rss.html
+        (r'from \d+ independent sources', f'from {feeds} independent sources'),
+        # vendor-landscape.html
+        (r'\d+\+ vendors across \d+ categories',
+         f'{vendors_floor}+ vendors across {vendor_categories} categories'),
     ]
 
 
@@ -445,6 +462,9 @@ HTML_PROSE_RULES = [
     # schema copy in step with it.
     (r"\d+ trusted RSS feeds", "{feeds} trusted RSS feeds"),
     (r"aggregated from our \d+ sources", "aggregated from our {feeds} sources"),
+    # rss.html's <title> names the source count; its visible copy carries a
+    # <!--count:feeds--> marker, which cannot sit inside <title>.
+    (r"RSS Feed - \d+ Curated Sources", "RSS Feed - {feeds} Curated Sources"),
     # glossary.html states its own size where a marker cannot sit: the <title>,
     # three content="..." descriptions, the search box's placeholder attribute,
     # and the no-JS starting value of its "N terms shown" counter. The chart on

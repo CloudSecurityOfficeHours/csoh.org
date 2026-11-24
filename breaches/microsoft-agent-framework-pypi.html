@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="How two credential-stealing releases of Microsoft's agent-framework reached PyPI in November 2026, through what Wiz assesses was a stolen release-service certificate.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="Microsoft agent-framework PyPI Hijack 2026, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2026, Microsoft, agent-framework, Microsoft Agent Framework, PyPI, ESRP, Engineering System Release Pipeline, client certificate, IP allow-list, .pth startup hook, credential stealer, Azure managed identity, IMDS, Azure DevOps, GitHub Actions OIDC, webhook.site, Cairn, software supply chain">
+    <title>Microsoft agent-framework PyPI Hijack 2026 Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/microsoft-agent-framework-pypi.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/microsoft-agent-framework-pypi.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/microsoft-agent-framework-pypi.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Microsoft agent-framework PyPI Hijack 2026 Breach Kill Chain">
+    <meta property="og:description" content="Two credential-stealing agent-framework releases reached PyPI under Microsoft's project. Wiz assesses a stolen certificate for Microsoft's release service; how it was obtained is not yet known.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-11-23">
+    <meta property="article:modified_time" content="2026-11-23">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="Microsoft agent-framework PyPI Hijack 2026">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2026">
+    <meta property="article:tag" content="Microsoft">
+    <meta property="article:tag" content="PyPI">
+    <meta property="article:tag" content="ESRP">
+    <meta property="article:tag" content=".pth startup hook">
+    <meta property="article:tag" content="credential stealer">
+    <meta property="article:tag" content="Azure managed identity">
+    <meta property="article:tag" content="GitHub Actions OIDC">
+    <meta property="article:tag" content="software supply chain">
+    <meta property="og:url" content="https://csoh.org/breaches/microsoft-agent-framework-pypi.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/microsoft-agent-framework-pypi.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Microsoft agent-framework PyPI Hijack 2026 Breach Kill Chain">
+    <meta name="twitter:description" content="Two credential-stealing agent-framework releases reached PyPI under Microsoft's project. Wiz assesses a stolen certificate for Microsoft's release service; how it was obtained is not yet known.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/microsoft-agent-framework-pypi.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
+    <link rel="preload" href="/style.css?v=d0ce5478" as="style"
+        integrity="sha384-1j+JFhDnLVV9ZQ5vgoHmdpTST3Kdn0Cy5lHDQBgDVQiHsXMEZy2KbAmPQ5wyjd02">
+    <link rel="stylesheet" href="/style.css?v=d0ce5478"
+        integrity="sha384-1j+JFhDnLVV9ZQ5vgoHmdpTST3Kdn0Cy5lHDQBgDVQiHsXMEZy2KbAmPQ5wyjd02">
+    <link rel="stylesheet" href="/breach-timeline.css?v=a2469e23" integrity="sha384-rmpFuzCn6UkelLpKe109kBx+yoPABmR7h+5VwIwk6eygz4kedbAkeGGDZiH59T7R">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "Microsoft agent-framework PyPI Hijack - Release-Service Certificate Assessed as Compromised, How Unknown → Retry From Microsoft IP Space → Auto-Approved, Malware Scan Passed → .pth Stealer on Every Python Start → New Version Two Minutes After Quarantine",
+  "description": "How two credential-stealing releases of Microsoft's agent-framework reached PyPI in November 2026, through what Wiz assesses was a stolen release-service certificate.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2026-11-23",
+  "dateModified": "2026-11-23",
+  "mainEntityOfPage": "https://csoh.org/breaches/microsoft-agent-framework-pypi.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "Unauthorized agent-framework releases on PyPI",
+    "description": "On November 17, 2026, agent-framework versions 1.26.1 and 1.26.2 were uploaded to PyPI under Microsoft's project without authorization, each repackaged from the legitimate 1.26.0 wheel with a .pth startup hook that collected credentials and requested Azure and CI tokens, then posted them to a webhook. Wiz assesses that the attacker appears to have used a compromised client certificate and private key for Microsoft's ESRP release service. Microsoft has not confirmed this, and how the credentials were obtained is not yet known."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Microsoft"
+    },
+    {
+      "@type": "Organization",
+      "name": "PyPI"
+    },
+    {
+      "@type": "Organization",
+      "name": "Wiz"
+    },
+    {
+      "@type": "Organization",
+      "name": "JFrog"
+    },
+    {
+      "@type": "Organization",
+      "name": "StepSecurity"
+    },
+    {
+      "@type": "Organization",
+      "name": "SafeDep"
+    },
+    {
+      "@type": "Organization",
+      "name": "Socket"
+    },
+    {
+      "@type": "Organization",
+      "name": "Aikido Security"
+    },
+    {
+      "@type": "Organization",
+      "name": "Chainguard"
+    },
+    {
+      "@type": "Organization",
+      "name": "Orca Security"
+    },
+    {
+      "@type": "Organization",
+      "name": "OpenSourceMalware"
+    },
+    {
+      "@type": "Organization",
+      "name": "OpenSSF"
+    },
+    {
+      "@type": "Organization",
+      "name": "GitHub"
+    },
+    {
+      "@type": "Organization",
+      "name": "MITRE"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Microsoft agent-framework PyPI Hijack 2026",
+      "item": "https://csoh.org/breaches/microsoft-agent-framework-pypi.html"
+    }
+  ]
+}
+    </script>
+  <noscript><link rel="stylesheet" href="/noscript.css?v=8806b2fa" integrity="sha384-a09IU6jBKCeHhGoD/YQr7jM3op0Sr57wzMvZzTx/cD/PXrCRHINeWLhwU3Ya6T3n"></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/></svg></button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">The subject</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="../iam.html">IAM &amp; identity</a></li>
+                            <li><a href="../topics.html#workloads">Workloads</a></li>
+                            <li><a href="../topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="../cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="../working-a-finding.html">Working a finding</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../breach-kill-chain-decks.html">Kill Chain Slide Decks</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Attending Conferences</a></li>
+                            <li><a href="../what-practitioners-think-about-human-risk.html">Human Risk</a></li>
+                            <li><a href="../what-practitioners-think-about-identity.html">Identity &amp; Passwords</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../cloud-deployment.html">How We Deploy</a></li>
+                            <li><a href="../how-csoh-org-is-secured.html">How We Secure It</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">Microsoft agent-framework PyPI Hijack 2026</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Microsoft agent-framework PyPI Hijack 2026</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="microsoft-agent-framework-pypi-2026">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">November 2026</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-purple"><a class="glossary-link" href="../glossary.html#term-pypi">PyPI</a> / Azure / <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a></span>
+    </div>
+    <h2 class="inc-title">Microsoft agent-framework PyPI Hijack - Release-Service Certificate Assessed as Compromised, How Unknown &rarr; Retry From Microsoft IP Space &rarr; Auto-Approved, Malware Scan Passed &rarr; .pth Stealer on Every Python Start &rarr; New Version Two Minutes After Quarantine</h2>
+    <p class="inc-summary">At 20:35 UTC on November 17, 2026, <code>agent-framework</code> 1.26.1 appeared on PyPI under Microsoft's official project. It is the meta-package of Microsoft Agent Framework, which Wiz says gets almost 200,000 downloads a month; that figure counts the whole package, not the bad versions. PyPI's advisory says versions 1.26.1 and 1.26.2 "were uploaded to PyPI on 2026-11-17 without authorization, as wheel-only releases repackaged from the legitimate 1.26.0 wheel." Each added a <code>.pth</code> startup hook that runs a credential stealer whenever Python starts in that environment, whether or not anything imports the package. It gathered secret-like environment variables, other processes' environments and credential files, requested fresh Azure tokens and, in 1.26.2, GitHub Actions <a class="glossary-link" href="../glossary.html#term-oidc">OIDC</a> tokens, and posted the lot to a webhook.site URL. By StepSecurity's timeline, PyPI quarantined 1.26.1 at 21:06:16, the attacker uploaded 1.26.2 at 21:08:39, and PyPI quarantined that at 21:16:44. PyPI says both versions have been removed.</p>
+    <p class="inc-summary"><strong>How the attacker could publish rests on one research team's assessment, and Microsoft has not confirmed it.</strong> The attacker's tooling reported its progress to the same public webhook it used for <a class="glossary-link" href="../glossary.html#term-exfiltration">exfiltration</a>. From those reports Wiz Research says the attacker "appears to have compromised a client certificate and private key for Microsoft ESRP (Engineering System Release Pipeline), the internal service Microsoft uses to sign and publish this package," and its chart labels this "Root cause (assessed)". In Wiz's account, ESRP's IP filtering rejected a first publish attempt from AWS, and a second attempt from Microsoft-owned IP space was approved automatically, passed ESRP's malware scan and went live. How the certificate and key were obtained "is not yet known," Wiz says. Microsoft has not confirmed or explained the root cause. A Microsoft spokesperson's statement says the company has "made some repositories private while we investigate malicious content," and PyPI says it "worked with Microsoft to review the project's accounts and complete remediation steps" without naming a mechanism. Wiz first published on November 17 and added the ESRP finding on November 18.</p>
+    <p class="inc-summary">The free webhook stored 50 requests, and among them Wiz counts "only three unique, successful cases of exfiltration of victim data": an Azure DevOps build pool, a GitHub Actions job in an open-source repository, and an Azure App Service. Wiz withholds their identities, and the count covers only what the webhook stored. All three are build or cloud workloads. No source gives the number of installs of the two bad versions, and none reports the stolen credentials being used.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>31 and 8 minutes</strong> on PyPI before quarantine, for 1.26.1 (JFrog) and 1.26.2 (StepSecurity)</div>
+      <div class="inc-stat"><strong>2 min 23 s</strong> between PyPI quarantining 1.26.1 and the upload of 1.26.2, per StepSecurity</div>
+      <div class="inc-stat"><strong>3</strong> victims whose data Wiz found among the 50 requests the webhook stored; Wiz withholds their names</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> not attributed; JFrog and the <a class="glossary-link" href="../glossary.html#term-openssf">OpenSSF</a> malicious-package advisory say so explicitly, and Wiz names only the tooling, which identified itself as Cairn, an open-source <a class="glossary-link" href="../glossary.html#term-ai">AI</a> penetration-testing framework</div>
+    </div>
+    <p class="inc-summary"><strong>Disclosure:</strong> the root-cause assessment and the victim count on this page come from Wiz Research, and the site's author works at Wiz. Microsoft has not confirmed the assessment. JFrog, StepSecurity, SafeDep, Socket, Aikido and others published their own analyses of the payload. Every source is linked so you can read it directly.</p>
+    <a class="pm-link" href="https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi" target="_blank" rel="noopener">📄 Wiz - Microsoft agent-framework Compromised: Credential Stealer Targets Azure and CI Pipelines ↗</a>
+    <a class="pm-link" href="https://osv.dev/vulnerability/PYSEC-2026-4388" target="_blank" rel="noopener">📄 PyPI Security - PYSEC-2026-4388 ↗</a>
+    <a class="pm-link" href="https://research.jfrog.com/post/agent-framework-hijack/" target="_blank" rel="noopener">📄 JFrog - Microsoft's agent-framework Hijacked on PyPI via Silent .pth Startup Hook ↗</a>
+    <a class="pm-link" href="https://www.stepsecurity.io/blog/microsoft-agent-framework-pypi-package-compromised" target="_blank" rel="noopener">📄 StepSecurity - Microsoft agent-framework PyPI Package Compromised ↗</a>
+    <p class="u-mt-075" data-breach-deck><strong>Slides:</strong> <a href="https://docs.google.com/presentation/d/15ZV9iK1xUP0pkTADnfbH4vpQbUdXFVRXIqvMMD8wITw/export/pdf" target="_blank" rel="noopener noreferrer">download the PDF</a> or <a href="https://docs.google.com/presentation/d/15ZV9iK1xUP0pkTADnfbH4vpQbUdXFVRXIqvMMD8wITw/copy" target="_blank" rel="noopener noreferrer">make your own editable copy</a> (copying needs a Google account). The slides are licensed <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer">CC BY-NC 4.0</a>.</p>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>: A Release Credential Nobody Has Explained</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The attacker held what Wiz assesses was a client certificate and private key for ESRP, Microsoft's internal signing and release service, and how it got them is not known</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/" target="_blank" rel="noopener">T1078 - Valid Accounts</a>
+        </div>
+        <p class="step-desc">ESRP is, in Wiz's words, "the internal service Microsoft uses to sign and publish this package." Wiz assesses that the attacker "appears to have compromised a client certificate and private key" for it. The evidence is the attacker's own status reports to the exfiltration webhook, which included a connectivity probe named <code>CAIRN_ESRP_PROBE2</code> and, after the release, what Wiz's chart calls a "full ESRP release record". Wiz is plain about the gap: "How the credentials were obtained is not yet known." Microsoft had not answered BleepingComputer's question about the point of breach by publication time, and this page found no Microsoft advisory on the incident as of November 23. StepSecurity wrote that the available evidence does not establish "the initial access vector, the specific account or credential used, or the uploader's identity."</p>
+        <p class="step-desc">What can be seen from outside points away from a poisoned build workflow. On November 17 Wiz found no <code>python-1.26.1</code> tag or release in <code>microsoft/agent-framework</code>, and the main branch did not contain the malicious code. No source reports a compromised workflow. By Wiz's account, the vector here also differs from Microsoft's <code>durabletask</code> package in May 2026, which Wiz reports was compromised after its PyPI token was stolen; of the two, Wiz says, "We have not linked the two incidents." The closest chain on this site is <a href="storm-0558.html">Storm-0558</a>, where a Microsoft signing key was used to forge access tokens and the Cyber Safety Review Board concluded that Microsoft does not know how the key was obtained.</p>
+        <p class="step-desc">This page maps only the part Wiz observed through the attacker's own beacons: a credential ESRP accepted, which ATT&amp;CK files under Valid Accounts. The theft itself is unknown, so no credential-access technique is mapped for it. Nobody has said whether the certificate has been revoked. StepSecurity wrote that the evidence "does not establish whether that access remains available now." As of November 23, 1.26.0 is again the latest release on PyPI.</p>
+        <div class="step-code">
+          <span class="hl">Service:</span> ESRP (Engineering System Release Pipeline), which signs and publishes the package (Wiz)<br>
+          <span class="hl">Credential:</span> a client certificate and private key the attacker "appears to have compromised" (Wiz)<br>
+          <span class="hl">How obtained:</span> "not yet known" (Wiz)<br>
+          <span class="hl">Confirmed by Microsoft:</span> no<br>
+          <span class="hl">Revoked:</span> not stated by anyone<br>
+          <span class="hl">Detect:</span> a published version with no matching tag or commit in the source repository
+        </div>
+        <div class="step-tags"><span class="stag">ESRP</span><span class="stag">Client Certificate</span><span class="stag">Root Cause Assessed</span><span class="stag">T1078</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-recon">🧰 Resource Development: An AI Pentest Framework and Two Networks</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The attacker's tooling identified itself as Cairn, an open-source AI penetration-testing framework, and ran from a host in AWS and another in Microsoft-owned IP space</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1588/007/" target="_blank" rel="noopener">T1588.007 - Obtain Capabilities: Artificial Intelligence</a>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1583/003/" target="_blank" rel="noopener">T1583.003 - Acquire Infrastructure: Virtual Private Server</a>
+        </div>
+        <p class="step-desc">Wiz could watch part of the operation because "the attacker's tooling reported its own progress to the same publicly accessible webhook it used for exfiltration." That tooling identified itself as Cairn, an open-source AI penetration-testing framework: the probe was named <code>CAIRN_ESRP_PROBE2</code>, and the package was staged at <code>/tmp/cairn_pkg</code>. At 20:28:07 UTC the attacker ran the stealer on its own machine, which Wiz places in AWS in Singapore at 13.215.157.103. The capture included an AI coding agent's configuration that Wiz says appears to be the open-source Pi harness, backed by a GLM-family model (<code>pi_glm53</code>) through a local proxy.</p>
+        <p class="step-desc">The attacker also had a host in what Wiz calls "Microsoft-owned IP space", which decided the publish step. Wiz does not say whether that was capacity rented from Azure or a Microsoft machine the attacker controlled. Nobody has attributed the attack. The OpenSSF malicious-package advisory, mirrored by GitHub, says "We have not attributed this to a known campaign," and JFrog says it has not attributed the attack to a known threat group.</p>
+        <div class="step-code">
+          <span class="hl">Tooling:</span> identifies itself as Cairn, an open-source AI penetration-testing framework (Wiz)<br>
+          <span class="hl">Agent config on the attacker's host:</span> appears to be the Pi harness with GLM-family model pi_glm53, through a local proxy (Wiz)<br>
+          <span class="hl">AWS host:</span> 13.215.157.103, Singapore (Wiz)<br>
+          <span class="hl">Second host:</span> "Microsoft-owned IP space"; what kind, Wiz does not say<br>
+          <span class="hl">Tell:</span> the attacker's progress reports went to the same public URL as the stolen data
+        </div>
+        <div class="step-tags"><span class="stag">Cairn</span><span class="stag">AI Tooling</span><span class="stag">AWS</span><span class="stag">T1588.007</span><span class="stag">T1583.003</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-de">🥸 Stealth: A Clean Wheel, Repacked Outside the Build</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The attacker unpacked the clean 1.26.0 wheel, added a startup hook and files named like telemetry, and zipped it back up outside Microsoft's build</div>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1036/" target="_blank" rel="noopener">T1036 - Masquerading</a>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1027/" target="_blank" rel="noopener">T1027 - Obfuscated Files or Information</a>
+        </div>
+        <p class="step-desc">The 1.26.1 wheel is the legitimate 1.26.0 wheel with a new <code>agent_framework_meta.pth</code>, a new <code>agent_framework_meta/_telemetry.py</code>, and a hook added to <code>agent_framework_meta/__init__.py</code>. JFrog reads the ZIP headers as a repack with Info-ZIP 3.0 at 20:26:19 UTC, under uid 1000, on a host whose clock was set to UTC+8, while the WHEEL file still claimed <code>Generator: flit 4.2.0</code>. The dependency on <code>agent-framework-core[all]==1.26.0</code> was left alone, so the framework kept working. SafeDep notes the wheel grew from 6,681 to 10,402 bytes.</p>
+        <p class="step-desc">The names were chosen to pass as SDK diagnostics. Wiz quotes the hook's description, "Lightweight runtime diagnostics hook", and its user-agent, <code>af-runtime-diagnostics/1</code>, and the exfiltration URL was base64-encoded. Aikido's reading: "That fits someone who unpacked a legitimate wheel, edited it by hand, and uploaded the repacked file with valid publishing credentials." JFrog says the wheel came "from a local script rather than Microsoft's Azure DevOps and ESRP release pipeline," which reads as if ESRP was bypassed, while Wiz says the release went through ESRP. Both can hold if the wheel was built outside the pipeline and then submitted to ESRP. That is this page's reading; neither source puts it that way.</p>
+        <p class="step-desc">As with <a href="litellm-pypi-teampcp.html">LiteLLM / TeamPCP</a>, the release had no matching tag in the project's repository, the cheapest check a consumer can run against a direct upload.</p>
+        <div class="step-code">
+          <span class="hl">Added:</span> agent_framework_meta.pth, agent_framework_meta/_telemetry.py, a hook in agent_framework_meta/__init__.py<br>
+          <span class="hl">Repacked:</span> Info-ZIP 3.0, 20:26:19 UTC, uid 1000, host clock UTC+8 (JFrog)<br>
+          <span class="hl">Left as before:</span> WHEEL "Generator: flit 4.2.0"; dependency agent-framework-core[all]==1.26.0<br>
+          <span class="hl">Disguise:</span> "Lightweight runtime diagnostics hook", user-agent af-runtime-diagnostics/1, base64-encoded URL<br>
+          <span class="hl">Detect:</span> a release that adds a .pth file the previous release did not have, with no matching tag
+        </div>
+        <div class="step-tags"><span class="stag">Repacked Wheel</span><span class="stag">.pth</span><span class="stag">No Git Tag</span><span class="stag">T1036</span><span class="stag">T1027</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ Initial Access: Through Microsoft's Own Release Service, by Wiz's Account</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">By Wiz's account, ESRP refused the publish from AWS, then accepted it from Microsoft-owned IP space, approved it automatically and passed it through its malware scan</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1195/002/" target="_blank" rel="noopener">T1195.002 - Compromise Software Supply Chain</a>
+        </div>
+        <p class="step-desc">Wiz's chart of the publish reads like a release log. At 20:25:06 UTC the <code>CAIRN_ESRP_PROBE2</code> probe reached the webhook from Microsoft IP space. At 20:28:56 a publish attempt from AWS was rejected by ESRP's IP filtering with HTTP 403, and the tooling reported "publish rejected". At 20:33:00 the release was submitted again from Microsoft IP space, and ESRP auto-approved it at 20:33:08. Its malware scan ran from 20:33:09 to 20:35:15 and passed, and 1.26.1 was live on PyPI at 20:35:20, 2 minutes 20 seconds after submission. At 20:37:12 the tooling sent the webhook what Wiz's chart calls a "full ESRP release record".</p>
+        <p class="step-desc">Three controls sat in the path, and Wiz's chart shows each one. The IP filter was the only one that refused anything, and it gave way four minutes later when the request came from Microsoft's address space. Approval was automatic. The malware scan passed a wheel carrying an executable <code>.pth</code> file. On PyPI, StepSecurity reports, both malicious wheels carried the uploader user-agent <code>RestSharp/106.13.0.0</code>, a .NET HTTP client, and no <a class="glossary-link" href="../glossary.html#term-provenance">provenance</a> attestation. Neither did the legitimate 1.26.0, SafeDep found, so there was no attested release to compare against. StepSecurity adds that "the absence of an attestation alone does not identify the upload mechanism," and no source says what user-agent Microsoft's legitimate uploads carry.</p>
+        <div class="step-code">
+          <span class="hl">20:28:56 UTC:</span> publish from AWS rejected by ESRP IP filtering, HTTP 403<br>
+          <span class="hl">20:33:00 UTC:</span> submitted from Microsoft IP space<br>
+          <span class="hl">20:33:08 UTC:</span> "auto-approved"<br>
+          <span class="hl">20:33:09 to 20:35:15 UTC:</span> malware scan "passed"<br>
+          <span class="hl">20:35:20 UTC:</span> 1.26.1 live on PyPI, wheel only<br>
+          <span class="hl">Why it worked:</span> an IP filter that Microsoft-owned address space satisfied, automatic approval, and a scan that passed a .pth file (Wiz's chart)
+        </div>
+        <div class="step-tags"><span class="stag">ESRP</span><span class="stag">IP Allow-List</span><span class="stag">Auto-Approval</span><span class="stag">No Provenance</span><span class="stag">T1195.002</span><span class="stag">T1078</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">💻 Execution: Every Python Start, Imported or Not</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Wherever 1.26.1 was installed, the .pth hook ran the stealer on every Python start, pip included</div>
+          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1546/018/" target="_blank" rel="noopener">T1546.018 - Event Triggered Execution: Python Startup Hooks</a>
+          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1059/006/" target="_blank" rel="noopener">T1059.006 - Python</a>
+        </div>
+        <p class="step-desc">Python's <code>site</code> module processes <code>.pth</code> files in <code>site-packages</code> at interpreter startup and executes lines that begin with <code>import</code>. So, as JFrog points out, <code>pip</code>, <code>pytest</code>, IDE language servers and container entrypoints all fired the hook, whether or not anything imported agent-framework. The hook forked a detached process with <code>os.setsid()</code>, or started a daemon thread on Windows, was guarded by an <code>_AF_TEL=1</code> environment variable, and silenced every error. The same startup trick carried the <a href="litellm-pypi-teampcp.html">LiteLLM / TeamPCP</a> and <a href="litellm-1-107-release-hijack.html">LiteLLM 1.107.0</a> payloads.</p>
+        <p class="step-desc">Automation moved quickly. JFrog saw Renovate open upgrade pull requests downstream "within six minutes of 1.26.1 landing on PyPI," and Wiz's chart puts the first victim's data at the webhook about five minutes after the release went live. The payload had no second stage and no worm, and JFrog reports "no <a class="glossary-link" href="../glossary.html#term-persistence">persistence</a> outside site-packages." Deleting the files stops new runs, though StepSecurity warns that removing a hook alone "does not terminate an existing collector," and any Python started before the files are gone runs the stealer again.</p>
+        <div class="step-code">
+          <span class="hl">Files (1.26.1):</span> agent_framework_meta.pth, agent_framework_meta/_telemetry.py<br>
+          <span class="hl">Trigger:</span> every interpreter start in the environment, including pip and pytest (JFrog)<br>
+          <span class="hl">Behaviour:</span> forks with os.setsid() or a daemon thread on Windows; guarded by _AF_TEL=1; errors silenced<br>
+          <span class="hl">First victim:</span> about 5 minutes after 1.26.1 went live (Wiz's chart)<br>
+          <span class="hl">Hunt command:</span> <code>find / -name 'agent_framework_meta.pth' -o -name 'af_runtime_diag.pth' 2&gt;/dev/null</code>
+        </div>
+        <div class="step-tags"><span class="stag">.pth Autorun</span><span class="stag">site-packages</span><span class="stag">Renovate</span><span class="stag">T1546.018</span><span class="stag">T1059.006</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access: Environments, Files and Fresh Azure Tokens</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The stealer read secret-like environment variables, other processes' environments and credential files, then asked Azure for fresh tokens</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener">T1552.001 - Unsecured Credentials: Credentials In Files</a>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/005/" target="_blank" rel="noopener">T1552.005 - Unsecured Credentials: Cloud Instance Metadata API</a>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1528/" target="_blank" rel="noopener">T1528 - Steal Application Access Token</a>
+        </div>
+        <p class="step-desc">It took the host name, user, working directory and the first 20 command-line arguments, then every environment variable whose name contained one of 31 case-insensitive substrings, by JFrog's count. It read up to 300 <code>/proc/*/environ</code> files, which hold other processes' environments, and up to 60 credential files: <code>~/.azure</code>, <code>.npmrc</code>, <code>pip.conf</code>, <code>.netrc</code>, <code>.git-credentials</code>, <code>.docker/config.json</code>, Hugging Face tokens, Microsoft Foundry configuration, the Azure DevOps agent's <code>.credentials</code>, and <code>.env</code> and JSON files under <code>/app</code> and <code>/workspace</code>.</p>
+        <p class="step-desc">Then it asked for new tokens. From the instance metadata service at 169.254.169.254, or the App Service <code>IDENTITY_ENDPOINT</code>, it requested <a class="glossary-link" href="../glossary.html#term-service-account">managed identity</a> tokens for 12 Azure resources by the count of Wiz, JFrog and Orca, including Resource Manager, Graph, <a class="glossary-link" href="../glossary.html#term-key-vault">Key Vault</a>, Storage, Container Registry and Azure DevOps; Chainguard counts nine resource types. Wiz and JFrog say such tokens can stay valid for up to 24 hours. It also asked for an Azure DevOps OIDC token for <code>api://AzureADTokenExchange</code> through <code>SYSTEM_OIDCREQUESTURI</code> and <code>SYSTEM_ACCESSTOKEN</code>, and whether that worked is disputed. JFrog says the request lacks <code>serviceConnectionId</code>, so real endpoints answer HTTP 400, though <code>SYSTEM_ACCESSTOKEN</code> itself still leaked through the environment. StepSecurity says static analysis cannot confirm that any token was issued. On a Linux host outside Azure that drops traffic to 169.254.169.254, JFrog notes, the metadata requests time out one after another for about 104 seconds before the data goes out.</p>
+        <p class="step-desc">What it did not take matters for scoping, and AWS is only partly out. None of Wiz, JFrog, StepSecurity, SafeDep, Socket or Orca lists AWS credential files or AWS metadata credential paths among the targets. All six do list AWS among the environment variable name substrings, so AWS keys held in the environment were in scope. The stealer also read <code>.env</code> files under <code>/app</code> and <code>/workspace</code>, and it kept entries from other processes' environments containing TOKEN, SECRET, PASSWORD or KEY= (SafeDep, Socket, StepSecurity), a filter an AWS secret key's variable name passes (this page's reading). JFrog lists AWS among the keys "in environment variables or .env files" to rotate. None of Wiz, JFrog, Socket or Orca lists GCP, <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> or SSH keys among its targets.</p>
+        <div class="step-code">
+          <span class="hl">Environment:</span> names matching 31 substrings (JFrog); up to 300 /proc/*/environ files<br>
+          <span class="hl">Files:</span> ~/.azure, .npmrc, pip.conf, .netrc, .git-credentials, .docker/config.json, Hugging Face tokens, Microsoft Foundry configuration, Azure DevOps agent .credentials; up to 60 files<br>
+          <span class="hl">Azure:</span> managed identity tokens via 169.254.169.254 or IDENTITY_ENDPOINT, 12 Azure resources (Wiz, JFrog, Orca)<br>
+          <span class="hl">Azure DevOps:</span> OIDC request JFrog calls malformed; SYSTEM_ACCESSTOKEN taken from the environment either way<br>
+          <span class="hl">Not targeted:</span> AWS credential files or AWS metadata credential paths, GCP, Kubernetes, SSH keys<br>
+          <span class="hl">AWS still in scope:</span> AWS keys in environment variables or .env files, which JFrog says to rotate<br>
+          <span class="hl">Detect:</span> one managed identity requesting tokens for many resources within seconds, in Entra sign-in logs
+        </div>
+        <div class="step-tags"><span class="stag">Managed Identity</span><span class="stag"><a class="glossary-link" href="../glossary.html#term-imds">IMDS</a></span><span class="stag">/proc environ</span><span class="stag">Azure DevOps</span><span class="stag">T1552.001</span><span class="stag">T1552.005</span><span class="stag">T1528</span><span class="stag">T1082</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exfil">📤 Exfiltration: One POST to a Public Webhook</div>
+    <div class="kc-step step-g">
+      <div class="step-num">07</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Everything went out in one compressed POST to a webhook.site URL, the same one the attacker's tooling reported to</div>
+          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1567/004/" target="_blank" rel="noopener">T1567.004 - Exfiltration Over Web Service: Exfiltration Over Webhook</a>
+        </div>
+        <p class="step-desc">The stealer packed its findings into one JSON document, compressed it with zlib at level 9, base64-encoded it, and sent it in a single HTTPS POST to <code>webhook[.]site/d381fd80-ec62-42ad-8f5c-d1b15103c9bb?t=telemetry</code>, with no retry and no fallback channel. The attacker's tooling sent its own progress reports to the same URL, which is how Wiz could see the ESRP steps.</p>
+        <p class="step-desc">Wiz analyzed "the 50 requests that were stored by webhook[.]site's free tier," which span 20:25 to 20:49 UTC; its chart marks the last one "endpoint likely hit 50-request cap". Wiz sets aside the attacker's own requests and those from sandboxes, scanners and tests, and says the remaining 17 "represent only three unique, successful cases of exfiltration of victim data": an Azure DevOps build pool (10 requests), a GitHub Actions job in an open-source repository (4) and an Azure App Service (3). "Victim identities withheld," the chart says. Because the count rests on stored requests alone, this page reads it as a floor. JFrog later received HTTP 429 from the endpoint. For reading your own proxy logs, Wiz says: "A 200 means that host's data was accepted. A 410/429 suggests it was rejected."</p>
+        <div class="step-code">
+          <span class="hl">Endpoint:</span> webhook[.]site/d381fd80-ec62-42ad-8f5c-d1b15103c9bb?t=telemetry<br>
+          <span class="hl">Encoding:</span> JSON, zlib level 9, base64; one POST, no retry<br>
+          <span class="hl">User-agents:</span> af-runtime-diagnostics/1 and runtime-diagnostics/1 (StepSecurity; Orca)<br>
+          <span class="hl">Stored:</span> 50 requests, 20:25 to 20:49 UTC; three unique victims (Wiz)<br>
+          <span class="hl">Detect:</span> the UUID path in proxy logs, not only the domain, which is a shared service
+        </div>
+        <div class="step-tags"><span class="stag">webhook.site</span><span class="stag">Single POST</span><span class="stag">T1567.004</span><span class="stag">T1560.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ Initial Access: Two Minutes After Quarantine</div>
+    <div class="kc-step step-r">
+      <div class="step-num">08</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Two minutes after PyPI quarantined 1.26.1, the attacker uploaded 1.26.2 with renamed files and GitHub Actions OIDC theft added</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1195/002/" target="_blank" rel="noopener">T1195.002 - Compromise Software Supply Chain</a>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1036/" target="_blank" rel="noopener">T1036 - Masquerading</a>
+        </div>
+        <p class="step-desc">PyPI quarantined 1.26.1 at 21:06:16 UTC, 31 minutes after it went live. At 21:08:39, "just 2 minutes 23 seconds after the first quarantine" in StepSecurity's words, 1.26.2 appeared. It restored <code>__init__.py</code> byte for byte and moved the hook to <code>af_runtime_diag.pth</code> and <code>af_runtime_diag.py</code>, which defeats a search for 1.26.1's file names and a diff of <code>__init__.py</code>. It added GitHub Actions OIDC token requests for <code>api://AzureADTokenExchange</code> and <code>https://management.azure.com/</code> in jobs with <code>id-token: write</code>, runner paths such as <code>/home/runner/work/_temp/*</code> and <code>/home/runner/.azure/</code>, and the name substrings ACTIONS, OIDC, RUNNER and ARM_. The file cap rose from 60 to 80. PyPI quarantined 1.26.2 at 21:16:44, eight minutes after upload, and JFrog says "PyPI removed both releases by 21:16." Sources that checked later give about 21:20 (Aikido, Orca) and 21:30 (Wiz) for both versions being gone.</p>
+        <p class="step-desc">No source describes the path 1.26.2 took to PyPI; StepSecurity notes only that both wheels carried the same uploader user-agent. What the re-publish does show is the gap JFrog names: "Quarantining a single version on PyPI does not revoke the compromised publishing credential." OpenSourceMalware wrote the next morning that the attacker "is believed to still have publishing access because 1.26.2 was published after PyPI quarantined 1.26.1." PyPI's advisory says it worked with Microsoft to review the project's accounts. Microsoft has made repositories private, which The Hacker News identifies as <code>microsoft/agent-framework</code> and <code>microsoft/onnxruntime</code>, and The Register notes that "neither Microsoft nor security researchers have linked the ONNX repo's pull to the malware campaign." GitHub Actions OIDC tokens were also the target in <a href="mini-shai-hulud-tanstack.html">Mini Shai-Hulud</a>, there scraped from runner memory to publish packages.</p>
+        <div class="step-code">
+          <span class="hl">21:06:16 UTC:</span> 1.26.1 quarantined (StepSecurity; JFrog gives 21:06)<br>
+          <span class="hl">21:08:39 UTC:</span> 1.26.2 uploaded<br>
+          <span class="hl">21:16:44 UTC:</span> 1.26.2 quarantined; both versions since removed (PyPI)<br>
+          <span class="hl">Renamed:</span> af_runtime_diag.pth, af_runtime_diag.py; __init__.py restored<br>
+          <span class="hl">Added:</span> GitHub Actions OIDC for api://AzureADTokenExchange and https://management.azure.com/<br>
+          <span class="hl">Why it worked:</span> quarantine removes a version and leaves the credential that published it (JFrog)
+        </div>
+        <div class="step-tags"><span class="stag">Re-Publish</span><span class="stag">Quarantine</span><span class="stag">GitHub Actions OIDC</span><span class="stag">T1195.002</span><span class="stag">T1036</span><span class="stag">T1528</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>If either version ran, stop running Python there before you clean up.</strong> Every interpreter start re-runs the hook, so StepSecurity and BleepingComputer both say to isolate affected hosts, containers and runners and not to run <code>pip</code> or Python in the affected environment. StepSecurity also says to terminate any collector process still running, since removing the hook does not stop one. JFrog's procedure differs: set <code>_AF_TEL=1</code> first, delete the four payload files and <code>__pycache__</code>, and avoid a bare <code>pip uninstall</code>, or use <code>uv pip uninstall</code> followed by <code>uv cache clean</code>. Then rebuild from a clean base pinned to <code>agent-framework==1.26.0</code> (StepSecurity, JFrog, Orca, Aikido), and lock the whole dependency tree with hashes, using <code>pip-compile --generate-hashes</code> or <code>uv lock</code>, not only agent-framework: SafeDep notes that "a pin on agent-framework alone leaves its four sibling dependencies free to update," and StepSecurity also advises a hash-pinned lockfile. Block 1.26.1 and 1.26.2 and evict them from mirrors and caches (StepSecurity, JFrog, Orca).</div>
+        <div class="def-item"><strong>Find every place the versions could have landed, including bots' pull requests.</strong> Search lockfiles, requirements, CI logs, virtual environments, container images, mirrors and caches for 1.26.1 and 1.26.2, and hosts for <code>agent_framework_meta.pth</code>, <code>agent_framework_meta/_telemetry.py</code>, <code>af_runtime_diag.pth</code>, <code>af_runtime_diag.py</code> and the <code>_AF_TEL</code> variable (Wiz, PyPI's advisory, StepSecurity, Orca). JFrog adds Renovate and Dependabot pull requests from November 17. In proxy and DNS logs, search for the UUID path rather than the domain, a shared service (OpenSourceMalware, Chainguard), and for the user-agents <code>af-runtime-diagnostics/1</code> and <code>runtime-diagnostics/1</code> (StepSecurity, Orca).</div>
+        <div class="def-item"><strong>Rotate from a clean machine, then deal with the tokens rotation cannot reach.</strong> Wiz, JFrog, StepSecurity, SafeDep and PyPI's advisory all say to rotate every secret present on an affected host or runner: Azure CLI sessions, Azure DevOps personal access tokens and service connections, <a class="glossary-link" href="../glossary.html#term-npm">npm</a>, PyPI, NuGet, Docker and Hugging Face tokens, git credentials and <a class="glossary-link" href="../glossary.html#term-llm">LLM</a> API keys. JFrog adds revoking <a class="glossary-link" href="../glossary.html#term-entra-id">Entra ID</a> user sessions wherever <code>~/.azure</code> token caches existed, and StepSecurity adds re-registering self-hosted runners whose credential files were exposed. Rotation does not touch tokens already issued, which SafeDep and StepSecurity both point out, and Wiz and JFrog put their lifetime at up to 24 hours. Review Entra ID sign-in and activity logs for the managed identities and federated credentials involved (Wiz, JFrog, StepSecurity). JFrog adds recycling the affected compute, and narrowing or removing role assignments if you detect unauthorized replay; StepSecurity also says to review managed-identity role assignments.</div>
+        <div class="def-item"><strong>For GitHub Actions jobs that installed 1.26.2 with <code>id-token: write</code>, treat the job's Azure <a class="glossary-link" href="../glossary.html#term-federation">federation</a> as exposed.</strong> Wiz advises treating OIDC tokens for <code>api://AzureADTokenExchange</code> and <code>https://management.azure.com/</code> as exposed, reviewing the Entra federated credentials that trust those repositories, and rotating the repository and organization secrets the job could read. StepSecurity likewise says to treat tokens the job could obtain as exposed and to audit GitHub OIDC permissions and Azure federated credentials, and OpenSourceMalware says to revoke GitHub Actions runtime credentials and invalidate OIDC-derived sessions where possible.</div>
+        <div class="def-item"><strong>Treat a release-service credential as the publisher's identity.</strong> By Wiz's assessment, one client certificate and key let the attacker submit a release that Microsoft's own service approved, scanned and published under Microsoft's name. Most PyPI chains on this site turn on a registry token or the project's own build workflow, as in <a href="litellm-pypi-teampcp.html">LiteLLM / TeamPCP</a> and <a href="ultralytics-cache-poisoning.html">Ultralytics</a>. If Wiz is right, this one sits further along, in the vendor's internal release service. In <a href="3cx-x-trader.html">3CX</a> the attacker had to reach the vendor's build environments; here, by Wiz's account, a credential for the service at the end of the pipeline was enough. This page's suggestion, since Microsoft has said nothing about how ESRP authenticates clients: keep any credential that can submit releases in hardware or bound to the build system's workload identity rather than in a file that can be copied, and alert on any use of it from outside the build pipeline.</div>
+        <div class="def-item"><strong>Allow-list the build system, not the company's address space.</strong> ESRP's IP filter turned away the attempt from AWS and let the same credential through four minutes later from Microsoft-owned IP space, per Wiz's chart. Wiz does not say whether that address space was rented Azure capacity or a Microsoft machine. If it was the former, a filter keyed to a cloud provider's ranges admits that provider's customers. This page's reading is that a release service's network rule should name the build agents allowed to call it, paired with a check on the caller's workload identity, so that a stolen certificate fails from anywhere else.</div>
+        <div class="def-item"><strong>Refuse a release that no commit or tag explains.</strong> Approval was automatic and the malware scan passed a repackaged wheel with a new <code>.pth</code> file, while the repository had no <code>python-1.26.1</code> tag and no malicious code on main. This page suggests two checks for a release service: compare each artifact with the source commit it claims, which here would have found nothing to match, and hold for a human any Python release that adds a <code>.pth</code> file the previous release did not have. Consumers can run the same check: as on the <a href="litellm-pypi-teampcp.html">LiteLLM / TeamPCP</a> page, fail a build when a new version has no matching tag. <a href="codecov-bash-uploader.html">Codecov</a> is the older lesson in the same vein: an artifact swapped outside the build ran for two months until one customer compared a published hash with what they had downloaded.</div>
+        <div class="def-item"><strong>Publish attestations so a bad release has something to be compared with, and hold new versions before adopting them.</strong> Neither the malicious wheels (StepSecurity) nor the legitimate 1.26.0 (SafeDep) carried a provenance attestation, and PyPI shows none for any release of the project (this page's check, November 23), so there was no record of how a good release was built to check a bad one against. Attestations do not stop a release that comes through the official path, as Ultralytics and <a href="litellm-1-107-release-hijack.html">LiteLLM 1.107.0</a> show. This page's reading is that one tied to the source repository and build workflow would have shown that 1.26.1 had no commit behind it. On the consuming side, Renovate opened upgrade pull requests within six minutes (JFrog), and both versions were gone within an hour of the first upload. StepSecurity and Chainguard both point to a cooldown that holds a new release until it has aged. Chainguard says a cooldown policy keeps "a same-day compromise like this one out of reach"; StepSecurity adds that a cooldown check on dependency pull requests "does not protect every install path," because an unpinned dependency can resolve to the newest release without a pull request.</div>
+        <div class="def-item"><strong>When a publishing credential is stolen, revoke the credential, not only the versions.</strong> Quarantining 1.26.1 left the credential working, and 1.26.2 followed 2 minutes 23 seconds later. JFrog's point is that "quarantining a single version on PyPI does not revoke the compromised publishing credential," and OpenSourceMalware drew the same conclusion from the timing. For a publisher, that means revoking every credential that can release the project, including registry tokens, trusted publisher bindings and any release-service credential, alongside pulling the versions. Microsoft has not said whether the ESRP certificate has been revoked.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi" target="_blank" rel="noopener">Wiz - Microsoft agent-framework compromised (updated November 18 with its assessed ESRP root cause)</a>
+        <a class="src-link" href="https://web.archive.org/web/20261117234238/https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi" target="_blank" rel="noopener">Wiz - Original November 17 version (Wayback Machine)</a>
+        <a class="src-link" href="https://osv.dev/vulnerability/PYSEC-2026-4388" target="_blank" rel="noopener">PyPI Security - PYSEC-2026-4388</a>
+        <a class="src-link" href="https://github.com/pypa/advisory-database/pull/429" target="_blank" rel="noopener">PyPA advisory database - Pull request 429</a>
+        <a class="src-link" href="https://github.com/advisories/GHSA-764m-3ppc-5m73" target="_blank" rel="noopener">GitHub Advisory Database - GHSA-764m-3ppc-5m73</a>
+        <a class="src-link" href="https://osv.dev/vulnerability/MAL-2026-20101" target="_blank" rel="noopener">OpenSSF malicious packages - MAL-2026-20101</a>
+        <a class="src-link" href="https://research.jfrog.com/post/agent-framework-hijack/" target="_blank" rel="noopener">JFrog - agent-framework hijacked via a .pth startup hook</a>
+        <a class="src-link" href="https://www.stepsecurity.io/blog/microsoft-agent-framework-pypi-package-compromised" target="_blank" rel="noopener">StepSecurity - Microsoft agent-framework PyPI package compromised</a>
+        <a class="src-link" href="https://safedep.io/blog/microsoft-agent-framework-pypi-compromise" target="_blank" rel="noopener">SafeDep - Microsoft agent-framework compromised twice on PyPI</a>
+        <a class="src-link" href="https://socket.dev/blog/agent-framework-pypi-package-compromised-with-credential-stealer" target="_blank" rel="noopener">Socket - agent-framework compromised with a credential stealer</a>
+        <a class="src-link" href="https://aikido.dev/blog/two-malicious-agent-framework-releases-hit-pypi-in-33-minutes" target="_blank" rel="noopener">Aikido - Two malicious agent-framework releases in 33 minutes</a>
+        <a class="src-link" href="https://www.chainguard.dev/unchained/microsoft-agent-framework-compromised-on-pypi-november-2026" target="_blank" rel="noopener">Chainguard - agent-framework compromised on PyPI</a>
+        <a class="src-link" href="https://opensourcemalware.com/blog/agent-framework-pypi-compromised" target="_blank" rel="noopener">OpenSourceMalware - Official agent-framework package compromised</a>
+        <a class="src-link" href="https://orca.security/resources/research/microsoft-agent-framework-pypi-supply-chain-attack-versions-1-26-1-and-1-26-2-steal-cloud-credentials/" target="_blank" rel="noopener">Orca Security - Versions 1.26.1 and 1.26.2 steal cloud credentials</a>
+        <a class="src-link" href="https://www.theregister.com/2026/11/18/microsoft_onnx_runtime_github/5310858" target="_blank" rel="noopener">The Register - Reporting, with Microsoft's statement</a>
+        <a class="src-link" href="https://thehackernews.com/2026/11/attackers-compromise-microsofts-agent.html" target="_blank" rel="noopener">The Hacker News - Reporting, with the repositories made private</a>
+        <a class="src-link" href="https://www.bleepingcomputer.com/news/security/microsofts-agent-framework-pypi-package-compromised-to-steal-credentials/" target="_blank" rel="noopener">BleepingComputer - Reporting</a>
+        <a class="src-link" href="https://wiz.io/blog/durabletask-teampcp-supply-chain-attack" target="_blank" rel="noopener">Wiz - durabletask, May 2026 (context)</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1078/" target="_blank" rel="noopener">MITRE T1078</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1588/007/" target="_blank" rel="noopener">MITRE T1588.007</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1195/002/" target="_blank" rel="noopener">MITRE T1195.002</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1546/018/" target="_blank" rel="noopener">MITRE T1546.018</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1552/005/" target="_blank" rel="noopener">MITRE T1552.005</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1567/004/" target="_blank" rel="noopener">MITRE T1567.004</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../ci-cd.html">CI/CD security</a>
+    <a class="src-link" href="../github-actions.html">GitHub Actions security</a>
+    <a class="src-link" href="../azure-security.html">Azure security</a>
+    <a class="src-link" href="../non-human-identity.html">Non-human identity</a>
+    <a class="src-link" href="../ai-ml-security.html">AI/ML security</a>
+    <a class="src-link" href="../incident-response.html">Incident response</a>
+  </div>
+</div>
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="wfx-loot-github-actions.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=59aab5a3" integrity="sha384-dB+qVv0Bh2JDBA+wsSREO9+89koSh2YyQ8me5SLY/soyhmbIrWeGiV4HHvxFAq3N"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>

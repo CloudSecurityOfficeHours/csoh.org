@@ -95,7 +95,7 @@ The rest of the curriculum lives on [`topics.html`](https://csoh.org/topics.html
 |---|---|
 | 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from <!--count:feeds-->63<!--/count--> sources |
 | 🔬 [Threat Research Sources](https://csoh.org/threat-research.html) | Curated directory of vendor research, IOC feeds, advisories - includes a Supply Chain Attacks section |
-| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->60<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
+| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->67<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
 | 📅 [Year in Review](https://csoh.org/cloud-breach-year-in-review.html) | Annual (and year-to-date) reviews of the cloud/SaaS/supply-chain breaches that defined each period |
 
 ### Careers
@@ -542,7 +542,7 @@ A community-maintained library of **step-by-step cloud breach reconstructions**,
 
 ### Current incidents covered
 
-All <!--count:breaches-->60<!--/count--> reconstructions, one row each. Techniques are the first four steps of that page's own kill chain, in order.
+All <!--count:breaches-->67<!--/count--> reconstructions, one row each. Techniques are the first four steps of that page's own kill chain, in order.
 
 | Incident | Year | Provider | Key Techniques |
 |---|---|---|---|
@@ -565,6 +565,7 @@ All <!--count:breaches-->60<!--/count--> reconstructions, one row each. Techniqu
 | [CircleCI](https://csoh.org/breaches/circleci-session-theft.html) | 2023 | CircleCI / CI | T1204.002, T1027, T1539, T1552.007 |
 | [MOVEit / Cl0p](https://csoh.org/breaches/moveit-cl0p.html) | 2023 | MFT / on-prem | T1594, T1190, T1505.003, T1036.005 |
 | [Okta Support System](https://csoh.org/breaches/okta-support-har.html) | 2023 | Okta | T1555.003, T1078, T1213, T1539 |
+| [Cloudflare Thanksgiving Intrusion](https://csoh.org/breaches/cloudflare-thanksgiving-2023.html) | 2023 | Atlassian / Service Accounts | T1199, T1550.001, T1059, T1213.003 |
 | [Snowflake / UNC5537](https://csoh.org/breaches/snowflake-unc5537.html) | 2024 | Snowflake | T1078.004, T1555.003, T1530, T1657 |
 | [Promptware](https://csoh.org/breaches/promptware.html) | 2024-2026 | AI / LLM (Gemini, Copilot) | T1566, T1071.001, T1534, T1530 |
 | [Change Healthcare / ALPHV](https://csoh.org/breaches/change-healthcare-alphv.html) | 2024 | Citrix / on-prem | T1133, T1078, T1021, T1041 |
@@ -583,6 +584,8 @@ All <!--count:breaches-->60<!--/count--> reconstructions, one row each. Techniqu
 | [Shai-Hulud npm Worm](https://csoh.org/breaches/shai-hulud-npm-worm.html) | 2025 | npm | T1566.002, T1111, T1195.002, T1059.007 |
 | [SharePoint ToolShell](https://csoh.org/breaches/sharepoint-toolshell.html) | 2025 | SharePoint / on-prem | T1190, T1505.003, T1552.004, T1606 |
 | [UNC6040 / Salesforce Vishing](https://csoh.org/breaches/unc6040-salesforce-vishing.html) | 2025 | Salesforce / SaaS | T1566.004, T1684.001, T1204.001, T1528 |
+| [Storm-0501 / Azure Cloud Ransomware](https://csoh.org/breaches/storm-0501-cloud-ransomware.html) | 2025 | Azure / Entra ID | T1098, T1098.003, T1490, T1486 |
+| [Bybit / Safe{Wallet}](https://csoh.org/breaches/bybit-safe-wallet.html) | 2025 | AWS S3 / Wallet Frontend | T1528, T1550.001, T1195.002, T1565.003 |
 | [Storm-2949 / Entra ID SSPR](https://csoh.org/breaches/storm-2949-entra-sspr.html) | 2026 | Azure / Entra ID | T1621, T1098.005, T1556.006, T1530 |
 | [Mini Shai-Hulud / TanStack npm](https://csoh.org/breaches/mini-shai-hulud-tanstack.html) | 2026 | npm / GitHub Actions | T1195.002, T1552.001, T1550.001, T1567.001 |
 | [Storm-3168 / Azure](https://csoh.org/breaches/storm-3168-jadepuffer-azure.html) | 2026 | Azure | T1552.001, T1580, T1552, T1485 |
@@ -606,6 +609,10 @@ All <!--count:breaches-->60<!--/count--> reconstructions, one row each. Techniqu
 | [ARTEX / Exposed Secrets to Azure](https://csoh.org/breaches/artex-github-secrets-azure.html) | 2026 | Entra ID / Azure | T1593.003, T1078.004, T1555.006, T1580 |
 | [Polymarket / DebugBear](https://csoh.org/breaches/polymarket-debugbear-rum-drainer.html) | 2026 | Third-Party Script / DNS | T1584.001, T1195.002, T1059.007, T1185 |
 | [Binance / TraderTraitor](https://csoh.org/breaches/binance-tradertraitor-signing-service.html) | 2026 | Crypto Exchange / Containers | T1204, T1566.003, T1554, T1552 |
+| [Qubole Cross-Account Trust Abuse](https://csoh.org/breaches/qubole-cross-account-trust.html) | 2026 | AWS / Cross-Account IAM | T1199, T1078.004, T1555.006, T1530 |
+| [Microsoft agent-framework PyPI Hijack](https://csoh.org/breaches/microsoft-agent-framework-pypi.html) | 2026 | PyPI / Azure / CI | T1078, T1195.002, T1546.018, T1567.004 |
+| [Barracuda 44-Hour Intrusion](https://csoh.org/breaches/barracuda-44-hour-intrusion.html) | 2026 | Cloud Accounts / Kubernetes / CI | T1552.001, T1078.004, T1555.006, T1677 |
+| [wfx-loot / WFX Phantom](https://csoh.org/breaches/wfx-loot-github-actions.html) | 2026 | GitHub Actions / AWS / Azure | T1078, T1677, T1003.007, T1098.001 |
 
 The recurring root causes across all of these are synthesized in **[breach-lessons.html](https://csoh.org/breach-lessons.html)**, and the incidents that defined each year are collected in the **[Cloud Breach Year in Review](https://csoh.org/cloud-breach-year-in-review.html)** series ([2021-2022](https://csoh.org/cloud-breach-year-in-review-2021-2022.html), [2023](https://csoh.org/cloud-breach-year-in-review-2023.html), [2024](https://csoh.org/cloud-breach-year-in-review-2024.html), [2025](https://csoh.org/cloud-breach-year-in-review-2025.html), [2026 so far](https://csoh.org/cloud-breach-year-in-review-2026-h1.html)). Kill chains that have a slide deck, to read alone or present, are listed on **[breach-kill-chain-decks.html](https://csoh.org/breach-kill-chain-decks.html)**.
 
@@ -726,14 +733,14 @@ csoh.org/
 │
 │  ── Breach kill chains ──
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages in breaches/)
-├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 60 chains
+├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 67 chains
 ├── breach-kill-chain-decks.html # Slide decks made from the kill chains (list generated from tools/decks/breaches/published.json)
 ├── cloud-breach-year-in-review.html       # Every-year hub for the reviews below
 ├── cloud-breach-year-in-review-2021-2022.html # 2021-2022 review
 ├── cloud-breach-year-in-review-2023.html  # 2023 review
 ├── cloud-breach-year-in-review-2024.html  # 2024 review
 ├── cloud-breach-year-in-review-2025.html  # The cloud/SaaS/supply-chain breaches that defined 2025
-├── cloud-breach-year-in-review-2026-h1.html  # 2026 review so far (January to early November)
+├── cloud-breach-year-in-review-2026-h1.html  # 2026 review so far (January to late November)
 ├── kevin-mitnick.html          # Special resource page
 │
 │  ── Governance + AI ──
@@ -820,7 +827,7 @@ csoh.org/
 ├── google66d489593949bd4c.html # Google Search Console verification token
 │
 │  ── Subdirectory page sets ──
-├── breaches/                   # 60 per-breach kill chain pages (Capital One, SolarWinds, etc.)
+├── breaches/                   # 67 per-breach kill chain pages (Capital One, SolarWinds, etc.)
 ├── meetings/                   # 122 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── homelab/                    # 4 deep command-line home-lab walkthroughs
@@ -954,7 +961,10 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `crosslink_glossary.py` | Adds `id="term-…"` to glossary `<dt>`s and links every term mention inside `<dd>`s | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_GLOSSARY_README.md) |
 | `crosslink_pages.py` | Links the first occurrence of each glossary term across the rest of the site | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_PAGES_README.md) |
 | `sync_glossary_usage.py` | Lists, under each glossary entry, every page that links to it ("Used on N pages") | docstring |
-| `sync_breach_timeline_index.py` | Renders the search field and kill chain index on `breach-timeline.html` from its breach cards | docstring |
+| `sync_breach_timeline_index.py` | Renders the search field, industry buttons and kill chain index on `breach-timeline.html` from its breach cards | docstring |
+| `breach_industries.py` | The industries a kill chain can be tagged with, their synonyms, and the exact "Industries hit" line on a card | docstring |
+| `register_kill_chain.py` | Writes the timeline ItemList, breach pagers and sitemap entries from the card order, and checks every kill chain is registered everywhere | docstring |
+| `check_card_finder_js.py` | Runs `card-finder.js` in a browser against a fixture page; run by hand after changing the search script | docstring |
 | `sync_breach_deck_index.py` | Renders the deck index, search field and cards on `breach-kill-chain-decks.html` from the published breach decks | docstring |
 | `glossary_terms.py` | Shared headword parsing behind both cross-linkers - one answer to "what strings link to this `<dt>`?", after two drifting copies each carried a bug the other had fixed | docstring |
 | `inject_meeting_topic_links.py` | Injects contextual topic-page links into recap bodies | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_MEETING_TOPIC_LINKS_README.md) |
@@ -1375,7 +1385,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->337<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->344<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
@@ -1386,7 +1396,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->323<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->122<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->330<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->122<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)

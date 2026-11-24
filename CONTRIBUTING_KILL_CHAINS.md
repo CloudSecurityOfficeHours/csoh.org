@@ -172,14 +172,13 @@ Everything below goes inside `<main class="kc-main kc-page" id="main-content">`.
 </div>
 ```
 
-Leave the `<nav class="incident-pager">` block that the copied page already has - you fix its links in step 2.
+Leave the `<nav class="incident-pager">` block that the copied page already has: `tools/register_kill_chain.py --fix` rewrites its links in step 2.
 
 ### 2. Register the page
 
-- **Timeline card.** In `breach-timeline.html`, add a `<li class="breach-card" id="<slug>">` in date order, matching the existing cards exactly (meta row with `inc-year` / `sev-badge` / `prov-tag`, then `breach-card-title`, `breach-card-summary`, and the `breach-card-cta`), linking to `breaches/<slug>.html`. Then run `python3 tools/sync_breach_timeline_index.py` so the search field and index above the cards list it; CI fails until you do.
-- **ItemList schema.** In the same file's `ItemList` JSON-LD, add a `ListItem` for the new page and **increment `numberOfItems`** (e.g. `10` to `11`). The count must equal the number of cards.
-- **Pager.** Fix the `incident-pager` prev/next links on the new page and on the two pages it now sits between, so the chain stays in order.
-- **Sitemap.** Add `https://csoh.org/breaches/<slug>.html` to `sitemap.xml`.
+- **Timeline card.** In `breach-timeline.html`, add a `<li class="breach-card" id="<slug>">` in date order, matching the existing cards exactly (meta row with `inc-year` / `sev-badge` / `prov-tag`, then `breach-card-title`, `breach-card-summary`, the industries line below, and the `breach-card-cta`), linking to `breaches/<slug>.html`. Then run `python3 tools/sync_breach_timeline_index.py` so the search field, industry buttons and index above the cards list it; CI fails until you do.
+- **Industries hit.** Write this line for your own breach; never copy a neighbouring card's. Name an industry only when your page says an organization in it was compromised, lost data, money or access, or took services offline because of the attack. Being targeted, or "potentially affected", doesn't count, and a page that names no victim industry gets no line. The industries and their exact spelling are in `tools/breach_industries.py`. List them alphabetically in this exact markup, on its own line after the summary: `<p class="industries-hit"><span class="industries-hit-label" data-finder-skip>Industries hit:</span> <span class="no-glossary">Finance, Retail</span></p>`. The sync tool rejects an unknown industry, and when the order or markup is off it prints the line to paste. Run `python3 tools/sync_breach_deck_index.py` too, so a published deck for the chain picks up the line.
+- **Registration tool.** After writing the card, run `python3 tools/register_kill_chain.py --fix`. It writes the timeline's `ItemList` entry (and its `numberOfItems`), the prev/next pagers on your page and the two it now sits between, and the `sitemap.xml` entry. Then run `python3 tools/register_kill_chain.py --check`: it lists anything your chain still lacks, such as its preview image, README row, breach-lessons entry or year-in-review link, and CI fails until the list is empty. The one exception is the slide deck: the maintainer builds and publishes it, so on your pull request the "no deck" finding is expected and is cleared before merging.
 - **Nav/footer.** Run `python3 tools/sync_chrome.py` so the shared header/footer stay identical site-wide.
 
 ---
@@ -195,7 +194,7 @@ If you've found a good post-mortem but don't want to write the HTML, you can use
 
    > *"Using this breach page as the template, write a new `breaches/salesloft-drift.html` for the Salesloft/Drift 2025 OAuth token theft campaign, keeping the exact same page structure, classes, and JSON-LD. Here's the post-mortem: [paste URL]"*
 
-5. Claude will research the incident, write a new breach page in the exact same style as the template, map each step to MITRE ATT&CK techniques, and return the file (remind it to also give you the `breach-card` and `ItemList` entries for `breach-timeline.html`)
+5. Claude will research the incident, write a new breach page in the exact same style as the template, map each step to MITRE ATT&CK techniques, and return the file (remind it to also give you the `breach-card` entry for `breach-timeline.html`; `tools/register_kill_chain.py --fix` writes the `ItemList` entry)
 6. **Review the output** - check the sources, verify the MITRE mappings, and make any corrections
 7. **Submit the updated file as a PR** following the steps below
 
@@ -209,7 +208,7 @@ This approach is particularly useful if you attended a Friday Zoom session where
 
 1. **Fork** the [CSOH GitHub repository](https://github.com/CloudSecurityOfficeHours/csoh.org)
 2. **Create a branch** named `kill-chain/incident-name-year` (e.g., `kill-chain/okta-2023`)
-3. **Create `breaches/<slug>.html`** and register it (timeline card, ItemList + `numberOfItems`, pager, sitemap, `sync_chrome.py`) following the two-step structure above
+3. **Create `breaches/<slug>.html`** and register it (timeline card and industries line, then `tools/register_kill_chain.py --fix` and `--check`, then `sync_chrome.py`) following the two-step structure above
 4. **Open a pull request** with the title format: `Add kill chain: [Incident Name] [Year]`
 5. In the PR description, include:
    - A one-paragraph summary of the incident

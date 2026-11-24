@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="How Storm-0501 turned domain admin on premises into Global Administrator in Entra ID, then Owner in Azure, through Entra Connect, then stole, deleted and encrypted cloud data and demanded ransom over Teams.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="Storm-0501 Cloud Ransomware 2025, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2025, Storm-0501, Microsoft Threat Intelligence, cloud-based ransomware, Entra Connect Sync, Directory Synchronization Account, Password Hash Synchronization, Global Administrator, MFA registration, hybrid joined device, Conditional Access, AADInternals, federated domain backdoor, elevateAccess, User Access Administrator, Azure Owner, AzureHound, AzCopy, resource locks, immutability policies, Recovery Services, Key Vault, encryption scopes, Microsoft Teams">
+    <title>Storm-0501 Cloud Ransomware 2025 Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/storm-0501-cloud-ransomware.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/storm-0501-cloud-ransomware.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/storm-0501-cloud-ransomware.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Storm-0501 Cloud Ransomware 2025 Breach Kill Chain">
+    <meta property="og:description" content="Microsoft's account of Storm-0501 in Azure: a synced Global Admin with no MFA, reset on premises, then Owner of every subscription, deleted backups, encryption with Azure's own features and a ransom demand over Teams.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-11-23">
+    <meta property="article:modified_time" content="2026-11-23">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="Storm-0501 Cloud Ransomware 2025">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2025">
+    <meta property="article:tag" content="Microsoft">
+    <meta property="article:tag" content="Storm-0501">
+    <meta property="article:tag" content="Entra Connect">
+    <meta property="article:tag" content="Global Administrator">
+    <meta property="article:tag" content="AADInternals">
+    <meta property="article:tag" content="elevateAccess">
+    <meta property="article:tag" content="Azure Backup">
+    <meta property="article:tag" content="Key Vault">
+    <meta property="article:tag" content="cloud ransomware">
+    <meta property="og:url" content="https://csoh.org/breaches/storm-0501-cloud-ransomware.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/storm-0501-cloud-ransomware.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Storm-0501 Cloud Ransomware 2025 Breach Kill Chain">
+    <meta name="twitter:description" content="Microsoft's account of Storm-0501 in Azure: a synced Global Admin with no MFA, reset on premises, then Owner of every subscription, deleted backups, encryption with Azure's own features and a ransom demand over Teams.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/storm-0501-cloud-ransomware.jpg">
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
+    <link rel="preload" href="/style.css?v=d0ce5478" as="style"
+        integrity="sha384-1j+JFhDnLVV9ZQ5vgoHmdpTST3Kdn0Cy5lHDQBgDVQiHsXMEZy2KbAmPQ5wyjd02">
+    <link rel="stylesheet" href="/style.css?v=d0ce5478"
+        integrity="sha384-1j+JFhDnLVV9ZQ5vgoHmdpTST3Kdn0Cy5lHDQBgDVQiHsXMEZy2KbAmPQ5wyjd02">
+    <link rel="stylesheet" href="/breach-timeline.css?v=a2469e23" integrity="sha384-rmpFuzCn6UkelLpKe109kBx+yoPABmR7h+5VwIwk6eygz4kedbAkeGGDZiH59T7R">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "Storm-0501 - Domain Admin On Premises → Entra Connect Sync Pivot → Synced Global Admin With No MFA → Owner of Every Subscription → Exfiltrate, Delete Backups, Encrypt → Ransom Over Teams",
+  "description": "How Storm-0501 turned domain admin on premises into Global Administrator in Entra ID, then Owner in Azure, through Entra Connect, then stole, deleted and encrypted cloud data and demanded ransom over Teams.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2026-11-23",
+  "dateModified": "2026-11-23",
+  "mainEntityOfPage": "https://csoh.org/breaches/storm-0501-cloud-ransomware.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "Storm-0501 cloud-based ransomware intrusion in Azure",
+    "description": "In an intrusion Microsoft described on August 27, 2025 without giving a date, Storm-0501 moved from domain administrator rights in an unnamed enterprise's on-premises Active Directory through Entra Connect Sync servers to a synced Global Administrator account with no MFA method. It then took Owner over the organization's Azure subscriptions, exfiltrated storage data, deleted backups and storage accounts along with multiple locks and immutability policies that blocked it, encrypted data that immutability still protected with a key from a new Key Vault, deleted the key and demanded ransom over Microsoft Teams. How the actor first got in is not disclosed."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Microsoft"
+    },
+    {
+      "@type": "Organization",
+      "name": "Microsoft Threat Intelligence"
+    },
+    {
+      "@type": "Organization",
+      "name": "Storm-0501"
+    },
+    {
+      "@type": "Thing",
+      "name": "Microsoft Entra ID"
+    },
+    {
+      "@type": "Thing",
+      "name": "Microsoft Azure"
+    },
+    {
+      "@type": "Organization",
+      "name": "Tenable"
+    },
+    {
+      "@type": "Organization",
+      "name": "Australian Signals Directorate"
+    },
+    {
+      "@type": "Organization",
+      "name": "CISA"
+    },
+    {
+      "@type": "Organization",
+      "name": "NSA"
+    },
+    {
+      "@type": "Organization",
+      "name": "Dark Reading"
+    },
+    {
+      "@type": "Organization",
+      "name": "MITRE"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Storm-0501 Cloud Ransomware 2025",
+      "item": "https://csoh.org/breaches/storm-0501-cloud-ransomware.html"
+    }
+  ]
+}
+    </script>
+  <noscript><link rel="stylesheet" href="/noscript.css?v=8806b2fa" integrity="sha384-a09IU6jBKCeHhGoD/YQr7jM3op0Sr57wzMvZzTx/cD/PXrCRHINeWLhwU3Ya6T3n"></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/></svg></button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">The subject</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="../iam.html">IAM &amp; identity</a></li>
+                            <li><a href="../topics.html#workloads">Workloads</a></li>
+                            <li><a href="../topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="../cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="../working-a-finding.html">Working a finding</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../breach-kill-chain-decks.html">Kill Chain Slide Decks</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Attending Conferences</a></li>
+                            <li><a href="../what-practitioners-think-about-human-risk.html">Human Risk</a></li>
+                            <li><a href="../what-practitioners-think-about-identity.html">Identity &amp; Passwords</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../cloud-deployment.html">How We Deploy</a></li>
+                            <li><a href="../how-csoh-org-is-secured.html">How We Secure It</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">Storm-0501 Cloud Ransomware 2025</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Storm-0501 Cloud Ransomware 2025</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="storm-0501-cloud-ransomware-2025">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">August 2025</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-azure">Azure</span>
+    </div>
+    <h2 class="inc-title">Storm-0501 - Domain Admin On Premises &rarr; Entra Connect Sync Pivot &rarr; Synced Global Admin With No MFA &rarr; Owner of Every Subscription &rarr; Exfiltrate, Delete Backups, Encrypt &rarr; Ransom Over Teams</h2>
+    <p class="inc-summary">On August 27, 2025 Microsoft <a class="glossary-link" href="../glossary.html#term-threat-intelligence">Threat Intelligence</a> described a recent intrusion by Storm-0501, which it calls a financially motivated threat actor, against an organization it does not name: "a large enterprise composed of multiple subsidiaries, each operating its own <a class="glossary-link" href="../glossary.html#term-active-directory">Active Directory</a> domain." The subsidiaries kept separate Azure tenants with varying Microsoft Defender coverage. Microsoft's account starts after the actor already held domain administrator rights on premises, so how it got in is not disclosed, and Microsoft gives no date for the intrusion beyond calling it recent. From there the actor moved through Entra Connect Sync servers into a second <a class="glossary-link" href="../glossary.html#term-tenant">tenant</a>, where a synced, non-human account held Global Administrator and had no <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> method registered. It reset that account's password on premises, let Password Hash Synchronization carry it to the cloud, registered its own MFA method, and signed in from a hybrid-joined server to satisfy <a class="glossary-link" href="../glossary.html#term-conditional-access">Conditional Access</a>. As Global Administrator it added a federated-domain backdoor, made itself Owner of every subscription, copied storage data out with AzCopy, deleted backups and storage accounts, removed resource locks and immutability policies in its way, encrypted what immutability still protected with a key from a new <a class="glossary-link" href="../glossary.html#term-key-vault">Key Vault</a>, deleted the key, and demanded ransom over Microsoft Teams.</p>
+    <p class="inc-summary">Microsoft's title calls this cloud-based ransomware, and its introduction says Storm-0501 runs such attacks "without relying on traditional malware deployment." Here the encryption was an Azure feature run at the actor's request, with no ransomware binary involved, though the actor still used tools: Evil-WinRM and AzureHound on the way in, and AADInternals once it held Global Administrator. One control held. In the first tenant, the actor's sign-ins as privileged users were blocked by Conditional Access and MFA, which Microsoft says suggests the actor held valid credentials but lacked a second factor or could not satisfy the policy conditions. Microsoft gives no data volume, ransom amount or <a class="glossary-link" href="../glossary.html#term-dwell-time">dwell time</a>, and does not say whether the encryption key was purged, whether the data was recovered, or whether the victim paid. Dark Reading made the last point explicit: "Microsoft did not say whether the victim paid."</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>Undated</strong> intrusion; Microsoft reported it on August 27, 2025 as "a recent campaign"</div>
+      <div class="inc-stat"><strong>2</strong> Entra Connect servers compromised, the second tied to a different tenant and AD domain</div>
+      <div class="inc-stat"><strong>1</strong> tenant with Defender for Endpoint deployed and one domain with significant coverage, "leaving portions of the network unmonitored," per Microsoft</div>
+      <div class="inc-stat"><strong>Storm-0501</strong>, a financially motivated actor active since at least 2021, per Microsoft; MITRE ATT&amp;CK group G1053</div>
+    </div>
+    <a class="pm-link" href="https://www.microsoft.com/en-us/security/blog/2025/08/27/storm-0501s-evolving-techniques-lead-to-cloud-based-ransomware/" target="_blank" rel="noopener">📄 Microsoft Threat Intelligence: Storm-0501's evolving techniques lead to cloud-based ransomware ↗</a>
+    <a class="pm-link" href="https://www.microsoft.com/en-us/security/blog/2024/09/26/storm-0501-ransomware-attacks-expanding-to-hybrid-cloud-environments/" target="_blank" rel="noopener">📄 Microsoft Threat Intelligence: Storm-0501 ransomware attacks expanding to hybrid cloud environments (2024) ↗</a>
+    <a class="pm-link" href="https://attack.mitre.org/groups/G1053/" target="_blank" rel="noopener">📄 MITRE ATT&amp;CK: Storm-0501, group G1053 ↗</a>
+    <p class="u-mt-075" data-breach-deck><strong>Slides:</strong> <a href="https://docs.google.com/presentation/d/1CrF2OCIQA5lzCj0nGnFAGFI7Leg0XIx_wUfS5lU4D8Q/export/pdf" target="_blank" rel="noopener noreferrer">download the PDF</a> or <a href="https://docs.google.com/presentation/d/1CrF2OCIQA5lzCj0nGnFAGFI7Leg0XIx_wUfS5lU4D8Q/copy" target="_blank" rel="noopener noreferrer">make your own editable copy</a> (copying needs a Google account). The slides are licensed <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer">CC BY-NC 4.0</a>.</p>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>: Domain Admin, by a Route Microsoft Does Not Describe</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">When Microsoft's account begins, Storm-0501 already holds domain administrator rights in one of the victim's Active Directory domains, and how it got them is not disclosed</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/002/" target="_blank" rel="noopener">T1078.002 - Valid Accounts: Domain Accounts</a>
+        </div>
+        <p class="step-desc">Microsoft says it focused its analysis "on the post-compromise phase," and that at that point the actor "had already achieved domain administrator privileges in the targeted domain." Its overview diagram compresses everything before that into one box, "Achieved initial access and escalated privileges to domain admin privileges," with no method attached. The intrusion carries no date either: Microsoft calls it "a recent campaign" in a post published August 27, 2025. Microsoft's earlier reporting on Storm-0501 covers other victims, and the 2025 post does not tie any of those entry routes to this one, so this page maps only the position Microsoft describes, a valid domain administrator account.</p>
+        <p class="step-desc">The victim's monitoring was uneven from the start. The subsidiaries kept separate Azure tenants "with varying Microsoft Defender product coverage." Only one tenant had Defender for Endpoint deployed, with devices from several AD domains onboarded under that tenant's license, and only one of the compromised domains had significant Defender for Endpoint deployment, "leaving portions of the network unmonitored." Microsoft says this fragmented deployment "created visibility gaps across the environment," and the next step shows the actor checking for them.</p>
+        <div class="step-code">
+          <span class="hl">Initial access:</span> not disclosed by Microsoft<br>
+          <span class="hl">Starting position:</span> domain administrator in the targeted domain<br>
+          <span class="hl">Date of intrusion:</span> not given; "a recent campaign"<br>
+          <span class="hl">Defender for Endpoint:</span> deployed in one tenant; significant deployment in one compromised domain<br>
+          <span class="hl">Detect:</span> nothing Microsoft describes; its account starts after this point
+        </div>
+        <div class="step-tags"><span class="stag">Domain Admin</span><span class="stag">Initial Access Not Disclosed</span><span class="stag">Fragmented <a class="glossary-link" href="../glossary.html#term-edr">EDR</a></span><span class="stag">T1078.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🔀 <a class="glossary-link" href="../glossary.html#term-lateral-movement">Lateral Movement</a>: Hosts Defender Could Not See</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">On premises the actor checked hosts for Defender, moved with Evil-WinRM, likely pivoted through an Entra Connect Sync server Defender did not cover, and ran DCSync</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1518/001/" target="_blank" rel="noopener">T1518.001 - Software Discovery: Security Software Discovery</a>
+          <a class="mt mt-lm" href="https://attack.mitre.org/techniques/T1021/006/" target="_blank" rel="noopener">T1021.006 - Remote Services: Windows Remote Management</a>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1003/006/" target="_blank" rel="noopener">T1003.006 - OS Credential Dumping: DCSync</a>
+        </div>
+        <p class="step-desc">On the few onboarded devices where Microsoft saw Storm-0501 activity, the actor ran reconnaissance before acting: <code>sc query sense</code> and <code>sc query windefend</code>, which ask for the Defender for Endpoint (Sense) and Microsoft Defender Antivirus (WinDefend) services. Microsoft reads this as "suggesting a deliberate effort to avoid detection by targeting non-onboarded systems." It also ran discovery with native Windows tools such as <code>quser.exe</code> and <code>net.exe</code>.</p>
+        <p class="step-desc">It moved laterally with Evil-WinRM, "a post-exploitation tool that utilizes PowerShell over Windows Remote Management (WinRM)." Earlier in the attack it had compromised an Entra Connect Sync server that was not onboarded to Defender for Endpoint. "We assess that this server served as a pivot point," Microsoft writes, with the actor establishing a tunnel through it. Entra Connect Sync is the server that synchronizes on-premises Active Directory with <a class="glossary-link" href="../glossary.html#term-entra-id">Entra ID</a>, so the actor now sat on a machine that links the two directories.</p>
+        <p class="step-desc">The actor also ran DCSync, which uses directory replication to ask a domain controller for credential data. By impersonating a domain controller, Microsoft says, it "could request password hashes for any user in the domain, including privileged accounts." Microsoft does not say which hashes were taken or whether any were used later.</p>
+        <div class="step-code">
+          <span class="hl">Defender checks:</span> sc query sense; sc query windefend<br>
+          <span class="hl">Discovery:</span> quser.exe, net.exe<br>
+          <span class="hl">Movement:</span> Evil-WinRM, PowerShell over WinRM<br>
+          <span class="hl">Pivot:</span> an Entra Connect Sync server not onboarded to Defender for Endpoint, used to tunnel (<a href="https://attack.mitre.org/techniques/T1572/" target="_blank" rel="noopener">T1572</a>); Microsoft's assessment<br>
+          <span class="hl">Credentials:</span> DCSync; which hashes were taken is not stated<br>
+          <span class="hl">Detect:</span> Defender for Endpoint "Suspicious remote PowerShell execution", "Possibly malicious use of proxy or tunneling tool" and "Possible source of DCSync attack"; Defender for Identity "Suspected DCSync attack (replication of directory services)"
+        </div>
+        <div class="step-tags"><span class="stag">Evil-WinRM</span><span class="stag">Entra Connect Sync</span><span class="stag">DCSync</span><span class="stag">Unmonitored Hosts</span><span class="stag">T1518.001</span><span class="stag">T1021.006</span><span class="stag">T1003.006</span><span class="stag">T1572</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🔍 Discovery: Tenant 1 Mapped, and Conditional Access Holds</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">With the Entra Connect Directory Synchronization Account and AzureHound the actor mapped the first tenant, then tried to sign in as privileged users and was blocked</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1087/004/" target="_blank" rel="noopener">T1087.004 - Account Discovery: Cloud Account</a>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1580/" target="_blank" rel="noopener">T1580 - Cloud Infrastructure Discovery</a>
+        </div>
+        <p class="step-desc">Entra Connect Sync works in Entra ID through its Directory Synchronization Account (DSA). The actor used that account, with AzureHound, "to enumerate users, roles, and Azure resources within the tenant." Microsoft does not say how the actor obtained the account's credential in this tenant.</p>
+        <p class="step-desc">The actor then "attempted to sign in as several privileged users." In Microsoft's words, "These attempts were unsuccessful, blocked by Conditional Access policies and multifactor authentication (MFA) requirements." Its reading is hedged: "This suggests that while Storm-0501 had valid credentials, they lacked the necessary second factor or were unable to satisfy policy conditions." Microsoft does not say where those credentials came from. This is the control in the chain that worked, and Microsoft's diagram marks it: "Initial attempts to compromise cloud environment blocked by conditional access and MFA." The actor's next moves were in a different domain and a different tenant.</p>
+        <div class="step-code">
+          <span class="hl">Identity:</span> the Entra Connect Sync Directory Synchronization Account; how it was obtained is not stated<br>
+          <span class="hl">Tool:</span> AzureHound<br>
+          <span class="hl">Enumerated:</span> users, roles, Azure resources<br>
+          <span class="hl">Sign-ins:</span> several privileged users, blocked by Conditional Access and MFA<br>
+          <span class="hl">Credential source:</span> not stated<br>
+          <span class="hl">Detect:</span> <span class="no-glossary">Defender for Cloud Apps</span> "Suspicious sign-in to Microsoft Entra Connect Sync account" and "Suspicious use of AzureHound"; Defender for Resource Manager "AzureHound tool invocation detected"
+        </div>
+        <div class="step-tags"><span class="stag">Directory Synchronization Account</span><span class="stag">AzureHound</span><span class="stag">Conditional Access</span><span class="stag">Control That Worked</span><span class="stag">T1087.004</span><span class="stag">T1580</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access: A Second Entra Connect Server</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The actor crossed into another AD domain, compromised a second Entra Connect server tied to a second tenant, extracted its sync account, and found a synced Global Administrator with no MFA method</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener">T1552.001 - Unsecured Credentials: Credentials In Files</a>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1087/004/" target="_blank" rel="noopener">T1087.004 - Account Discovery: Cloud Account</a>
+        </div>
+        <p class="step-desc">Microsoft says the actor "traversed between Active Directory domains" and moved laterally to compromise a second Entra Connect server, associated with a different Entra ID tenant and AD domain. It does not say how. The actor then "extracted the Directory Synchronization Account to repeat the reconnaissance process" in the second tenant. Microsoft names no tool or method for the extraction. ATT&amp;CK's entry for AADInternals files theft of Entra Connect credentials under Credentials In Files, and Microsoft's detection list includes Defender for Endpoint's "Entra Connect Sync credentials extraction attempt" and Defender Antivirus signatures such as <code>Behavior:Win32/DumpADConnectCreds.A!EntraConnect</code>.</p>
+        <p class="step-desc">The reconnaissance in the second tenant found "a non-human synced identity" holding the Global Administrator role in Entra ID, and "this account lacked any registered MFA method." Microsoft does not say what the account was for. A synced account is managed from on-premises AD, and the guide from ASD's ACSC, <a class="glossary-link" href="../glossary.html#term-cisa">CISA</a>, NSA and partners spells out the consequence: an attacker who compromises AD DS and reaches a privileged user object that synchronizes to Entra ID gains access to Entra ID. Its rule is "Do not synchronise privileged user objects from AD DS to Microsoft Entra ID."</p>
+        <div class="step-code">
+          <span class="hl">Second server:</span> Entra Connect, tied to a different Entra ID tenant and AD domain<br>
+          <span class="hl">Extracted:</span> the Directory Synchronization Account; method not stated<br>
+          <span class="hl">Found:</span> a synced, <a class="glossary-link" href="../glossary.html#term-nhi">non-human identity</a> holding Global Administrator, with no registered MFA method<br>
+          <span class="hl">Why it worked:</span> a cloud admin role on an account managed from on-premises AD<br>
+          <span class="hl">Detect:</span> Defender for Endpoint "Entra Connect Sync credentials extraction attempt" and "Potential Entra Connect Tampering"; Defender Antivirus Behavior:Win32/DumpADConnectCreds.A!EntraConnect
+        </div>
+        <div class="step-tags"><span class="stag">Entra Connect</span><span class="stag">Sync Account</span><span class="stag">Synced Global Admin</span><span class="stag">No MFA Registered</span><span class="stag">T1552.001</span><span class="stag">T1087.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">⬆️ <a class="glossary-link" href="../glossary.html#term-privilege-escalation">Privilege Escalation</a>: An On-Premises Reset Becomes a Cloud Sign-In</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The actor reset the account's on-premises password, Password Hash Synchronization carried it to Entra ID, and the actor registered its own MFA method and signed in from a hybrid-joined server</div>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1098/" target="_blank" rel="noopener">T1098 - Account Manipulation</a>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1098/005/" target="_blank" rel="noopener">T1098.005 - Account Manipulation: Device Registration</a>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">T1078.004 - Valid Accounts: Cloud Accounts</a>
+        </div>
+        <p class="step-desc">The actor "reset the user's on-premises password," which Entra Connect Sync then "legitimately synced" to the account's cloud identity shortly afterwards. The service ran Password Hash Synchronization, which Microsoft calls "the most common mode," and in Entra ID the password change appears as made by the Directory Synchronization Account. Microsoft's 2024 post lists two routes for a synced account: reset its on-premises password and let sync carry it to the cloud, or use a stolen sync account to set the cloud password with AADInternals. The 2025 post describes the first. The guide from ASD's ACSC, CISA, NSA and partners warns that the sync account "could also be used to set the password for a user object with the Global Administrator role."</p>
+        <p class="step-desc">The password was not enough on its own. With no MFA method registered, the actor "was redirected to simply register a new MFA method under their control." Microsoft does not say which method type. A Conditional Access policy also required a hybrid-joined device, so the actor "had to move laterally between different devices in the network" until Microsoft saw a successful Azure portal sign-in as Global Administrator "coming from a server that was hybrid joined." Microsoft describes the actor meeting the policies, not changing them. <a class="glossary-link" href="../glossary.html#term-mitre">MITRE</a>'s group page maps this to Modify Authentication Process: Conditional Access Policies, which covers changing policies, so this page maps it to Valid Accounts: Cloud Accounts instead.</p>
+        <div class="step-code">
+          <span class="hl">Reset:</span> the synced Global Administrator's on-premises password<br>
+          <span class="hl">Delivered by:</span> Password Hash Synchronization; Entra ID shows the sync account making the change<br>
+          <span class="hl">MFA:</span> none registered, so the actor registered its own; method type not stated<br>
+          <span class="hl">Device condition:</span> hybrid joined, met from a compromised hybrid-joined server<br>
+          <span class="hl">Why it worked:</span> a privileged account with no registered factor, and a device condition a compromised hybrid-joined machine meets<br>
+          <span class="hl">Detect:</span> failed Global Administrator sign-ins from company devices that "did not meet the Conditional Access condition," before one succeeded; sync account activity that breaks its pattern, which Microsoft says "is typically repetitive, coming from the same IP address to the same application"; this page adds an alert on any MFA registration for a privileged account
+        </div>
+        <div class="step-tags"><span class="stag">Password Hash Sync</span><span class="stag">MFA Registration</span><span class="stag">Hybrid Join</span><span class="stag">Conditional Access</span><span class="stag">T1098</span><span class="stag">T1098.005</span><span class="stag">T1078.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🔐 <a class="glossary-link" href="../glossary.html#term-persistence">Persistence</a>: A Federated Domain the Attacker Owns</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">As Global Administrator the actor used AADInternals to register a tenant it owned as a trusted federated domain, a backdoor for signing in as almost any user</div>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1484/002/" target="_blank" rel="noopener">T1484.002 - Domain or Tenant Policy Modification: Trust Modification</a>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1606/002/" target="_blank" rel="noopener">T1606.002 - Forge Web Credentials: SAML Tokens</a>
+        </div>
+        <p class="step-desc">The actor used its Global Administrator rights and the AADInternals tool "to register a threat actor-owned Entra ID tenant as a trusted federated domain." Microsoft says the backdoor let it "craft security assertion markup language (SAML) tokens" and sign in "as almost any user, according to the ImmutableId user property." Microsoft's table of observed activity lists crafting access tokens and acting against the cloud with them, but its narrative does not tie a forged token to a particular later step.</p>
+        <p class="step-desc">A <a class="glossary-link" href="../glossary.html#term-federation">federation</a> trust does not depend on the account that created it, so resetting that Global Administrator's password would leave the backdoor in place. Microsoft <a class="glossary-link" href="../glossary.html#term-incident-response">Incident Response</a>'s recovery <a class="glossary-link" href="../glossary.html#term-runbook">playbook</a> for Octo Tempest, a different actor that also plants federation backdoors, tells responders to "Change federation authentication from Federated to Managed" during eviction. The <a href="solarwinds.html">SolarWinds</a> intruders also added trusted federated identity providers in Azure AD.</p>
+        <div class="step-code">
+          <span class="hl">Tool:</span> AADInternals<br>
+          <span class="hl">Change:</span> an attacker-owned Entra ID tenant registered as a trusted federated domain<br>
+          <span class="hl">Capability:</span> SAML tokens for "almost any user", matched on ImmutableId<br>
+          <span class="hl">Forged tokens used for:</span> not tied to a later step by Microsoft<br>
+          <span class="hl">Harden:</span> set validatingDomains in federatedTokenValidationPolicy to 'all' (Microsoft)<br>
+          <span class="hl">Detect:</span> <span class="no-glossary">Defender for Cloud Apps</span> "Backdoor creation using AADInternals tool"; Defender for Endpoint "Suspicious cmdlets launch using AADInternals"
+        </div>
+        <div class="step-tags"><span class="stag">AADInternals</span><span class="stag">Federated Domain</span><span class="stag">SAML</span><span class="stag">ImmutableId</span><span class="stag">T1484.002</span><span class="stag">T1606.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">⬆️ Privilege Escalation: Global Admin to Owner of Every Subscription</div>
+    <div class="kc-step step-g">
+      <div class="step-num">07</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The actor called elevateAccess to become User Access Administrator over all the organization's subscriptions, made itself Owner of each, and mapped the protections it would meet</div>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1098/003/" target="_blank" rel="noopener">T1098.003 - Account Manipulation: Additional Cloud Roles</a>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1580/" target="_blank" rel="noopener">T1580 - Cloud Infrastructure Discovery</a>
+        </div>
+        <p class="step-desc">Entra ID roles do not grant access to Azure resources, Microsoft Learn explains, but a Global Administrator can elevate across that boundary. The actor invoked <code>Microsoft.Authorization/elevateAccess/action</code> and gained the User Access Administrator role "over all the organization's Azure subscriptions"; Microsoft Learn says elevation assigns that role "at root scope (/)". It then "assigned themselves the Owner Azure role over all the Azure subscriptions available" with <code>Microsoft.Authorization/roleAssignments/write</code>.</p>
+        <p class="step-desc">Microsoft assesses that the actor then used AzureHound to locate the organization's critical assets. It "managed to map out the Azure environment," including Azure policies, resource locks and Azure Storage immutability policies, the protections the next steps ran into. Compare <a href="storm-2949-entra-sspr.html">Storm-2949</a>, where the compromised identities already held privileged Azure <a class="glossary-link" href="../glossary.html#term-rbac">RBAC</a>; here an Entra role became Azure Owner through two operations.</p>
+        <div class="step-code">
+          <span class="hl">Elevate:</span> Microsoft.Authorization/elevateAccess/action; User Access Administrator at root scope "/" (Microsoft Learn)<br>
+          <span class="hl">Assign:</span> Microsoft.Authorization/roleAssignments/write; Owner on all subscriptions<br>
+          <span class="hl">Mapped:</span> Azure policies, resource locks, Azure Storage immutability policies (AzureHound, in Microsoft's assessment)<br>
+          <span class="hl">Logged in:</span> the Entra directory audit logs (in preview) and the Directory Activity view of the Azure <a class="glossary-link" href="../glossary.html#term-cloudtrail">activity log</a> (Microsoft Learn)<br>
+          <span class="hl">Detect:</span> Defender for Resource Manager "Suspicious elevate access operation" and "Suspicious Azure role assignment detected (Preview)"; Defender XDR "Possibly compromised user elevated access to Azure resources"
+        </div>
+        <div class="step-tags"><span class="stag">elevateAccess</span><span class="stag">User Access Administrator</span><span class="stag">Owner</span><span class="stag">Root Scope</span><span class="stag">T1098.003</span><span class="stag">T1580</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exfil">📤 <a class="glossary-link" href="../glossary.html#term-exfiltration">Exfiltration</a>: Open the Accounts, Take the Keys, Copy the Data</div>
+    <div class="kc-step step-r">
+      <div class="step-num">08</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The actor opened storage accounts to the internet and its own infrastructure, read their access keys, and copied the data out with AzCopy</div>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1686/001/" target="_blank" rel="noopener">T1686.001 - Disable or Modify System Firewall: Cloud Firewall</a>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/" target="_blank" rel="noopener">T1552 - Unsecured Credentials</a>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1530/" target="_blank" rel="noopener">T1530 - Data from Cloud Storage</a>
+        </div>
+        <p class="step-desc">Storm-0501 "exposed non-remotely accessible accounts to the internet and to their own infrastructure" with <code>Microsoft.Storage/storageAccounts/write</code>. Microsoft files this under defense evasion; in ATT&amp;CK v19 a cloud firewall change sits under Defense Impairment. For storage accounts with key access enabled, the actor used its Owner role to read the access keys through <code>Microsoft.Storage/storageAccounts/listkeys/action</code>, and "exfiltrated the data in these accounts to their own infrastructure" with the AzCopy command-line tool.</p>
+        <p class="step-desc">Microsoft gives no data volume and does not say what kind of infrastructure received the data, so this page maps the collection from cloud storage and leaves the exfiltration technique open: <a href="https://attack.mitre.org/techniques/T1537/" target="_blank" rel="noopener">Transfer Data to Cloud Account</a> and Exfiltration to Cloud Storage would each fit one reading. Microsoft ties the AzCopy copy to the exposure step and does not say whether it used the stolen keys, but an account key works without any Entra ID sign-in, which is why <code>listkeys</code> matters. In <a href="storm-3168-jadepuffer-azure.html">Storm-3168</a>, Microsoft noted that the same key collection could enable future data access.</p>
+        <div class="step-code">
+          <span class="hl">Exposure:</span> Microsoft.Storage/storageAccounts/write<br>
+          <span class="hl">Keys:</span> Microsoft.Storage/storageAccounts/listkeys/action<br>
+          <span class="hl">Copy:</span> AzCopy, to "their own infrastructure"<br>
+          <span class="hl">Volume:</span> not given<br>
+          <span class="hl">Detect:</span> Defender for Storage "Unusual amount of data extracted from a storage account", and its alert that a blob container's access level "was changed to allow unauthenticated public access"
+        </div>
+        <div class="step-tags"><span class="stag">Storage Public Access</span><span class="stag">ListKeys</span><span class="stag">AzCopy</span><span class="stag">T1686.001</span><span class="stag">T1552</span><span class="stag">T1530</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">💥 Impact: Backups, Storage, and the Locks in the Way</div>
+    <div class="kc-step step-o">
+      <div class="step-num">09</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The actor deleted snapshots, restore points, storage accounts and Recovery Services protection containers, and removed locks and immutability policies that stood in the way</div>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1490/" target="_blank" rel="noopener">T1490 - Inhibit System Recovery</a>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1485/" target="_blank" rel="noopener">T1485 - Data Destruction</a>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1685/" target="_blank" rel="noopener">T1685 - Disable or Modify Tools</a>
+        </div>
+        <p class="step-desc">The deletions covered recovery and data alike: <code>Microsoft.Compute/snapshots/delete</code>, <code>Microsoft.Compute/restorePointCollections/delete</code>, <code>Microsoft.Storage/storageAccounts/delete</code> and <code>Microsoft.RecoveryServices/Vaults/backupFabrics/protectionContainers/delete</code>. Microsoft names Recovery Services protection containers, not whole vaults. Across the Storm-0501 Azure campaigns it investigated, Microsoft says, this is "where they mainly focused, deleting as many Azure Storage account resources as possible."</p>
+        <p class="step-desc">Some deletions failed "due to the existing protections": resource locks and Azure Storage immutability policies. The Owner role could remove them. The actor called <code>Microsoft.Authorization/locks/delete</code> and <code>Microsoft.Storage/storageAccounts/blobServices/containers/immutabilityPolicies/delete</code>, succeeded for "multiple" locks and policies, and went on "successfully erasing resources in various Azure subscriptions." Microsoft does not say whether any of the policies were locked. Microsoft Learn draws the line that matters: an unlocked time-based retention policy can be deleted, while "You can't delete a locked time-based retention policy." In <a href="storm-3168-jadepuffer-azure.html">Storm-3168</a>, by contrast, attempts to remove recovery locks failed.</p>
+        <div class="step-code">
+          <span class="hl">Deleted:</span> snapshots, VM restore point collections, storage accounts, Recovery Services protection containers<br>
+          <span class="hl">Blocked at first by:</span> resource locks; Azure Storage immutability policies<br>
+          <span class="hl">Then removed:</span> Microsoft.Authorization/locks/delete; Microsoft.Storage/storageAccounts/blobServices/containers/immutabilityPolicies/delete<br>
+          <span class="hl">Why it worked:</span> Owner can delete resource locks, and an unlocked immutability policy can be deleted (Microsoft Learn)<br>
+          <span class="hl">Detect:</span> Defender for Resource Manager "Suspicious backup resource deletion (Preview)"; Defender for Storage "Unusual deletion in a storage account"
+        </div>
+        <div class="step-tags"><span class="stag">Mass Deletion</span><span class="stag">Recovery Services</span><span class="stag">Resource Locks</span><span class="stag">Immutability Policies</span><span class="stag">T1490</span><span class="stag">T1485</span><span class="stag">T1685</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">💥 Impact: Encryption Scopes, a Deleted Key and a Teams Message</div>
+    <div class="kc-step step-y">
+      <div class="step-num">10</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">For data that immutability still protected, the actor encrypted it with a key from a new Key Vault it created, deleted the key, and demanded ransom over Microsoft Teams</div>
+          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1486/" target="_blank" rel="noopener">T1486 - Data Encrypted for Impact</a>
+          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1657/" target="_blank" rel="noopener">T1657 - Financial Theft</a>
+        </div>
+        <p class="step-desc">"For resources that remained protected by immutability policies, the actor resorted to cloud-based encryption." It "created a new Azure Key Vault and a new Customer-managed key" (<code>Microsoft.KeyVault/vaults/write</code>) and applied it through storage encryption scopes (<code>Microsoft.Storage/storageAccounts/encryptionScopes/write</code>). Encryption alone "wasn't sufficient, as the organization could still access the data," Microsoft notes, so the actor deleted the key used for the encryption. Microsoft adds, as a general point, that Key Vault keys used for encryption are protected by soft delete, "with a default period of 90 days," which allows a deleted key or vault to be retrieved. It does not say whether the key was purged or whether the data was recovered. Microsoft Learn adds two platform rules that bear on this vault: a key vault holding an encryption scope's customer-managed key "must have purge protection enabled," so the key could not be purged before its retention period ended, and that period is set when the vault is created, anywhere from 7 to 90 days. Here the actor created the vault, so the actor chose the recovery window.</p>
+        <p class="step-desc">The demand came last: the actor "contacted the victims using Microsoft Teams using one of the previously compromised users, demanding ransom." Microsoft gives no amount and does not say whether anyone paid. <a href="codefinger-s3.html">Codefinger</a> used the same idea in <a class="glossary-link" href="../glossary.html#term-s3">S3</a>, encrypting with keys AWS never stores. Here the key lived in Key Vault, where soft delete and the purge protection that encryption scopes require kept a deleted key recoverable until the retention period ran out.</p>
+        <div class="step-code">
+          <span class="hl">Created:</span> a new Azure Key Vault and customer-managed key (Microsoft.KeyVault/vaults/write)<br>
+          <span class="hl">Applied:</span> Microsoft.Storage/storageAccounts/encryptionScopes/write<br>
+          <span class="hl">Then:</span> the key deleted<br>
+          <span class="hl">Recoverable:</span> the soft-deleted key, for the retention period the vault's creator set (7 to 90 days; 90 by default)<br>
+          <span class="hl">Not stated:</span> whether the key was purged, whether data was recovered, whether the ransom was paid<br>
+          <span class="hl">Demand:</span> Microsoft Teams, from a previously compromised user<br>
+          <span class="hl">Detect:</span> Defender for Key Vault "Unusual operation pattern in a key vault"
+        </div>
+        <div class="step-tags"><span class="stag">Key Vault</span><span class="stag">Encryption Scopes</span><span class="stag">Soft Delete</span><span class="stag">Microsoft Teams</span><span class="stag">T1486</span><span class="stag">T1657</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Run Entra Connect servers as Tier 0, with EDR on them.</strong> The actor used both Entra Connect servers in this chain, and the first was not onboarded to Defender for Endpoint. The guide from ASD's ACSC, CISA, NSA and partners says these servers "need to be afforded the same security as Domain Controllers," notes that Microsoft classifies them as Tier 0 assets in its Enterprise Access Model, and adds single-purpose servers and administration only through jump servers and secure admin workstations. Microsoft recommends enabling TPM on the Entra Connect Sync server "to securely store sensitive credentials and cryptographic keys, mitigating Storm-0501's credential extraction techniques," along with tamper protection and EDR in block mode, and using Exposure Management to identify the Entra Connect server, users with DCSync permissions and Global Administrators as critical assets. Microsoft also says the limited Defender for Endpoint deployment "significantly hindered detection," and on the devices Microsoft could see, this actor checked for Defender before acting, so find the domains, tenants and servers with no EDR, starting with Tier 0.</div>
+        <div class="def-item"><strong>Keep Global Administrators in the cloud only.</strong> Microsoft's guidance is that "Global Administrator (and other privileged groups) accounts should be <span class="no-glossary">cloud-native</span> accounts with no ties to on-premises Active Directory." The ASD-led guide agrees: "Use separate privileged accounts for AD DS and Microsoft Entra ID." In this chain a password reset on premises became a Global Administrator credential in the cloud. A review of synced accounts that hold Entra admin roles, non-human ones included, finds accounts like this one before an attacker does.</div>
+        <div class="def-item"><strong>Register <a class="glossary-link" href="../glossary.html#term-phishing-resistant">phishing-resistant MFA</a> on every privileged account before anyone else can.</strong> The Global Administrator had no method registered, so the first sign-in with its password could enroll one. Microsoft's advice is to "Ensure all existing privileged users have an already registered MFA method to protect against malicious MFA registrations," and to require <span class="no-glossary">phishing-resistant</span> authentication strength for administrators. Microsoft also recommends Entra ID Protection with risk-based Conditional Access. The hybrid-joined device condition here was met from a compromised server, so for admin roles this page reads a device condition as a complement to phishing-resistant MFA rather than a substitute for it.</div>
+        <div class="def-item"><strong>Put the sync account behind Conditional Access, and move Entra Connect to application-based authentication.</strong> Microsoft recommends Conditional Access to "limit the access of Microsoft Entra ID Directory Synchronization Accounts (DSA) from untrusted IP addresses to all cloud apps," and, once Entra Connect uses application-based authentication, Conditional Access for workload identities. Application-based authentication arrived as a public preview in Entra Connect 2.5.3.0 on May 27, 2025, and Microsoft's version history requires Entra Connect Sync 2.6.84.0 or later with application-based authentication by April 7, 2027. Microsoft has also restricted the permissions of the Directory Synchronization Accounts role; Tenable dates that change to August 2024, before this intrusion was reported, and notes that "the role is still privileged," able among other things to "reset their password." Turn on the <span class="no-glossary">Defender for Cloud Apps</span> connectors so the sync-account alerts can fire, and hunt for sync-account activity that leaves its usual pattern.</div>
+        <div class="def-item"><strong>Limit what a federated-domain backdoor can reach.</strong> Microsoft recommends setting the validatingDomains property of federatedTokenValidationPolicy to 'all', which blocks SAML sign-ins to non-federated domains such as .onmicrosoft.com; Microsoft Graph documents that Entra ID then rejects a federated token whose account's root domain does not match the mapped Entra ID account. Microsoft also recommends, where only Entra ID performs MFA for a federated domain, setting federatedIdpMfaBehavior to rejectMfaByFederatedIdp. A Global Administrator can add a domain or change these settings, and adding a federated domain is a rare administrative act, so this page suggests alerting on any new federated domain or change to a domain's federation settings, alongside Microsoft's "Backdoor creation using AADInternals tool" detection.</div>
+        <div class="def-item"><strong>Alert on elevate access, and remove it after use.</strong> One call to <code>Microsoft.Authorization/elevateAccess/action</code> gave an Entra role control of Azure role assignments at root scope. Microsoft Learn says to remove elevated access "once you have made the changes you need to make at root scope," records each elevation in the Entra directory audit logs (in preview) and in the Directory Activity view of the Azure activity log, and points to a <a class="glossary-link" href="../glossary.html#term-sentinel">Microsoft Sentinel</a> rule template, "Azure RBAC (Elevate Access)". Microsoft Learn lists the entry under Directory Activity rather than in a subscription's activity log, so this page reads it as easy to miss for a pipeline that collects only subscription activity logs. Pair it with Defender for Resource Manager's "Suspicious elevate access operation" and an alert on new Owner assignments at subscription scope.</div>
+        <div class="def-item"><strong>Give backups a protection the subscription Owner cannot remove.</strong> Owner rights deleted resource locks and immutability policies here, so a lock or an unlocked policy guards against mistakes and gives way to an attacker holding Owner. Microsoft's post recommends immutable blob storage, Resource Manager locks, blob backup and Azure Backup for VMs, and does not discuss locked policies. Microsoft Learn does: "You can't delete a locked time-based retention policy," a container under a locked policy can be deleted only when it is empty, and Microsoft recommends the unlocked state only for short-term testing. For Azure Backup, an immutable vault set to "Enabled and locked" can't be disabled, covers Recovery Services and Backup vaults, and blocks stopping protection with deletion of data, though Microsoft Learn notes it "doesn't apply to operational backups for resources like blobs, files, and disks." Locking is irreversible in both cases, so test the retention settings first.</div>
+        <div class="def-item"><strong>Watch for new Key Vaults and encryption scopes, and recover soft-deleted keys in time.</strong> The key in this chain sat in a vault the actor created, so the victim's own vault settings did not govern it. An encryption scope with a customer-managed key requires a vault with purge protection, which kept the deleted key from being purged early, but the vault's creator sets the retention period when creating it, anywhere from 7 to 90 days. A responder should find vaults created during the intrusion and recover their soft-deleted keys before that period ends. Defender for Key Vault's "Unusual operation pattern in a key vault" covers the vault activity; this page adds an alert on new vaults or storage encryption scopes created outside the deployment pipeline. For the vaults you own, Microsoft recommends purge protection "to prevent immediate, irreversible deletion of vaults and secrets," with the default 90-day retention.</div>
+        <div class="def-item"><strong>If you are responding to a chain like this, start the eviction in the cloud.</strong> Microsoft did not publish this victim's recovery steps. Microsoft Incident Response's playbook for hybrid identity compromise, written for Octo Tempest, begins "with the cloud eviction process": change federated domains back to managed authentication, revoke permissions from the old admin accounts and create new ones, then on premises reset the KRBTGT and built-in Administrator passwords twice each, reset inter-domain trust and DSRM passwords, and finish with a mass password reset. That is general practice for hybrid compromise, not a record of what this victim did.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://www.microsoft.com/en-us/security/blog/2025/08/27/storm-0501s-evolving-techniques-lead-to-cloud-based-ransomware/" target="_blank" rel="noopener">Microsoft Threat Intelligence: Storm-0501's evolving techniques lead to cloud-based ransomware (August 27, 2025)</a>
+        <a class="src-link" href="https://www.microsoft.com/en-us/security/blog/2024/09/26/storm-0501-ransomware-attacks-expanding-to-hybrid-cloud-environments/" target="_blank" rel="noopener">Microsoft Threat Intelligence: Storm-0501 ransomware attacks expanding to hybrid cloud environments (September 26, 2024)</a>
+        <a class="src-link" href="https://learn.microsoft.com/en-us/azure/role-based-access-control/elevate-access-global-admin" target="_blank" rel="noopener">Microsoft Learn: Elevate access to manage all Azure subscriptions and management groups</a>
+        <a class="src-link" href="https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview" target="_blank" rel="noopener">Microsoft Learn: Immutable storage for blob data</a>
+        <a class="src-link" href="https://learn.microsoft.com/en-us/azure/backup/backup-azure-immutable-vault-concept" target="_blank" rel="noopener">Microsoft Learn: Immutable vault for Azure Backup</a>
+        <a class="src-link" href="https://learn.microsoft.com/en-us/azure/storage/blobs/encryption-scope-manage" target="_blank" rel="noopener">Microsoft Learn: Create and manage encryption scopes</a>
+        <a class="src-link" href="https://learn.microsoft.com/en-us/azure/key-vault/general/soft-delete-overview" target="_blank" rel="noopener">Microsoft Learn: Azure Key Vault soft-delete</a>
+        <a class="src-link" href="https://learn.microsoft.com/en-us/graph/api/resources/federatedtokenvalidationpolicy" target="_blank" rel="noopener">Microsoft Graph: federatedTokenValidationPolicy resource type</a>
+        <a class="src-link" href="https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/reference-connect-version-history" target="_blank" rel="noopener">Microsoft Learn: Microsoft Entra Connect version release history</a>
+        <a class="src-link" href="https://www.tenable.com/blog/despite-recent-security-hardening-entra-id-synchronization-feature-remains-open-for-abuse" target="_blank" rel="noopener">Tenable: Entra ID synchronization feature remains open for abuse</a>
+        <a class="src-link" href="https://www.cyber.gov.au/publication/detecting-and-mitigating-active-directory-compromises" target="_blank" rel="noopener">ASD's ACSC, CISA, NSA and partners: Detecting and mitigating Active Directory compromises</a>
+        <a class="src-link" href="https://techcommunity.microsoft.com/blog/microsoftsecurityexperts/octo-tempest-hybrid-identity-compromise-recovery/4166783" target="_blank" rel="noopener">Microsoft Incident Response: Octo Tempest, hybrid identity compromise recovery</a>
+        <a class="src-link" href="https://www.darkreading.com/cloud-security/storm-0501-cloud-based-ransomware-attack" target="_blank" rel="noopener">Dark Reading: Storm-0501 hits enterprise with cloud-based ransomware</a>
+        <a class="src-link" href="https://attack.mitre.org/groups/G1053/" target="_blank" rel="noopener">MITRE ATT&amp;CK: Storm-0501 (G1053)</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1484/002/" target="_blank" rel="noopener">MITRE T1484.002</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1098/003/" target="_blank" rel="noopener">MITRE T1098.003</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1490/" target="_blank" rel="noopener">MITRE T1490</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1486/" target="_blank" rel="noopener">MITRE T1486</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../azure-security.html">Azure security</a>
+    <a class="src-link" href="../iam.html">IAM &amp; cloud identity</a>
+    <a class="src-link" href="../non-human-identity.html">Non-human identity</a>
+    <a class="src-link" href="../backup-dr.html">Backup &amp; disaster recovery</a>
+    <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
+    <a class="src-link" href="../incident-response.html">Incident response</a>
+  </div>
+</div>
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="nx-s1ngularity.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="salesloft-drift-unc6395.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=59aab5a3" integrity="sha384-dB+qVv0Bh2JDBA+wsSREO9+89koSh2YyQ8me5SLY/soyhmbIrWeGiV4HHvxFAq3N"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>
