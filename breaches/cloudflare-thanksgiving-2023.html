@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Cloudflare left four credentials from the October 2023 Okta compromise unrotated, mistakenly believing them unused. With two of them, an attacker it believes was a nation-state spent eight days on its self-hosted Atlassian server.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="Cloudflare Thanksgiving Intrusion 2023, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2023, Cloudflare, Okta, credential rotation, service account, service token, non-human identity, Moveworks, Smartsheet, Atlassian, Jira, Confluence, Bitbucket, ScriptRunner, Sliver, nation-state, Code Red">
+    <title>Cloudflare Thanksgiving Intrusion 2023 Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/cloudflare-thanksgiving-2023.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/cloudflare-thanksgiving-2023.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/cloudflare-thanksgiving-2023.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Cloudflare Thanksgiving Intrusion 2023 Breach Kill Chain">
+    <meta property="og:description" content="Cloudflare failed to rotate four of the credentials leaked in the Okta breach because it mistakenly believed they were unused. Two of them opened its Atlassian server, where an integration account's Jira admin rights put Sliver on the host.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-11-23">
+    <meta property="article:modified_time" content="2026-11-23">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="Cloudflare Thanksgiving Intrusion 2023">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2023">
+    <meta property="article:tag" content="Cloudflare">
+    <meta property="article:tag" content="Okta">
+    <meta property="article:tag" content="credential rotation">
+    <meta property="article:tag" content="non-human identity">
+    <meta property="article:tag" content="Atlassian">
+    <meta property="article:tag" content="Jira">
+    <meta property="article:tag" content="ScriptRunner">
+    <meta property="article:tag" content="Sliver">
+    <meta property="article:tag" content="Bitbucket">
+    <meta property="og:url" content="https://csoh.org/breaches/cloudflare-thanksgiving-2023.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/cloudflare-thanksgiving-2023.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Cloudflare Thanksgiving Intrusion 2023 Breach Kill Chain">
+    <meta name="twitter:description" content="Cloudflare failed to rotate four of the credentials leaked in the Okta breach because it mistakenly believed they were unused. Two of them opened its Atlassian server, where an integration account's Jira admin rights put Sliver on the host.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/cloudflare-thanksgiving-2023.jpg">
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
+    <link rel="preload" href="/style.css?v=d0ce5478" as="style"
+        integrity="sha384-1j+JFhDnLVV9ZQ5vgoHmdpTST3Kdn0Cy5lHDQBgDVQiHsXMEZy2KbAmPQ5wyjd02">
+    <link rel="stylesheet" href="/style.css?v=d0ce5478"
+        integrity="sha384-1j+JFhDnLVV9ZQ5vgoHmdpTST3Kdn0Cy5lHDQBgDVQiHsXMEZy2KbAmPQ5wyjd02">
+    <link rel="stylesheet" href="/breach-timeline.css?v=a2469e23" integrity="sha384-rmpFuzCn6UkelLpKe109kBx+yoPABmR7h+5VwIwk6eygz4kedbAkeGGDZiH59T7R">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "Cloudflare Thanksgiving Intrusion - Four Okta-Leaked Credentials Left Unrotated → Service Token Through the Gateway → Look-Alike Atlassian Account → Sliver via ScriptRunner → 76 Repositories Archived → Caught on an Admin-Group Change",
+  "description": "Cloudflare left four credentials from the October 2023 Okta compromise unrotated, mistakenly believing them unused. With two of them, an attacker it believes was a nation-state spent eight days on its self-hosted Atlassian server.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2026-11-23",
+  "dateModified": "2026-11-23",
+  "mainEntityOfPage": "https://csoh.org/breaches/cloudflare-thanksgiving-2023.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "Intrusion into Cloudflare's self-hosted Atlassian server with credentials leaked in the October 2023 Okta compromise",
+    "startDate": "2023-11-14",
+    "description": "From November 14, 2023 an attacker holding four credentials leaked in the October 2023 Okta compromise, which Cloudflare had failed to rotate because it mistakenly believed they were unused, probed Cloudflare's systems for ways to use them and reached an AWS environment that powers the Cloudflare Apps marketplace. From November 15 it used two of them, a Moveworks service token and a Smartsheet service account, to reach Jira and Confluence on Cloudflare's self-hosted Atlassian server. The attacker created a look-alike Atlassian account, installed the Sliver framework on the Atlassian server through ScriptRunner for Jira, tried and failed to reach a console server in a São Paulo data center that was not yet in production, and downloaded 76 Bitbucket repositories to the Atlassian server, which Cloudflare could not confirm were exfiltrated and treats as exfiltrated. Cloudflare detected the attacker on November 23, says no customer data or systems were impacted, and believes the attacker was a nation-state."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Cloudflare"
+    },
+    {
+      "@type": "Organization",
+      "name": "Okta"
+    },
+    {
+      "@type": "Organization",
+      "name": "Atlassian"
+    },
+    {
+      "@type": "Organization",
+      "name": "Moveworks"
+    },
+    {
+      "@type": "Organization",
+      "name": "Smartsheet"
+    },
+    {
+      "@type": "Organization",
+      "name": "Amazon Web Services"
+    },
+    {
+      "@type": "Organization",
+      "name": "CrowdStrike"
+    },
+    {
+      "@type": "Thing",
+      "name": "Sliver"
+    },
+    {
+      "@type": "Thing",
+      "name": "ScriptRunner for Jira"
+    },
+    {
+      "@type": "Organization",
+      "name": "MITRE"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Cloudflare Thanksgiving Intrusion 2023",
+      "item": "https://csoh.org/breaches/cloudflare-thanksgiving-2023.html"
+    }
+  ]
+}
+    </script>
+  <noscript><link rel="stylesheet" href="/noscript.css?v=8806b2fa" integrity="sha384-a09IU6jBKCeHhGoD/YQr7jM3op0Sr57wzMvZzTx/cD/PXrCRHINeWLhwU3Ya6T3n"></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/></svg></button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">The subject</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="../iam.html">IAM &amp; identity</a></li>
+                            <li><a href="../topics.html#workloads">Workloads</a></li>
+                            <li><a href="../topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="../cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="../working-a-finding.html">Working a finding</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../breach-kill-chain-decks.html">Kill Chain Slide Decks</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Attending Conferences</a></li>
+                            <li><a href="../what-practitioners-think-about-human-risk.html">Human Risk</a></li>
+                            <li><a href="../what-practitioners-think-about-identity.html">Identity &amp; Passwords</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../cloud-deployment.html">How We Deploy</a></li>
+                            <li><a href="../how-csoh-org-is-secured.html">How We Secure It</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">Cloudflare Thanksgiving Intrusion 2023</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Cloudflare Thanksgiving Intrusion 2023</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="cloudflare-thanksgiving-2023">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">November 2023</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-blue">Atlassian / Service Accounts</span>
+    </div>
+    <h2 class="inc-title">Cloudflare Thanksgiving Intrusion - Four Okta-Leaked Credentials Left Unrotated &rarr; Service Token Through the Gateway &rarr; Look-Alike Atlassian Account &rarr; Sliver via ScriptRunner &rarr; 76 Repositories Archived &rarr; Caught on an Admin-Group Change</h2>
+    <p class="inc-summary">At 16:00 UTC on Thanksgiving Day, November 23, 2023, an automated alert told Cloudflare's security team that a Smartsheet <a class="glossary-link" href="../glossary.html#term-service-account">service account</a> had just been added to an administrator group. The change came from an intruder on Cloudflare's self-hosted Atlassian server who had been reading Jira and Confluence since November 15, after a day of probing. Cloudflare says the intruder first got into its systems with four credentials leaked in the October 2023 Okta compromise, which this site covers as the <a href="okta-support-har.html">Okta support system kill chain</a>: a Moveworks service token that gave remote access into the Atlassian system, the Smartsheet service account, which held administrative access to Jira, a Bitbucket service account, and a fourth for an AWS environment with no access to the global network and no customer or sensitive data. Cloudflare says every credential leaked in that compromise was meant to be rotated, and that it failed to rotate these four, out of thousands, because "mistakenly it was believed they were unused." Over about eight days the intruder read 202 wiki pages and 36 Jira tickets, created an Atlassian account that looked like an ordinary Cloudflare user, installed the Sliver <a class="glossary-link" href="../glossary.html#term-c2">C2</a> framework on the Atlassian server through the ScriptRunner for Jira plugin, tried and failed to reach a console server in a São Paulo data center that was not yet in production, viewed 120 Bitbucket repositories and downloaded 76 of them to the Atlassian server. Cloudflare could not confirm whether those 76 left its network and treats them as exfiltrated. It says no Cloudflare customer data or systems were impacted. Based on its collaboration with colleagues in industry and government, it believes the attacker was a nation-state, "likely a nation-state" in the post's conclusion, and it names no country.</p>
+    <p class="inc-summary"><strong>The lesson sits in step 01, and on this page's reading it is about how accurate a credential inventory is.</strong> Cloudflare's own words are about a belief: all the leaked credentials were meant to be rotated, and these four, out of thousands, were not, because it was mistakenly believed they were unused. That one belief decided which credentials stayed valid. A credential marked unused still works for whoever holds it until it is revoked, and the actor began probing for ways to use these 27 days after Cloudflare detected the Okta-related intrusion (this page's arithmetic). Rotation after a breach has to cover every exposed credential. A credential exempted because it looks unused has to be shown to be unused from its last-used data, and then revoked rather than left valid. An accurate entry also records what the credential reaches: one of the four "unused" credentials held administrator rights in Jira. Cloudflare does not say why the four were believed unused; it says only that the belief was wrong.</p>
+    <p class="inc-summary"><strong>Detection came from the attacker's own privilege change, and the response went far wider than four credentials.</strong> The alert fired on the Smartsheet account joining an administrator group at 15:58. Cloudflare's SOC deactivated that account 35 minutes after the alert and the look-alike account 48 minutes after that; firewall rules blocked the actor's known addresses at 21:31, the last known activity was at 10:44 on November 24, and Sliver was removed at 11:59 that day. Cloudflare brought in CrowdStrike on November 26, and from November 27 to January 5 it ran a company-wide effort it called Code Red: it rotated every production credential, more than 5,000 of them, physically segmented its test and staging systems, carried out forensic triage on 4,893 systems, and reimaged and rebooted every machine in its global network. Cloudflare says CrowdStrike's independent assessment found no activity that Cloudflare had missed; this page found no public statement from CrowdStrike itself.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>4 credentials</strong> left valid out of the thousands leaked in the Okta compromise: one Moveworks service token and three service accounts (Smartsheet, Bitbucket, AWS)</div>
+      <div class="inc-stat"><strong>About 8 days</strong> in Jira and Confluence, from 16:28 UTC on November 15 to the alert at 16:00 on November 23 (this page's arithmetic from Cloudflare's timeline)</div>
+      <div class="inc-stat"><strong>76 of 11,904</strong> repositories downloaded to the Atlassian server with git archive, after 120 were viewed; Cloudflare could not confirm whether they left its network and treats them as exfiltrated</div>
+      <div class="inc-stat"><strong>No customer data or systems</strong> impacted, per Cloudflare; it says access was limited to the Atlassian suite and the server it runs on, though its own timeline also records access to the segmented AWS environment in step 02</div>
+      <div class="inc-stat"><strong>Nation-state</strong>, in Cloudflare's belief ("likely a nation-state"); no country named, and ATT&amp;CK does not cite the incident</div>
+    </div>
+    <a class="pm-link" href="https://blog.cloudflare.com/thanksgiving-2023-security-incident/" target="_blank" rel="noopener">📄 Cloudflare: Thanksgiving 2023 security incident ↗</a>
+    <a class="pm-link" href="https://blog.cloudflare.com/how-cloudflare-mitigated-yet-another-okta-compromise/" target="_blank" rel="noopener">📄 Cloudflare: How Cloudflare mitigated yet another Okta compromise (October 2023) ↗</a>
+    <a class="pm-link" href="https://sec.okta.com/articles/2023/11/unauthorized-access-oktas-support-case-management-system-root-cause/" target="_blank" rel="noopener">📄 Okta Security: root cause and remediation of the support system compromise ↗</a>
+    <p class="u-mt-075" data-breach-deck><strong>Slides:</strong> <a href="https://docs.google.com/presentation/d/1cneSPEsSMDzt0XZPO6mCh04c38Jn10W3mH1noBZdx8I/export/pdf" target="_blank" rel="noopener noreferrer">download the PDF</a> or <a href="https://docs.google.com/presentation/d/1cneSPEsSMDzt0XZPO6mCh04c38Jn10W3mH1noBZdx8I/copy" target="_blank" rel="noopener noreferrer">make your own editable copy</a> (copying needs a Google account). The slides are licensed <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer">CC BY-NC 4.0</a>.</p>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-cred">🔑 Credential Exposure: Four Leaked Credentials the Rotation Skipped</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Credentials leaked in the October 2023 Okta compromise were all meant to be rotated; Cloudflare failed to rotate four of them, one service token and three service accounts, because it mistakenly believed they were unused</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1199/" target="_blank" rel="noopener">T1199 - Trusted Relationship</a>
+        </div>
+        <p class="step-desc">Cloudflare dates the start of the attack to October 18, 2023, when, for the second time, a compromise of Okta's systems reached Cloudflare and gave a threat actor a set of Cloudflare credentials. The <a href="okta-support-har.html">Okta support system kill chain</a> covers that compromise: an attacker inside Okta's customer support system took session tokens from files that customers had uploaded. Cloudflare's October post says that, it appears, the actor hijacked a session token from a support ticket a Cloudflare employee had created. Using that token as an open Okta session with administrative privileges, the actor got into Cloudflare's own Okta instance and compromised two Cloudflare employee accounts there. Cloudflare detected that intrusion on October 18 and wrote at the time that it had contained it before the actor could establish <a class="glossary-link" href="../glossary.html#term-persistence">persistence</a>. Neither post says how the four credentials in this chain were obtained, whether from files in Okta's support system or during the October session, and this page does not guess.</p>
+        <p class="step-desc">The February post says all of the leaked credentials were meant to be rotated, and that Cloudflare failed to rotate one service token and three service accounts out of thousands. The four were a Moveworks service token that granted remote access into Cloudflare's Atlassian system; a service account used by the <a class="glossary-link" href="../glossary.html#term-saas">SaaS</a> application Smartsheet, with administrative access to Cloudflare's Jira; a Bitbucket service account used to reach its source code management system; and a service account for an AWS environment that, Cloudflare says, had no access to the global network and held no customer or sensitive data. Cloudflare says they were skipped because it mistakenly believed they were unused, that the belief was wrong, and that these credentials were how the actor first got into its systems and kept access to its Atlassian products. It does not say why they were believed unused, and it calls the failure its own, not an error by Atlassian, AWS, Moveworks or Smartsheet. Okta says it notified customers and shared guidance to rotate credentials on October 19 (TechRadar).</p>
+        <p class="step-desc">ATT&amp;CK has no technique for a rotation that left four entries valid. This page maps the supplier path, a compromise at Cloudflare's <a class="glossary-link" href="../glossary.html#term-idp">identity provider</a> that exposed Cloudflare's credentials, to Trusted Relationship. The failure underneath is one of inventory accuracy. All the leaked credentials were meant to be rotated, and these four were not because it was believed that nothing used them; that belief was wrong, and it decided whether they stayed valid. Two of them reached a long way: one gave remote access into the Atlassian system, and another held administrator rights in Jira.</p>
+        <div class="step-code">
+          <span class="hl">Exposure:</span> the Okta compromise, detected at Cloudflare on October 18, 2023<br>
+          <span class="hl">Leaked set:</span> thousands of credentials, all meant to be rotated (Cloudflare)<br>
+          <span class="hl">Not rotated:</span> Moveworks service token; Smartsheet, Bitbucket and AWS service accounts<br>
+          <span class="hl">Reason given:</span> "mistakenly it was believed they were unused"<br>
+          <span class="hl">How the four were obtained:</span> not stated by Cloudflare<br>
+          <span class="hl">Why it worked:</span> an exemption from rotation rested on a belief about usage that was wrong<br>
+          <span class="hl">Defence gap:</span> credentials believed unused were left valid rather than revoked
+        </div>
+        <div class="step-tags"><span class="stag">Okta Compromise</span><span class="stag">Credential Rotation</span><span class="stag">Service Accounts</span><span class="stag"><a class="glossary-link" href="../glossary.html#term-nhi">Non-Human Identity</a></span><span class="stag">T1199</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-recon">🔭 Reconnaissance: Probing for Ways to Use the Credentials, November 14</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">From 09:22:49 UTC on November 14 the actor probed for ways to use the leaked credentials: Cloudflare's Okta instance and the Cloudflare Dashboard refused it, and an AWS environment that powers the Cloudflare Apps marketplace let it in</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">T1078.004 - Valid Accounts: Cloud Accounts</a>
+        </div>
+        <p class="step-desc">Cloudflare's logs show the actor probing its systems and doing reconnaissance from November 14, looking for ways to use the credentials and for systems they could reach. It tried to log in to Cloudflare's Okta instance and was denied, and tried the Cloudflare Dashboard and was denied. One attempt worked: the actor accessed an AWS environment used to power the Cloudflare Apps marketplace. Cloudflare says that environment was segmented, with no access to the global network or customer data, that the service account for it was revoked, and that it validated the environment's integrity. It does not say what the actor did there, or when the account was revoked. Nor does it say in one sentence that this account was the fourth unrotated credential. Its list of the four ends with an AWS environment that "had no access to the global network and no customer or sensitive data", and it says this one "was segmented with no access to global network or customer data"; this page reads the two descriptions as the same environment.</p>
+        <p class="step-desc">Cloudflare's timeline lists no alert on these attempts; the first alert it describes came nine days later, in step 09. A refused login with a credential known to have leaked, or the first use in weeks of a credential believed unused, is a high-confidence signal, and probing like this is where one would show up (this page's suggestion). Cloudflare's published indicators name 193.142.58[.]126, at M247 Europe SRL in Bucharest, as the actor's primary infrastructure, without tying it to particular steps.</p>
+        <div class="step-code">
+          <span class="hl">When:</span> November 14, 2023, from 09:22:49 UTC<br>
+          <span class="hl">Refused:</span> Cloudflare's Okta instance; the Cloudflare Dashboard<br>
+          <span class="hl">Reached:</span> the AWS environment behind the Cloudflare Apps marketplace, segmented from the global network and customer data (Cloudflare)<br>
+          <span class="hl">Primary actor infrastructure (<a class="glossary-link" href="../glossary.html#term-ioc">IOC</a>):</span> 193.142.58[.]126, M247 Europe SRL, Bucharest<br>
+          <span class="hl">Why it worked:</span> the account for this environment had not been rotated after the Okta compromise; Cloudflare's matching descriptions make it the fourth unrotated credential (this page's reading)<br>
+          <span class="hl">Detect:</span> treat any authentication with a credential on the exposed list as an incident, whether it succeeds or fails; alert on the first use of a dormant non-human credential (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">Probing</span><span class="stag">Okta</span><span class="stag">AWS</span><span class="stag">Cloud Accounts</span><span class="stag">T1078.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>: A Service Token Through the Gateway</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">At 16:28:38 UTC on November 15 the actor authenticated through Cloudflare's gateway with the Moveworks service token, then used the Smartsheet service account to get into Jira and Confluence</div>
+          <a class="mt mt-lm" href="https://attack.mitre.org/techniques/T1550/001/" target="_blank" rel="noopener">T1550.001 - Use Alternate Authentication Material: Application Access Token</a>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/" target="_blank" rel="noopener">T1078 - Valid Accounts</a>
+        </div>
+        <p class="step-desc">Cloudflare says the actor reached Jira and Confluence on November 15 by authenticating through its gateway with the Moveworks service token, and then used the Smartsheet service account to get into the Atlassian suite. Both credentials belonged to integrations, Moveworks and the SaaS application Smartsheet, rather than to people, and both still worked almost a month after the Okta compromise. The Smartsheet account held administrative access to Jira. The actor used the account in steps 05 and 06, and added it to an administrator group in step 09.</p>
+        <p class="step-desc">Cloudflare credits its access controls, firewall rules and hardware security keys, enforced through its own <a class="glossary-link" href="../glossary.html#term-zero-trust">Zero Trust</a> tools, for the actor's failure to reach many other systems during the intrusion. Hardware keys protect people. A service token is presented by software, so no hardware key is involved when it is used; what limits a token is where it is accepted from, what it can reach and how long it stays valid (this page's reading; Cloudflare does not discuss it). Cloudflare does not say what restrictions applied to this token. Whatever they were, it was accepted from the actor's connection, it reached the Atlassian system, and it was still valid.</p>
+        <p class="step-desc">The Smartsheet account was an account on Cloudflare's self-hosted Atlassian server rather than in a cloud provider, so this page maps it to the parent Valid Accounts technique rather than choosing between its Cloud Accounts and Local Accounts sub-techniques.</p>
+        <div class="step-code">
+          <span class="hl">When:</span> November 15, 16:28:38 UTC<br>
+          <span class="hl">First credential:</span> Moveworks service token, used to authenticate through Cloudflare's gateway<br>
+          <span class="hl">Second credential:</span> Smartsheet service account, with administrative access to Jira<br>
+          <span class="hl">Reached:</span> Jira and Confluence on the self-hosted Atlassian server<br>
+          <span class="hl">Why it worked:</span> both integration credentials were still valid, and a credential presented by software involves no person's hardware key<br>
+          <span class="hl">Detect:</span> an integration's credential used from outside that integration's own network, or used to browse; where the gateway allows it, accept each service token only from its integration's source addresses (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">Service Token</span><span class="stag">Gateway</span><span class="stag">Moveworks</span><span class="stag">Smartsheet</span><span class="stag">Non-Human Identity</span><span class="stag">T1550.001</span><span class="stag">T1078</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🗂 Collection: Reading the Wiki and Jira for Ways In</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The actor searched Confluence for remote access, secrets and tokens, and read 202 wiki pages and 36 Jira tickets, among them tickets on secret rotation, <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> bypass and Cloudflare's response to the Okta incident</div>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1213/001/" target="_blank" rel="noopener">T1213.001 - Data from Information Repositories: Confluence</a>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1213/" target="_blank" rel="noopener">T1213 - Data from Information Repositories</a>
+        </div>
+        <p class="step-desc">Once inside, the actor searched Cloudflare's wiki for terms including remote access, secret, client-secret, openconnect, cloudflared and token. It read 202 of the wiki's 194,100 pages and 36 of the 2,059,357 tickets in Jira, Cloudflare's bug database. The tickets covered <a class="glossary-link" href="../glossary.html#term-vulnerability-management">vulnerability management</a>, secret rotation, MFA bypass, network access and Cloudflare's response to the Okta incident itself. On the day after first access the actor turned to the configuration and management of Cloudflare's global network, and, Cloudflare says, its wiki searches and the pages it read suggest interest in every aspect of access to Cloudflare's systems: password resets, remote access, configuration and Cloudflare's use of Salt. Cloudflare says it did not target customer data or customer configurations.</p>
+        <p class="step-desc">Cloudflare reads this as an actor studying the architecture, security and management of its global network in order to get a deeper foothold. The searches look for secrets, but Cloudflare does not say any credential was found in what the actor read, so this page does not map Unsecured Credentials. During Code Red Cloudflare searched Jira tickets and source code for secrets, and examined and deleted every HAR file that had been uploaded to its wiki in case it held tokens. (The first version of the post gave the wiki's total as 14,099 pages; the current text, which this page follows, says 194,100. The Internet Archive holds both.) Jira has no sub-technique of its own in ATT&amp;CK, so its tickets map to the parent technique.</p>
+        <div class="step-code">
+          <span class="hl">Searched for:</span> remote access, secret, client-secret, openconnect, cloudflared, token<br>
+          <span class="hl">Read:</span> 202 of 194,100 wiki pages; 36 of 2,059,357 Jira tickets<br>
+          <span class="hl">Ticket topics:</span> vulnerability management, secret rotation, MFA bypass, network access, the Okta response<br>
+          <span class="hl">Not targeted:</span> customer data or customer configurations (Cloudflare)<br>
+          <span class="hl">Why it worked:</span> the Smartsheet service account gave access to the Atlassian suite, where the actor read Confluence and Jira<br>
+          <span class="hl">Detect:</span> a service account searching a wiki at all, and searches for secret-like terms by any account (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">Confluence</span><span class="stag">Jira</span><span class="stag">Secret Hunting</span><span class="stag">T1213.001</span><span class="stag">T1213</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🪪 Persistence: An Account That Looked Like a Colleague</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">At 14:36:37 UTC on November 16 the actor used the Smartsheet credential to create an Atlassian account that looked like a normal Cloudflare user, and added it to a number of groups</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1136/" target="_blank" rel="noopener">T1136 - Create Account</a>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1036/010/" target="_blank" rel="noopener">T1036.010 - Masquerading: Masquerade Account Name</a>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1098/" target="_blank" rel="noopener">T1098 - Account Manipulation</a>
+        </div>
+        <p class="step-desc">Cloudflare says the new account was made to look like an ordinary Cloudflare user and was added to several Atlassian groups, so that the actor would keep access to the Atlassian environment if the Smartsheet service account were removed. It was a second way in, prepared in case the first was found. On November 23 both were found: the Smartsheet account was deactivated at 16:35, and the actor's account at 17:23, 48 minutes later.</p>
+        <p class="step-desc">From 14:33:52 UTC on November 17 to 09:26:53 on November 20 the actor stayed away, apart from what Cloudflare says were apparently brief tests that its access still worked, and came back just before Thanksgiving. (The post's summary places that further access on November 20 and 21.) Atlassian ran on Cloudflare's own server, so this page maps the parent Create Account technique rather than its Cloud Account sub-technique.</p>
+        <div class="step-code">
+          <span class="hl">When:</span> November 16, 14:36:37 UTC<br>
+          <span class="hl">Created by:</span> the Smartsheet service account<br>
+          <span class="hl">Account:</span> named to look like a normal Cloudflare user; added to a number of Atlassian groups<br>
+          <span class="hl">Purpose, per Cloudflare:</span> access that would survive removal of the Smartsheet account<br>
+          <span class="hl">Quiet period:</span> November 17, 14:33:52 to November 20, 09:26:53, with what appeared to be brief access tests<br>
+          <span class="hl">Detect:</span> an Atlassian account created anywhere but the identity provider's provisioning; any account created by a service account (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">Backup Account</span><span class="stag">Masquerading</span><span class="stag">Atlassian</span><span class="stag">T1136</span><span class="stag">T1036.010</span><span class="stag">T1098</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🧰 Execution: Sliver Installed Through ScriptRunner</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">At 14:18:22 UTC on November 22 the actor used the Smartsheet account's Jira administrator rights and the ScriptRunner for Jira plugin to install the Sliver C2 framework on the Atlassian server</div>
+          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1059/" target="_blank" rel="noopener">T1059 - Command and Scripting Interpreter</a>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1105/" target="_blank" rel="noopener">T1105 - Ingress Tool Transfer</a>
+        </div>
+        <p class="step-desc">Cloudflare connects the two facts directly: because the Smartsheet service account had administrative access to Jira, the actor could install the Sliver Adversary Emulation Framework, and it did so with the ScriptRunner for Jira plugin. Sliver is a framework red teams and attackers both use for command and control (ATT&amp;CK software <a href="https://attack.mitre.org/software/S0633/" target="_blank" rel="noopener">S0633</a>). It gave the actor continuous access to the Atlassian server itself. Cloudflare's indicators name the payload, a file called <code>jvm-agent</code>, the domain that served it, idowall[.]com, and the Sliver C2 server, 198.244.174[.]214 at OVH SAS in London.</p>
+        <p class="step-desc">This is the step where an application permission became control of a host. An integration account that was a Jira administrator, on a server where a scripting plugin was installed, could run code on the machine that hosted Jira. Cloudflare does not say whether ScriptRunner was already installed, what script the actor ran, which protocol Sliver used for C2, or how it would have survived a restart. This page maps the parent Command and Scripting Interpreter technique for that reason, and does not map a C2 protocol.</p>
+        <div class="step-code">
+          <span class="hl">When:</span> November 22, 14:18:22 UTC<br>
+          <span class="hl">Rights used:</span> the Smartsheet service account's administrative access to Jira<br>
+          <span class="hl">Mechanism:</span> ScriptRunner for Jira plugin<br>
+          <span class="hl">Payload:</span> jvm-agent, SHA256 bdd1a085d651082ad567b03e5186d1d46d822bb7794157ab8cce95d850a3caaf<br>
+          <span class="hl">Served from:</span> idowall[.]com<br>
+          <span class="hl">C2:</span> 198.244.174[.]214, OVH SAS, London<br>
+          <span class="hl">Why it worked:</span> Jira administrator plus a scripting plugin meant code execution on the server, and an integration account held Jira administrator<br>
+          <span class="hl">Detect:</span> log and alert on every ScriptRunner script run; alert on new outbound destinations from the Atlassian server (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">Sliver</span><span class="stag">ScriptRunner</span><span class="stag">Jira Admin</span><span class="stag">C2</span><span class="stag">T1059</span><span class="stag">T1105</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">🔀 <a class="glossary-link" href="../glossary.html#term-lateral-movement">Lateral Movement</a>: A Console Server in a Data Center Not Yet Live</div>
+    <div class="kc-step step-g">
+      <div class="step-num">07</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">From the Sliver foothold the actor tried to reach a non-production console server in Cloudflare's new São Paulo data center, an attempt Cloudflare ties to a non-enforced <a class="glossary-link" href="../glossary.html#term-acl">ACL</a>, and was denied</div>
+          <a class="mt mt-lm" href="https://attack.mitre.org/techniques/T1021/" target="_blank" rel="noopener">T1021 - Remote Services</a>
+        </div>
+        <p class="step-desc">Cloudflare says the actor used its access to the Atlassian server to attempt lateral movement, including an attempt on a non-production console server in its São Paulo, Brazil data center, which the post attributes to an ACL that was not enforced. The data center was new and not yet in production. The access was denied, and the actor reached none of the global network. Cloudflare's logs also show attempts on its internal metrics, network configuration, build system, alerting systems and release management system, none of them successful by its review. The post does not say which control denied the console server attempt or what protocol was tried, so this page maps the parent Remote Services technique as an attempt.</p>
+        <p class="step-desc">Cloudflare still sent the Brazil equipment back to its manufacturers, whose forensic teams examined it for access or persistence. They found nothing, and Cloudflare replaced the hardware anyway.</p>
+        <div class="step-code">
+          <span class="hl">Target:</span> non-production console server, São Paulo data center (not yet in production)<br>
+          <span class="hl">Path:</span> Cloudflare ties the attempt to a non-enforced ACL<br>
+          <span class="hl">Result:</span> denied; no access to the global network<br>
+          <span class="hl">Also tried, all unsuccessful:</span> internal metrics, network configuration, build system, alerting systems, release management<br>
+          <span class="hl">Why the other attempts failed, per Cloudflare:</span> access controls, firewall rules and hardware security keys enforced through its Zero Trust tools (a general statement; the post does not say what denied the console server attempt)<br>
+          <span class="hl">Detect:</span> connection attempts from an application server to out-of-band management; treat an ACL that exists but is not enforced as a finding before a site goes live (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">Console Server</span><span class="stag">Data Center</span><span class="stag">Segmentation</span><span class="stag">Attempted</span><span class="stag">T1021</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exfil">📦 Collection: 76 Repositories Archived to the Atlassian Server</div>
+    <div class="kc-step step-r">
+      <div class="step-num">08</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Over the next day the actor viewed 120 of Cloudflare's 11,904 code repositories and used Bitbucket's git archive feature to download 76 of them to the Atlassian server</div>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1213/003/" target="_blank" rel="noopener">T1213.003 - Data from Information Repositories: Code Repositories</a>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1074/001/" target="_blank" rel="noopener">T1074.001 - Data Staged: Local Data Staging</a>
+        </div>
+        <p class="step-desc">Of the 120 repositories the actor viewed in Bitbucket, it used the git archive feature on 76 to download them to the Atlassian server. Cloudflare could not confirm whether they were exfiltrated, and decided to treat them as exfiltrated. It says the 76 were almost all about how backups work, how the global network is configured and managed, how identity works at Cloudflare, remote access, and its use of <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> and <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a>. A small number held encrypted secrets, which were rotated immediately although they were strongly encrypted.</p>
+        <p class="step-desc">The leaked Bitbucket service account is one of the four, but the post does not say it was used here. Bitbucket access appears in the timeline only after Sliver was on the Atlassian server, and Cloudflare does not say which path reached it. Because Cloudflare did not confirm that data left its network, this page maps the archiving to the Atlassian server as staging and maps no <a class="glossary-link" href="../glossary.html#term-exfiltration">exfiltration</a> technique. Cloudflare says that, as a SaaS company, it considers its source code less precious than that of companies that distribute software to end users, and that it has open-sourced much of it anyway, so its focus was on embedded secrets and vulnerabilities rather than on someone having the code. During Code Red it reviewed all 76 repositories for both and rotated the secrets it found in code.</p>
+        <div class="step-code">
+          <span class="hl">Viewed:</span> 120 of 11,904 repositories<br>
+          <span class="hl">Archived:</span> 76, with Bitbucket's git archive feature, written to the Atlassian server<br>
+          <span class="hl">Contents:</span> backups, global network configuration and management, identity, remote access, Terraform and Kubernetes<br>
+          <span class="hl">Exfiltration:</span> not confirmed; Cloudflare treats the 76 as exfiltrated<br>
+          <span class="hl">Secrets:</span> a small number of repositories held encrypted secrets, rotated immediately<br>
+          <span class="hl">Detect:</span> one identity archiving dozens of repositories in a day; archives written to a server that is not a build host (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">Bitbucket</span><span class="stag">Source Code</span><span class="stag">git archive</span><span class="stag">Staging</span><span class="stag">T1213.003</span><span class="stag">T1074.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">🚨 Detection: One Admin-Group Change Trips the Alert</div>
+    <div class="kc-step step-o">
+      <div class="step-num">09</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">At 15:58 UTC on November 23 the actor added the Smartsheet service account to an administrator group; an automated alert reached the security team two minutes later, and Sliver was off the server by 11:59 the next day</div>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1098/" target="_blank" rel="noopener">T1098 - Account Manipulation</a>
+        </div>
+        <p class="step-desc">The alert that worked fired on a privilege change. Cloudflare's timeline shows no earlier alert, whether on the account created on November 16, the Sliver install on November 22 or the archiving of 76 repositories, and the post does not say whether rules for those events existed. The last known activity, at 10:44 on November 24, came after both accounts had been deactivated and the known addresses blocked, and Sliver was removed at 11:59. On this page's reading of the timeline, disabling the accounts did not by itself end access while the implant was still on the server.</p>
+        <p class="step-desc">Cloudflare's own team began investigating on November 23 and brought in CrowdStrike's forensic team on November 26. Code Red ran from November 27 to January 5. Beyond rotating every production credential, segmenting test and staging, triaging 4,893 systems and reimaging every machine in the global network and all its Atlassian products, Cloudflare looked for software packages that had not been updated, user accounts that might have been created, and unused active employee accounts. Cloudflare says CrowdStrike's assessment found no activity it had missed and confirmed 10:44 on November 24 as the last evidence of the actor; Reuters reported that CrowdStrike did not immediately respond to a request for comment.</p>
+        <div class="step-code">
+          <span class="hl">15:58:</span> the actor adds the Smartsheet service account to an administrator group<br>
+          <span class="hl">16:00:</span> automated alert to the security team<br>
+          <span class="hl">16:12:</span> Cloudflare SOC starts investigating<br>
+          <span class="hl">16:35:</span> Smartsheet service account deactivated<br>
+          <span class="hl">17:23:</span> the actor's Atlassian account found and deactivated<br>
+          <span class="hl">17:43:</span> internal incident declared<br>
+          <span class="hl">21:31:</span> firewall rules block the actor's known IP addresses<br>
+          <span class="hl">November 24, 10:44:</span> last known actor activity (confirmed by CrowdStrike)<br>
+          <span class="hl">November 24, 11:59:</span> Sliver removed
+        </div>
+        <div class="step-tags"><span class="stag">Detection</span><span class="stag">Admin Group</span><span class="stag">Code Red</span><span class="stag">CrowdStrike</span><span class="stag">T1098</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Rotate every credential in the exposed set, and prove "unused" before acting on it.</strong> Cloudflare says all the leaked credentials were meant to be rotated, and that these four, out of thousands, were not, because it was mistakenly believed they were unused. After a breach notice the exposed list is the scope: every entry is rotated or revoked, and none is exempted on someone's understanding of what it does. Where a credential looks unused, check the record of its last use before deciding anything. In AWS, the <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> credential report and <code>aws iam get-access-key-last-used</code> give last-used dates for access keys; for gateway service tokens and SaaS integration accounts, the gateway's and the application's authentication logs answer the same question. NHI Mgmt Group's case page on this incident makes both points: rotate every exposed credential without exempting the ones thought to be unused, and keep last-used data in the credential inventory. <a class="glossary-link" href="../glossary.html#term-owasp">OWASP</a>'s Non-Human Identities Top 10 makes a related point under Vulnerable Third-Party NHI: keep a <a class="glossary-link" href="../glossary.html#term-runbook">playbook</a> for a suspected breach with a process to revoke and reissue every connected OAuth token.</div>
+        <div class="def-item"><strong>Revoke what is unused instead of leaving it valid.</strong> If a credential really is unused, revoking it breaks nothing. If revoking it breaks something, the inventory was wrong, and the breakage says so at once (this page's reasoning). A valid credential nobody is watching is the outcome to avoid, and it is the state these four were in for about a month. NHI Mgmt Group gives the same advice for a credential that turns out to be unused: retire it. So does OWASP's Non-Human Identities Top 10 under Improper Offboarding: recertify non-human identities periodically to confirm they are still in use, and decommission any found to be no longer needed.</div>
+        <div class="def-item"><strong>Record what each credential reaches, and keep integration accounts out of administrator roles.</strong> One of the four "unused" credentials belonged to Smartsheet's integration and held administrative access to Jira; the actor used that one account to create a look-alike user and install Sliver, and at the end added it to an administrator group. An inventory entry that records what a non-human identity can reach marks this one as high-impact whatever its usage. Give integration accounts the narrowest permissions their integration needs, and review administrator-group membership for non-human accounts on a schedule.</div>
+        <div class="def-item"><strong>Treat a scripting plugin as code execution on the host.</strong> With ScriptRunner for Jira installed, Jira administrator rights were enough to put Sliver on the Atlassian server. Adaptavist, ScriptRunner's vendor, says in its security documentation that by default authoring or running a script takes Jira administrator permissions, and that the Script Console can run a command-line program on the Jira server. Its "Enable System Admin Only Script Edit Permissions" setting limits script editing to groups that hold Jira System administrator permissions. List the plugins that run scripts on each application server, turn on restrictions like that one and keep integration accounts out of the groups they allow, log every script run and alert on it, and give the server no outbound route except the ones it needs, so that an implant calling home fails or stands out (this page's suggestion).</div>
+        <div class="def-item"><strong>Alert on what came before the alert that fired.</strong> Cloudflare's detection fired on the administrator-group change at 15:58 on November 23. Its timeline shows no earlier alert on the account created on November 16, the Sliver install on November 22 or the archiving of 76 repositories, and the post does not say whether rules for them existed. Each has a clean signal: an Atlassian account created outside the identity provider's provisioning, a new outbound destination from the Atlassian server (the Sliver C2 server sat at OVH in London), and one identity archiving dozens of repositories in a day. Route them to the <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> with the same priority as the privilege change (this page's suggestion).</div>
+        <div class="def-item"><strong>Watch the exposed list after rotating it.</strong> Nine days before the alert, the actor, probing for ways to use the leaked credentials, tried to sign in to Cloudflare's Okta instance and the Cloudflare Dashboard and was refused. A refused sign-in with a credential known to have leaked is a high-confidence signal, and so is any use of a credential the inventory says nothing uses. Put the exposed set on a watchlist and keep it there for months after the breach (this page's suggestion).</div>
+        <div class="def-item"><strong>Enforce segmentation before a site goes live.</strong> Cloudflare ties the attempt on the São Paulo console server to an ACL that was not enforced; the attempt was still denied, and the post does not say what denied it. Keep out-of-band management unreachable from application servers, and treat an ACL that exists but is not enforced as a pre-launch finding (this page's suggestion). Cloudflare credits access controls, firewall rules and hardware security keys enforced through its Zero Trust tools for the actor's failures elsewhere in its network.</div>
+        <div class="def-item"><strong>Assume the worst about what was read, and keep secrets out of what can be read.</strong> Cloudflare treated the 76 repositories as exfiltrated, reviewed them for embedded secrets and vulnerabilities, and rotated the secrets it found, encrypted ones included. It searched Jira tickets and source code for secrets and deleted every HAR file uploaded to its wiki. The actor's wiki searches were for remote access, secrets and tokens, which is where a review of your own wiki and ticket system should start.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://blog.cloudflare.com/thanksgiving-2023-security-incident/" target="_blank" rel="noopener">Cloudflare: Thanksgiving 2023 security incident (February 1, 2024)</a>
+        <a class="src-link" href="https://web.archive.org/web/20240201200520/https://blog.cloudflare.com/thanksgiving-2023-security-incident/" target="_blank" rel="noopener">Internet Archive: the first capture of Cloudflare's post, February 1, 2024, 20:05 UTC (wiki total given as 14,099)</a>
+        <a class="src-link" href="https://blog.cloudflare.com/how-cloudflare-mitigated-yet-another-okta-compromise/" target="_blank" rel="noopener">Cloudflare: How Cloudflare mitigated yet another Okta compromise (October 20, 2023)</a>
+        <a class="src-link" href="https://sec.okta.com/articles/2023/11/unauthorized-access-oktas-support-case-management-system-root-cause/" target="_blank" rel="noopener">Okta Security: Unauthorized access to Okta's support case management system, root cause and remediation (November 3, 2023)</a>
+        <a class="src-link" href="https://www.techradar.com/pro/security/cloudflare-hacked-company-reveals-details-of-november-2023-cyberattack-blames-previous-okta-breach" target="_blank" rel="noopener">TechRadar Pro: Cloudflare reveals details of November 2023 cyberattack, with Okta's statement (February 2, 2024)</a>
+        <a class="src-link" href="https://www.insurancejournal.com/news/national/2024/02/02/759164.htm" target="_blank" rel="noopener">Reuters, via Insurance Journal: Cloudflare says state-backed hackers tried to burrow into its global network (February 2, 2024)</a>
+        <a class="src-link" href="https://nhimg.org/cloudflare-breach" target="_blank" rel="noopener">NHI Mgmt Group: Cloudflare Thanksgiving Breach 2023 (case page)</a>
+        <a class="src-link" href="https://owasp.github.io/www-project-non-human-identities-top-10/2025/1-improper-offboarding/" target="_blank" rel="noopener">OWASP Non-Human Identities Top 10: NHI1:2025 Improper Offboarding</a>
+        <a class="src-link" href="https://owasp.github.io/www-project-non-human-identities-top-10/2025/3-vulnerable-third-party-nhi/" target="_blank" rel="noopener">OWASP Non-Human Identities Top 10: NHI3:2025 Vulnerable Third-Party NHI</a>
+        <a class="src-link" href="https://docs.adaptavist.com/sr4js/latest/get-started/vulnerabilities-and-security/" target="_blank" rel="noopener">Adaptavist: ScriptRunner for Jira, Vulnerabilities and Security (restricting scripting permissions)</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1199/" target="_blank" rel="noopener">MITRE T1199</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1550/001/" target="_blank" rel="noopener">MITRE T1550.001</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1213/003/" target="_blank" rel="noopener">MITRE T1213.003</a>
+        <a class="src-link" href="https://attack.mitre.org/software/S0633/" target="_blank" rel="noopener">MITRE S0633: Sliver</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../non-human-identity.html">Non-human identity</a>
+    <a class="src-link" href="../iam.html">IAM &amp; cloud identity</a>
+    <a class="src-link" href="../saas-security.html">SaaS security (SSPM)</a>
+    <a class="src-link" href="../zero-trust.html">Zero trust</a>
+    <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
+    <a class="src-link" href="../incident-response.html">Incident response</a>
+  </div>
+</div>
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="promptware.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="okta-support-har.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=59aab5a3" integrity="sha384-dB+qVv0Bh2JDBA+wsSREO9+89koSh2YyQ8me5SLY/soyhmbIrWeGiV4HHvxFAq3N"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>
