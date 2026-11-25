@@ -119,6 +119,9 @@ on:
       # The industry vocabulary and synonyms both index gates render, and
       # whose self-test the kill chain index step runs.
       - 'tools/breach_industries.py'
+      # The page finder gate: its tool holds the field's markup and the
+      # list of pages that carry it.
+      - 'tools/sync_page_finder.py'
       # The kill chain registration gate, and the files it reads that no
       # other pattern here covers: the sitemap, the breach preview images and
       # the list that generates them.
@@ -604,6 +607,22 @@ jobs:
           python3 tools/sync_breach_timeline_index.py --check 2>&1 | tee -a check-breach-timeline-index.log || status=1
           exit "$status"
 
+      # The "Find on this page" field (page-finder.js) is stamped into the
+      # contents box of the pages tools/sync_page_finder.py lists. A listed
+      # page without it, a hand-edited copy, or an unlisted page that took it
+      # from a copied sibling all fail here. Unconditional, because a change
+      # to the tool's list or markup changes the verdict with no page in the
+      # diff. The self-test runs first as the control; it also asserts the
+      # glossary cross-linker never edits the field.
+      - name: Assert the page finder is current
+        id: page-finder
+        run: |
+          set -o pipefail
+          status=0
+          python3 tools/sync_page_finder.py --self-test 2>&1 | tee check-page-finder.log || status=1
+          python3 tools/sync_page_finder.py --check 2>&1 | tee -a check-page-finder.log || status=1
+          exit "$status"
+
       # Every page in breaches/ must appear everywhere a kill chain is listed
       # or linked: its timeline card, the timeline ItemList, prev/next pagers
       # in timeline order, sitemap.xml, a preview image and og:image, a
@@ -733,6 +752,7 @@ jobs:
           OUTCOME_BREACH_DECKS: ${{ steps.breach-decks.outcome }}
           OUTCOME_BREACH_DECK_INDEX: ${{ steps.breach-deck-index.outcome }}
           OUTCOME_BREACH_TIMELINE_INDEX: ${{ steps.breach-timeline-index.outcome }}
+          OUTCOME_PAGE_FINDER: ${{ steps.page-finder.outcome }}
           OUTCOME_KILL_CHAIN_REGISTRATION: ${{ steps.kill-chain-registration.outcome }}
           OUTCOME_NEWS_DATES: ${{ steps.news-dates.outcome }}
           OUTCOME_HTML5: ${{ steps.html5.outcome }}
@@ -758,6 +778,7 @@ jobs:
               { name: 'Assert breach deck outlines and links', outcome: process.env.OUTCOME_BREACH_DECKS, file: 'check-breach-decks.log' },
               { name: 'Assert the breach deck list is current', outcome: process.env.OUTCOME_BREACH_DECK_INDEX, file: 'check-breach-deck-index.log' },
               { name: 'Assert the kill chain index is current', outcome: process.env.OUTCOME_BREACH_TIMELINE_INDEX, file: 'check-breach-timeline-index.log' },
+              { name: 'Assert the page finder is current', outcome: process.env.OUTCOME_PAGE_FINDER, file: 'check-page-finder.log' },
               { name: 'Assert every kill chain is registered', outcome: process.env.OUTCOME_KILL_CHAIN_REGISTRATION, file: 'check-kill-chain-registration.log' },
               { name: 'Reject future publish dates (news freshness gate)', outcome: process.env.OUTCOME_NEWS_DATES, file: 'check-news-dates.log' },
               { name: 'Validate HTML5', outcome: process.env.OUTCOME_HTML5, file: 'log.log' },

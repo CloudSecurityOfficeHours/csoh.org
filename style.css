@@ -1924,6 +1924,154 @@ main :is(
     color: var(--text-muted);
 }
 
+/* Page finder (tools/sync_page_finder.py, page-finder.js): "Find on this
+   page" at the top of a long guide's On this page box. The script highlights
+   every match and narrows the box's list to the sections holding one, with a
+   count beside each. Scoped under .toc so the paragraph and type rules that
+   reach into the box (`.contribute-article p`, the rail's smaller text) lose
+   to it. noscript.css hides it when scripts are off.
+
+   Colours come from tokens, which flip in dark mode, except the borders: the
+   field and buttons sit on the box's tinted background, and their edge has
+   to reach 3:1 against it there, which --border-color does not. */
+.toc .page-finder {
+    margin: 0 0 1rem;
+}
+.toc .page-finder .search-wrapper {
+    min-width: 0;
+}
+.toc .page-finder .search-wrapper::before {
+    left: 0.7rem;
+    width: 15px;
+    height: 15px;
+}
+.toc .page-finder input.page-finder-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem 0.75rem 0.5rem 2.1rem;
+    font-family: inherit;
+    font-size: var(--fs-16);
+    line-height: 1.4;
+    color: var(--text-color);
+    background: var(--white);
+    border: 1px solid #64748b;
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.toc .page-finder input.page-finder-input::placeholder {
+    color: var(--text-muted);
+}
+.toc .page-finder input.page-finder-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.25);
+}
+.toc .page-finder .page-finder-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.375rem;
+    margin: 0.5rem 0 0;
+    font-size: var(--fs-14);
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+/* Nothing to say until the reader types, so the line takes no space. */
+.toc .page-finder .page-finder-status:has(> .page-finder-count:empty) {
+    margin: 0;
+}
+.toc .page-finder .page-finder-count {
+    flex: 1 1 auto;
+}
+.toc .page-finder .page-finder-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    font-family: inherit;
+    font-size: var(--fs-16);
+    line-height: 1;
+    color: var(--text-color);
+    background: var(--white);
+    border: 1px solid #64748b;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.toc .page-finder .page-finder-step:hover {
+    border-color: var(--primary-color);
+}
+.toc .page-finder .page-finder-step:focus-visible {
+    outline: 2px solid var(--secondary-color);
+    outline-offset: 2px;
+}
+/* The match count beside a section in the narrowed list. */
+.toc .page-finder-hits {
+    display: inline-block;
+    margin-left: 0.375rem;
+    padding: 0 0.4rem;
+    font-size: var(--fs-13);
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--text-muted);
+    background: var(--white);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+}
+/* In the wide-screen rail the box's text is smaller, and a phone's zoom on
+   focusing a field under 16px does not arise. */
+@media (min-width: 1360px) {
+    .contribute-article > .toc .page-finder input.page-finder-input {
+        padding: 0.375rem 0.5rem 0.375rem 1.875rem;
+        font-size: var(--fs-14);
+    }
+    .contribute-article > .toc .page-finder .search-wrapper::before {
+        left: 0.55rem;
+        width: 13px;
+        height: 13px;
+    }
+    .contribute-article > .toc .page-finder .page-finder-status {
+        font-size: var(--fs-13);
+    }
+    .contribute-article > .toc .page-finder .page-finder-step {
+        width: 1.75rem;
+        height: 1.75rem;
+        font-size: var(--fs-14);
+    }
+    /* The rail is too narrow for a count to follow a wrapped entry, where it
+       lands alone on a line of its own, so while a search is on each entry
+       keeps a gutter on the right and its count sits there, level with the
+       entry's first line. page-finder.js sets .is-finding. */
+    .contribute-article > .toc.is-finding li {
+        position: relative;
+        padding-right: 2.25rem;
+    }
+    /* A nested list hands its parent's gutter back, so a child's count lines
+       up with its parent's rather than a gutter further in. */
+    .contribute-article > .toc.is-finding li > :is(ol, ul) {
+        margin-right: -2.25rem;
+    }
+    .contribute-article > .toc .page-finder-hits {
+        position: absolute;
+        top: 0;
+        right: 0;
+        margin-left: 0;
+        font-size: var(--fs-12);
+    }
+}
+/* Matches the page finder found, painted with the CSS Custom Highlight API.
+   Each sets its text colour with its background, so the pair is the same in
+   both themes: 11.8:1 for every match, 7.8:1 for the one stepped to. */
+::highlight(page-finder) {
+    background-color: #fde68a;
+    color: #1f2937;
+}
+::highlight(page-finder-current) {
+    background-color: #fb923c;
+    color: #111827;
+}
+
 /* "Industries hit: Finance, Healthcare" on breach kill chain and deck cards
    (tools/breach_industries.py). */
 .industries-hit {
@@ -4580,6 +4728,18 @@ footer {
 
 [data-theme="dark"] .toc a {
     color: var(--secondary-color);
+}
+
+/* The page finder's field and buttons need an edge of 3:1 against the dark
+   box (#141e2a); the light value would be too dark here. */
+[data-theme="dark"] .toc .page-finder input.page-finder-input,
+[data-theme="dark"] .toc .page-finder .page-finder-step {
+    border-color: #5b7591;
+}
+
+[data-theme="dark"] .toc .page-finder input.page-finder-input:focus,
+[data-theme="dark"] .toc .page-finder .page-finder-step:hover {
+    border-color: var(--primary-color);
 }
 
 [data-theme="dark"] .contribution-type {
@@ -7738,6 +7898,10 @@ h3:hover > .head-anchor,
     :root:not([data-theme]) .toc { background-color: #141e2a; border-left-color: var(--secondary-color); }
     :root:not([data-theme]) .toc h3 { color: #7dccff; }
     :root:not([data-theme]) .toc a { color: var(--secondary-color); }
+    :root:not([data-theme]) .toc .page-finder input.page-finder-input,
+    :root:not([data-theme]) .toc .page-finder .page-finder-step { border-color: #5b7591; }
+    :root:not([data-theme]) .toc .page-finder input.page-finder-input:focus,
+    :root:not([data-theme]) .toc .page-finder .page-finder-step:hover { border-color: var(--primary-color); }
     :root:not([data-theme]) .contribution-type { color: #eaf6ff; font-weight: 500; background-color: #1a2535; border-color: #2a3d52; }
     :root:not([data-theme]) .faq-item { background-color: #1a2535; border-left-color: var(--secondary-color); }
     :root:not([data-theme]) .step-box { background-color: #1a2535; border-color: #2a3d52; }

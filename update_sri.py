@@ -40,6 +40,9 @@ ASSETS: List[Tuple[str, str, str]] = [
     # The card finder (search field + index above a page's cards) on
     # breach-kill-chain-decks.html and breach-timeline.html.
     ('card-finder.js', 'script', 'src'),
+    # "Find on this page" in the contents box of the long guides that
+    # tools/sync_page_finder.py lists.
+    ('page-finder.js', 'script', 'src'),
     ('404.js', 'script', 'src'),
     # resources.html hub: cross-category search + forwarding for the old
     # /resources.html#card-<slug> deep links the category split left behind.
