@@ -1,14 +1,16 @@
 // Page finder: a "Find on this page" field inside a long guide's "On this
-// page" box (.toc). tools/sync_page_finder.py stamps the field into the pages
-// it lists. An external file because the site's CSP (`script-src 'self'`)
-// blocks inline <script>.
+// page" box (.toc), or at the top of a breach kill chain (.kill-chain).
+// tools/sync_page_finder.py stamps the field into those pages. An external
+// file because the site's CSP (`script-src 'self'`) blocks inline <script>.
 //
-// Typing highlights every match in the article and narrows the box's list to
-// the sections holding one, each with its count. Enter or the down arrow
-// steps to the next match, Shift+Enter or the up arrow to the previous one,
-// and choosing a section in the narrowed list jumps to its first match.
-// Escape clears. The first step goes to the first match below the top of the
-// window, as a browser's own find does.
+// Typing highlights every match in the article and, in a guide, narrows the
+// box's list to the sections holding one, each with its count. Enter or the
+// down arrow steps to the next match, Shift+Enter or the up arrow to the
+// previous one, and choosing a section in the narrowed list jumps to its
+// first match. Escape clears. The first step goes to the first match below
+// the top of the window, as a browser's own find does. While a search is on,
+// the field carries .is-finding, which pins it under the header on a kill
+// chain (breach-timeline.css), where no box lists the steps.
 //
 // Matching ignores case and starts at the beginning of a word, so "sso" finds
 // "SSO" but not "lesson". The words of a query match as a phrase with any
@@ -25,36 +27,39 @@
 (function () {
     const finder = document.querySelector('.page-finder');
     if (!finder) return;
+    // Null on a kill chain, which has no contents box to narrow.
     const toc = finder.closest('.toc');
     const input = finder.querySelector('.page-finder-input');
     const status = finder.querySelector('.page-finder-count');
     const prevBtn = finder.querySelector('.page-finder-prev');
     const nextBtn = finder.querySelector('.page-finder-next');
     const root = document.querySelector('main');
-    if (!toc || !input || !status || !prevBtn || !nextBtn || !root) return;
+    if (!input || !status || !prevBtn || !nextBtn || !root) return;
 
     const canPaint = typeof Highlight === 'function' && window.CSS && CSS.highlights;
     // Enough for any real query; a two-letter one on the longest guide stays
     // well under it. Past it, painting and stepping are not worth the cost.
     const MAX = 2000;
 
-    // Text a reader does not see as part of the article: the contents box and
-    // the field itself, controls, drawings, and anything hidden.
-    const SKIP = 'script, style, noscript, template, svg, button, select, textarea, .toc,'
-        + ' .visually-hidden, [hidden], .is-hidden, [aria-hidden="true"]';
+    // Text a reader does not see as part of the article: the contents box,
+    // the field itself, navigation (a kill chain's previous/next links),
+    // controls, drawings, and anything hidden.
+    const SKIP = 'script, style, noscript, template, svg, nav, button, select, textarea, .toc,'
+        + ' .page-finder, .visually-hidden, [hidden], .is-hidden, [aria-hidden="true"]';
     // Elements that end a run of text. A phrase never matches across one.
     const BLOCK = /^(ADDRESS|ARTICLE|ASIDE|BLOCKQUOTE|CAPTION|DD|DETAILS|DIV|DL|DT|FIGCAPTION|FIGURE|FOOTER|H[1-6]|HEADER|LI|MAIN|NAV|OL|P|PRE|SECTION|SUMMARY|TABLE|TD|TH|TR|UL)$/;
     const SEP = '\u0000';
 
     // One entry per link in the box, in page order, with its <li>.
     const entries = [];
-    toc.querySelectorAll('li > a[href^="#"]').forEach(a => {
+    const box = toc || finder;
+    box.querySelectorAll('li > a[href^="#"]').forEach(a => {
         const target = document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)));
         if (target) entries.push({ a, li: a.parentElement, target, count: 0, first: -1, badge: null });
     });
     entries.sort((x, y) => (x.target.compareDocumentPosition(y.target) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
-    const items = Array.from(toc.querySelectorAll('li'));
-    const lists = Array.from(toc.querySelectorAll('ol, ul'));
+    const items = Array.from(box.querySelectorAll('li'));
+    const lists = Array.from(box.querySelectorAll('ol, ul'));
 
     let matches = [];   // { range, entry }
     let current = -1;   // index into matches of the one stepped to, or -1
@@ -188,7 +193,10 @@
 
     // While a search is on, the box lists only the sections holding a match,
     // each with its count; a parent stays when one of its children does.
+    // Without a box there is nothing to narrow, only the field to flag.
     function narrow(searching) {
+        finder.classList.toggle('is-finding', searching);
+        if (!toc) return;
         const keep = new Set();
         entries.forEach(e => {
             if (!searching || !e.count) {
@@ -324,7 +332,7 @@
     // than the top of the section. Capturing on the box runs this before
     // main.js's smooth-scroll handler on the link, and stopping the event
     // here keeps that handler from scrolling back to the section's top.
-    toc.addEventListener('click', e => {
+    if (toc) toc.addEventListener('click', e => {
         const a = e.target.closest('a[href^="#"]');
         const entry = a && entries.find(x => x.a === a);
         if (!entry || entry.first < 0) return;

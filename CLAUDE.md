@@ -436,7 +436,7 @@ never hand-edit the output.
 | Breach deck links (`data-breach-deck`) on breaches/ pages | `tools/build_breach_decks.py --stamp` | `--check` in `validate-html.yml`; `--stale --published-only` there warns |
 | Search field and kill chain index on breach-timeline.html (between `breach-index` markers) | `tools/sync_breach_timeline_index.py`, after adding or renaming a timeline card | `--check` in `validate-html.yml` |
 | Deck index, search field and cards on breach-kill-chain-decks.html (between `breach-decks` markers) | `tools/sync_breach_deck_index.py`, after every `build_breach_decks.py --record` | `--check` in `validate-html.yml` |
-| "Find on this page" field in the On this page box, and its script tag, on the pages in its `PAGES` list | `tools/sync_page_finder.py`, then `update_sri.py` | `--check` in `validate-html.yml` |
+| "Find on this page" field, and its script tag: in the On this page box on the pages in its `PAGES` list, and above the chain on every breaches/ page | `tools/sync_page_finder.py`, then `update_sri.py` | `--check` in `validate-html.yml` |
 | Dark-mode mirror block | `tools/sync_dark_branch.py` | `--check` in Lint |
 
 All are idempotent. **Run any generator twice before trusting it.** The second

@@ -847,7 +847,7 @@ csoh.org/
 ├── meetings.js                 # meetings.html-specific index + filters + speaker filter
 ├── glossary.js                 # glossary.html-specific search/filter
 ├── card-finder.js              # search field + index above the cards (deck list, breach timeline)
-├── page-finder.js              # "Find on this page" in the long guides' contents box
+├── page-finder.js              # "Find on this page" in long guides and kill chains
 ├── breach-timeline.css         # breach-timeline.html-specific styles
 ├── countdown.css               # countdown.html styles (dark clock face, self-hosted fonts)
 ├── countdown.js                # countdown.html split-flap clock logic
@@ -968,7 +968,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `register_kill_chain.py` | Writes the timeline ItemList, breach pagers and sitemap entries from the card order, and checks every kill chain is registered everywhere | docstring |
 | `check_card_finder_js.py` | Runs `card-finder.js` in a browser against a fixture page; run by hand after changing the search script | docstring |
 | `sync_breach_deck_index.py` | Renders the deck index, search field and cards on `breach-kill-chain-decks.html` from the published breach decks | docstring |
-| `sync_page_finder.py` | Stamps the "Find on this page" field into the contents box of the long guides it lists | docstring |
+| `sync_page_finder.py` | Stamps the "Find on this page" field into the contents box of the long guides it lists and above every kill chain | docstring |
 | `glossary_terms.py` | Shared headword parsing behind both cross-linkers - one answer to "what strings link to this `<dt>`?", after two drifting copies each carried a bug the other had fixed | docstring |
 | `inject_meeting_topic_links.py` | Injects contextual topic-page links into recap bodies | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_MEETING_TOPIC_LINKS_README.md) |
 | `inject_session_blocks.py` | Stamps a "From the Friday sessions" block onto topic pages | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_SESSION_BLOCKS_README.md) |

@@ -642,8 +642,15 @@ def _strip_tags(fragment: str) -> str:
     return " ".join(htmllib.unescape(fragment).split())
 
 
+# The "Find on this page" field tools/sync_page_finder.py stamps at the top
+# of every kill chain. It is a control, not anything a deck restates, so the
+# page text and its hash leave it out, and stamping it or changing its markup
+# never makes a published deck look stale.
+PAGE_FINDER_RE = re.compile(r"<!-- page-finder -->.*?<!-- /page-finder -->", re.S)
+
+
 def _main_html(html: str) -> str:
-    html = DECK_LINE_RE.sub("", html)
+    html = PAGE_FINDER_RE.sub("", DECK_LINE_RE.sub("", html))
     m = MAIN_RE.search(html)
     if m is None:
         raise OutlineError("page has no <main> element")
@@ -1955,6 +1962,15 @@ def _case_page_hash_stable(tmp: Path) -> None:
         f'  <p class="deck-line" {DECK_ATTR}="x"><a href="d.pptx">Deck</a></p>\n  <div class="kill-chain">', 1)
     assert decked != base and page_sha256(decked) == h
     assert page_sha256(_breach_page(nav="Other nav 123")) == h
+    found = base.replace(
+        '  <div class="kill-chain">',
+        '  <!-- page-finder -->\n  <div class="page-finder" role="search">'
+        '<label>Find on this page 2026</label><button>&darr;</button></div>\n  <!-- /page-finder -->\n'
+        '  <div class="kill-chain">', 1)
+    assert found != base and page_sha256(found) == h
+    # Control: the same field without its markers is page text.
+    unmarked = found.replace("<!-- page-finder -->", "").replace("<!-- /page-finder -->", "")
+    assert unmarked != found and page_sha256(unmarked) != h
     changed = base.replace("credentials", "secrets", 1)
     assert changed != base and page_sha256(changed) != h
     # A deck line not alone on its line is page content, so it is not removed.

@@ -181,6 +181,11 @@ DROP_BLOCKS = [
         r'<nav\b[^>]*class=["\'][^"\']*breadcrumb-nav[^"\']*["\'][^>]*>.*?</nav>',
         re.DOTALL | re.IGNORECASE,
     ),
+    # The "Find on this page" field (tools/sync_page_finder.py), by its marker
+    # comments. It goes before the contents box's pattern, which ends at the
+    # first </div>: inside a box, the field's own divs would otherwise end
+    # that match early and leave the box's list of sections in the text.
+    re.compile(r"<!-- page-finder -->.*?<!-- /page-finder -->", re.DOTALL),
     re.compile(
         r'<div\b[^>]*class=["\'][^"\']*\btoc\b[^"\']*["\'][^>]*>.*?</div>',
         re.DOTALL | re.IGNORECASE,
