@@ -355,3 +355,153 @@ python3 tools/sync_breach_deck_index.py --self-test  # planted controls
 outline, no breach page or no card on the timeline. The generated text sits in
 headings, links and `no-glossary` spans, so `crosslink_pages.py` never edits
 it; the self-test asserts that against the real glossary.
+
+# Topic decks
+
+Each teaching page carded on `topics.html` can have a slide deck, written as a
+plain-text outline in `tools/decks/topics/`, built into a .pptx, published to
+Google Slides and linked from one line under the page's `page-meta` line. The
+page set is every root-level card on `topics.html` less `EXCLUDED` in
+`tools/build_topic_decks.py` (`glossary.html`, `faq.html` and
+`vendor-landscape.html`), so a new topic card shows up in `--status` without a
+code change.
+
+The topic tool is the breach tool's machinery run with a different
+`DeckKind`: the parser, style limits, mapping, stamping, staleness and build
+loop live once in `tools/build_breach_decks.py`, and every function that reads
+a kind-specific value takes a `kind`. `tools/topic_deck_render.py` draws every
+layout but `figure` through `tools/breach_deck_render.py`, and adds the
+`figure` layout, the cover art and the topic wording of the generated slides.
+
+```bash
+python3 tools/build_topic_decks.py --self-test    # run the built-in cases
+python3 tools/build_topic_decks.py --check        # CI gate
+python3 tools/build_topic_decks.py --extract SLUG [--sections ID,ID]   # the page as text, for drafting and review
+python3 tools/build_topic_decks.py --build SLUG [SLUG ...]   # render outlines to tools/decks/topics/build/
+python3 tools/build_topic_decks.py --self-test-render        # run the renderer cases
+python3 tools/build_topic_decks.py --stale [--published-only]  # decks whose outline or cited sections changed
+python3 tools/build_topic_decks.py --status       # outline and publish state, and the pages with no deck by design
+python3 tools/build_topic_decks.py --stamp        # rewrite topic page deck lines from the mapping
+python3 tools/build_topic_decks.py --record SLUG PRES_ID
+```
+
+`--self-test` and `--check` use the standard library only, so CI runs them
+without python-pptx, Pillow or Playwright. `--build` needs python-pptx and
+Pillow, plus Playwright with Chromium to render the page's diagrams;
+`--self-test-render` needs the same. `--check` exits 1 when there are no
+outlines.
+
+## Reading a page: `--extract`
+
+`--extract SLUG` prints the page's `<main>` as text: the page title as
+`# <h1> {#top}`, then each h2 as `## <text> {#id}` and each h3 as `### <text>`,
+paragraphs as single lines, list items as `- ` lines, table rows as
+`| a | b |`, a link's URL in parentheses after its text except for glossary
+links, and each diagram where it sits as
+`[figure #id] <title>: <description> (caption: <caption>)`. The table of
+contents, the page finder, the `page-meta` line and the deck line are left
+out, and so are the labels inside an SVG. With `--sections a,b` it prints the
+heading list and then only those sections. Drafters and reviewers read this,
+never the page's HTML or images.
+
+## Topic outline format
+
+What differs from the breach format:
+
+```text
+title: <deck title>
+page: <slug>.html
+as-of: YYYY-MM-DD
+promise: <one sentence>
+
+== <slide heading>
+layout: figure
+section: supply-chain
+figure: cluster-supply-chain
+At most 25 words of prose on a figure slide.
+notes:
+Speaker notes, on every slide.
+```
+
+- `page:` names a page from the topic page set.
+- Every slide carries `section: <id>` or `section: <id> | <id>`. An id is the
+  `id` of the `<section>` that wraps an h2 in `<main>`. An h2 with no such
+  section gets a slug of its text (`Where next` is `where-next`). The text
+  above the first h2 is section `top`. The ids are the `{#id}` marks in the
+  extract.
+- Control lines are `layout`, `section`, `figure`, `source` and `credit`;
+  there is no `stage`, `stages` or `phase`.
+- Layouts: `text`, `stats`, `checklist`, `links`, `layers`, `timeline`,
+  `compare`, `table`, `bars`, `matrix`, `question`, `answer` and `figure`,
+  with the breach layouts' typed lines. There is no `stage`, `stage-group`,
+  `flow` or `background`.
+- A `figure` slide has one `figure: <id>` line naming one of the page's
+  diagrams, which must sit in a section the slide cites; its id is the
+  `[figure #id]` in the extract (the figure's own `id`, or its SVG
+  `<title>`'s id where the figure has none). The drafter never types the
+  caption: the builder places the page's `<figcaption>` under the picture.
+  Each figure appears at most once per deck, and a deck whose page has a
+  diagram has at least one `figure` slide.
+- Every number, technique ID and link in a slide's text and notes appears in
+  the sections it cites. The title and promise, which the cover shows, are
+  held to the whole page.
+- On a page that carries "(disclosure: the site's author works at Wiz)", the
+  first slide that names Wiz carries it too, in the slide's text when the
+  text names Wiz, or in its notes when only the notes do. A title or promise
+  that names Wiz puts it in the promise.
+- Limits: 15 to 30 slides counting the generated cover, how-to-use and
+  closing slides; at most 40 words of prose per slide (25 on a `figure`
+  slide), 14 per typed field, 12 in a heading and 300 in the notes; no U+2013
+  or U+2014 and no spaced hyphen used as a dash.
+
+## Topic gate, staleness and the deck line
+
+- `--check` reports every finding above, naming the outline line, and
+  validates `tools/decks/topics/published.json`: every entry has exactly
+  `id`, `outline_sha256`, `page_sha256`, `sections` (each cited section id
+  mapped to its hash) and `published`.
+- A section's hash covers its extract text, link URLs included, and the SVG
+  markup of its figures, so a redrawn diagram changes it while the
+  `page-meta` date, the deck line, the nav and a glossary link do not.
+  `--stale` names the cited sections that changed or are no longer on the
+  page; a change to a section no slide cites leaves the deck current, so a
+  re-review reads only the named sections.
+- The deck line is `<p class="page-meta" data-topic-deck>` with the breach
+  deck line's link text, alone on its line right after the page's
+  `page-meta` line at the top of `<main>`. `--stamp` and `--record` write it
+  and plan every page before writing any, as the breach tool does. The
+  glossary cross-linker skips a `<p>` carrying `data-topic-deck`.
+
+## Topic build
+
+`--build SLUG` writes `tools/decks/topics/build/<slug>.pptx`, refusing an
+outline with any `--check` finding, and verifies the saved file as the breach
+build does, with pictures allowed. Diagrams render with Playwright: the page
+loads from the working tree through a routed origin with `integrity`
+attributes stripped, a light colour scheme and device scale 2, and each
+figure's `<svg>` is screenshotted. The render stops when `style.css` did not
+load, and a picture of one colour is refused as blank. The hero illustration,
+which article pages hide, is shown for its screenshot on a panel the colour of
+the cover. PNGs are cached in `tools/decks/topics/build/figures/<slug>/`
+under the hash of their SVG markup, so an unchanged figure is never rendered
+again; delete that directory to render everything afresh.
+
+- A `figure` slide shows its heading, its prose, then the picture on a white
+  panel, scaled to fit with its aspect ratio kept and never past 1.5 image
+  pixels per point of its width, with the page's caption under it. When the
+  room left is too small, a `LayoutError` names the slide; shorten the
+  heading or the prose.
+- The cover shows the page's hero illustration beside the title, or, on a
+  page without one, the image on its `topics.html` card.
+- Every picture carries alt text: the SVG's `<title>` for a figure, the
+  hero's label, or the card image's `alt`.
+- Verification also checks that the cover carries the art, each `figure`
+  slide its one picture and the page's caption, and no other slide a
+  picture, and that every picture has the expected alt text, its image's
+  aspect ratio, enough pixels, no crop and more than one colour.
+
+Publishing follows the breach steps, to the "CSOH topic decks" Drive folder:
+build, upload privately, check every picture in Google's render, fact-review
+the slides against the sections they cite, get the owner's approval, then on
+the owner's go share it publicly, run `--record SLUG PRES_ID`, run `--check`
+and commit. Topic decks are CC BY-NC 4.0 and the pages stay CC BY-NC-ND 4.0.

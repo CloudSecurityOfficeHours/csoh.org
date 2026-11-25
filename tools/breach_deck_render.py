@@ -3,11 +3,14 @@
 Render a breach kill chain deck (a BDeck from build_breach_decks.py) to a
 16:9 .pptx, and reopen the saved file to verify it.
 
-The file is uploaded to Google Drive and converted to Google Slides, and the
-converter drops images, connectors, SmartArt, embedded fonts and autofit. So
-only text boxes and these native shapes are drawn: rectangles, rounded
-rectangles, ovals, chevrons, right arrows and down arrows. verify_pptx
-reports anything else it finds in the saved file.
+The file is uploaded to Google Drive and converted to Google Slides. The
+converter keeps pictures, at their placed size and aspect ratio and with
+their alt text, but drops connectors, SmartArt, embedded fonts and autofit.
+So a breach deck draws only text boxes and these native shapes: rectangles,
+rounded rectangles, ovals, chevrons, right arrows and down arrows. A deck
+kind whose slides carry pictures (topic decks, through topic_deck_render.py)
+places pictures too. verify_pptx reports anything else it finds in the
+saved file, and reports a picture unless it is told pictures are allowed.
 
 Every height is estimated before a shape is placed, the way the how-to
 renderer does it, and an element that would end below the content limit
@@ -555,6 +558,9 @@ class _Page:
     above, and the floor that elements pinned to the bottom leave, so an
     overflow is reported before the file is written."""
 
+    # How the last line of every slide's notes names the page.
+    NOTES_LINK = "Full kill chain"
+
     def __init__(self, prs, deck, where: str, dark: bool = False):
         self.slide = prs.slides.add_slide(prs.slide_layouts[6])
         self.deck = deck
@@ -692,7 +698,7 @@ class _Page:
                  [_p(f"{n} / {total}", *args)], align=PP_ALIGN.RIGHT, track=False)
 
     def notes(self, paras: list[str]) -> None:
-        url = f"Full kill chain: {SITE}{self.deck.page}"
+        url = f"{self.NOTES_LINK}: {SITE}{self.deck.page}"
         self.slide.notes_slide.notes_text_frame.text = "\n\n".join([*paras, url])
 
 
@@ -1424,34 +1430,38 @@ def _render_closing(page) -> None:
     page.box("body", X, y, W, h, paras, gap=LOOK["para_gap"])
 
 
-def _generated(prs, deck, which: str, draw, n: int, total: int, dark: bool = False) -> None:
-    page = _Page(prs, deck, f"{deck.slug}.deck ({which})", dark=dark)
+def _generated(prs, deck, which: str, draw, n: int, total: int, dark: bool = False,
+               page_cls=_Page) -> None:
+    page = page_cls(prs, deck, f"{deck.slug}.deck ({which})", dark=dark)
     draw(page)
     page.footer(n, total)
     page.notes([])
 
 
-def _content(prs, deck, s, n: int, total: int) -> None:
-    page = _Page(prs, deck, s.where, dark=s.layout in DARK_LAYOUTS)
+def _content(prs, deck, s, n: int, total: int, page_cls=_Page, renderers=None) -> None:
+    page = page_cls(prs, deck, s.where, dark=s.layout in DARK_LAYOUTS)
     _credits(page, s)
-    RENDERERS[s.layout](page, s)
+    (renderers or RENDERERS)[s.layout](page, s)
     page.footer(n, total)
     page.notes(s.notes)
 
 
-def render_deck(deck, out: Path) -> Path:
+def render_deck(deck, out: Path, *, page_cls=_Page, renderers=None, cover=_render_cover,
+                how_to=_render_how_to_use, closing=_render_closing) -> Path:
     """Write deck as a .pptx at out: a generated cover and "how to use this
     deck", the outline's slides, a generated closing. Raises LayoutError
-    before writing if any element would end below the room it has."""
+    before writing if any element would end below the room it has. Another
+    deck kind passes its own page class, generated slides and layout
+    renderers (topic_deck_render.py adds the figure layout and cover art)."""
     prs = Presentation()
     prs.slide_width = Emu(SLIDE_W_EMU)
     prs.slide_height = Emu(SLIDE_H_EMU)
     total = len(deck.slides) + GENERATED
-    _generated(prs, deck, "cover", _render_cover, 1, total, dark=True)
-    _generated(prs, deck, "how to use", _render_how_to_use, 2, total)
+    _generated(prs, deck, "cover", cover, 1, total, dark=True, page_cls=page_cls)
+    _generated(prs, deck, "how to use", how_to, 2, total, page_cls=page_cls)
     for n, s in enumerate(deck.slides, start=3):
-        _content(prs, deck, s, n, total)
-    _generated(prs, deck, "closing", _render_closing, total, total)
+        _content(prs, deck, s, n, total, page_cls, renderers)
+    _generated(prs, deck, "closing", closing, total, total, page_cls=page_cls)
     out.parent.mkdir(parents=True, exist_ok=True)
     prs.save(str(out))
     return out
@@ -1487,9 +1497,9 @@ def _fill_behind(shapes: list, i: int, bg: str) -> str:
     return bg
 
 
-def _kind_problem(shape) -> str | None:
+def _kind_problem(shape, pictures: bool = False) -> str | None:
     kind = shape.shape_type
-    if kind == MSO_SHAPE_TYPE.TEXT_BOX:
+    if kind == MSO_SHAPE_TYPE.TEXT_BOX or (pictures and kind == MSO_SHAPE_TYPE.PICTURE):
         return None
     if kind == MSO_SHAPE_TYPE.AUTO_SHAPE:
         auto = shape.auto_shape_type
@@ -1520,7 +1530,8 @@ def _run_findings(tag: str, shape, behind: str) -> list[str]:
     return out
 
 
-def _slide_findings(tag: str, slide, n: int, total: int, page: str, outline) -> list[str]:
+def _slide_findings(tag: str, slide, n: int, total: int, page: str, outline,
+                    pictures: bool = False) -> list[str]:
     findings: list[str] = []
     limit = Inches(STYLE["bottom_limit"]) + EMU_SLACK
     bg = _solid(slide.background) or STYLE["bg"]
@@ -1528,7 +1539,7 @@ def _slide_findings(tag: str, slide, n: int, total: int, page: str, outline) -> 
     named: dict[str, list] = {}
     for i, sh in enumerate(shapes):
         named.setdefault(sh.name, []).append(sh)
-        kind = _kind_problem(sh)
+        kind = _kind_problem(sh, pictures)
         if kind:
             findings.append(
                 f"{tag}: shape {sh.name!r} is {kind}; only text boxes, rectangles, rounded "
@@ -1579,12 +1590,13 @@ def reopen(path: Path):
     return Presentation(str(path))
 
 
-def verify_pptx(path: Path, deck) -> list[str]:
+def verify_pptx(path: Path, deck, pictures: bool = False) -> list[str]:
     """Reopen the saved file and return every finding: the slide count and
-    size; per slide, shape kinds, bottoms and sides, autofit, run sizes
-    (18 pt body, 14 pt labels), contrast of every run against what it sits
-    on, dashes, the footer, the notes, and the type label and source line
-    that background and discussion slides carry."""
+    size; per slide, shape kinds (a picture only when pictures is True),
+    bottoms and sides, autofit, run sizes (18 pt body, 14 pt labels),
+    contrast of every run against what it sits on, dashes, the footer, the
+    notes, and the type label and source line that background and
+    discussion slides carry."""
     prs = reopen(path)
     findings: list[str] = []
     want = len(deck.slides) + GENERATED
@@ -1597,6 +1609,6 @@ def verify_pptx(path: Path, deck) -> list[str]:
     outline = {i + 3: s for i, s in enumerate(deck.slides)}
     for n, slide in enumerate(prs.slides, start=1):
         findings += _slide_findings(
-            f"{path.name} slide {n}", slide, n, want, deck.page, outline.get(n)
+            f"{path.name} slide {n}", slide, n, want, deck.page, outline.get(n), pictures
         )
     return findings
