@@ -1,0 +1,394 @@
+title: Zero Trust Architecture
+page: zero-trust.html
+as-of: 2026-11-25
+promise: Zero Trust means no implicit trust from network location: every access decision is per request, identity-aware and device-aware, dynamic and logged.
+
+== The 30-second version
+layout: text
+section: top
+Zero Trust is an architectural pattern: no implicit trust based on network location. Every access decision is per-request, identity-aware and device-aware, dynamic and logged. Cloud makes the architecture mechanically easier; the org change is the harder part.
+notes:
+The page opens with a 30-second version. Zero Trust is an architectural pattern with no implicit trust based on network location. Every access decision is made per request, takes identity and device into account, is dynamic, and is logged.
+
+It is defined by NIST SP 800-207, popularized by Google's BeyondCorp, and operationalized through five pillars (Identity, Devices, Networks, Apps and Workloads, and Data) per the CISA Zero Trust Maturity Model.
+
+It is not a product. Any vendor pitching "the Zero Trust solution" is selling one pillar, usually ZTNA replacing the VPN, or microsegmentation. A real program ties together identity, device posture, microsegmentation, workload identity through SPIFFE and mTLS, data classification, telemetry, and a policy engine that evaluates per-request context.
+
+Cloud makes the architecture mechanically easier, because every access is already an API call. The org change is the harder part.
+
+== The network is not a trust boundary
+layout: table
+section: what-is
+row: Word | What it means
+row: Architectural | A way of designing systems, not a SKU
+row: Strategy | Multi-year, touching identity, networks, applications, workloads and data
+row: Per-request | Trust is established at access, not at connection; revocable between requests
+Every request, whether human to app, app to API or service to service, is authenticated, authorized against a dynamic policy, and recorded.
+notes:
+Zero Trust is an architectural strategy built on a single assumption: the network is not a trust boundary. A request from inside the corporate VPN, the production VPC or the Kubernetes cluster is treated with the same skepticism as one from the public internet. Every request, whether human to application, application to API, or service to service, is authenticated, authorized against a dynamic policy that considers identity, device posture and context, and recorded.
+
+The page calls three words in that definition load-bearing. Architectural: it is a way of designing systems, not a SKU. Strategy: it is multi-year and touches identity, networks, applications, workloads and data, and you do not buy your way to it in a quarter. Per-request: trust is established at the moment of access, not at the moment of network connection, and it can be revoked between requests.
+
+== What Zero Trust is not
+layout: list
+section: what-is
+item: Not a product: vendors ship parts of the architecture
+item: Not just VPN replacement: workload calls stay on implicit trust
+item: Not literally "trust no one": trust comes from explicit signals
+item: Not a one-time project: maturity models stage it over years
+item: Not the death of the firewall: defense in depth still matters
+A Zero Trust program is half engineering and half organizational change. The technology is largely ready; the hard part is sequencing the work.
+notes:
+The page lists five things Zero Trust is not. No vendor ships Zero Trust. Vendors ship products that implement parts of it, such as ZTNA, microsegmentation, identity-aware proxies, posture-management agents and service meshes, and the architecture is what you build on top.
+
+ZTNA replacing your VPN is a real, valuable project, but calling it Zero Trust is a category error: you have improved remote user access while leaving every workload-to-workload call inside the cluster on implicit trust.
+
+The shorthand "never trust, always verify" is rhetorical. You do trust authenticated identities to do their job; the point is that trust is established per request from explicit signals, not granted because of network location.
+
+Zero Trust is closer to a posture you continuously improve than a milestone you hit, and the CISA and DoD maturity models explicitly stage the work over years. Perimeter and egress controls remain useful as coarse-grained filters and for compliance; they are just no longer where trust decisions live.
+
+If you take one thing from the page: a Zero Trust program is half engineering and half organizational change. The technology is largely ready; the hard part is sequencing the work and not letting any single vendor talk you into thinking their box is the whole story.
+
+== Where Zero Trust came from
+layout: timeline
+section: origin
+event: 2010 | Forrester analyst John Kindervag coins the term
+event: 2014 | Google's BeyondCorp papers begin, describing a working production implementation
+event: 2020 | NIST SP 800-207 becomes the canonical vendor-neutral definition
+event: 2022 | OMB M-22-09 directs federal civilian agencies to align with it
+Every U.S. federal cloud security program, and a large fraction of regulated private-sector programs, now maps to 800-207 terminology.
+notes:
+Three moments matter. In 2010 John Kindervag, then a Forrester analyst, published No More Chewy Centers. His argument was that the castle-and-moat model, a hard perimeter with a soft interior, had failed: once an attacker was inside the network, lateral movement was trivial. His prescription was to trust nothing by default, verify everything, and inspect and log all traffic. The implementation guidance was thin because the tooling did not yet exist at scale.
+
+In 2014 Google published the first BeyondCorp paper, in a series running through 2018. After the 2009 Operation Aurora intrusion, Google moved every employee application off the corporate VPN. Access depended on user identity, device identity and per-application policy enforced at an identity-aware proxy, and the user's location became irrelevant.
+
+In August 2020 NIST published SP 800-207. It establishes the seven tenets and the logical components. Section 3.1 describes three approaches: enhanced identity governance, micro-segmentation, and network infrastructure and software defined perimeters. Section 3.2 describes four deployments of them. In January 2022, OMB Memorandum M-22-09 directed federal civilian agencies to align with it. When in doubt, the page says, that is the document to read.
+
+Other touchstones: NIST SP 1800-35 (final June 2025), the DoD Zero Trust Reference Architecture v2.0 (2022), the CISA Zero Trust Maturity Model v2.0 (2023) and NSA's Embracing a Zero Trust Security Model.
+
+== The seven tenets of NIST SP 800-207
+layout: list
+section: tenets
+item: All data sources and computing services are resources
+item: All communication is secured regardless of network location
+item: Access to individual resources is granted per session
+item: Access is determined by dynamic policy
+item: The posture of all owned and associated assets is monitored
+item: Authentication and authorization are dynamic and strictly enforced before access
+item: Collect as much state as possible and use it to improve
+notes:
+800-207 enumerates seven tenets every Zero Trust Architecture is expected to satisfy. In the page's operator language: a VM, a SaaS API, a Kubernetes pod, a managed database and a customer-managed key are all resources under the same access-decision discipline. A request from a workload in the same VPC gets the same authentication, encryption (typically mTLS) and authorization check as one from the public internet. Authentication and authorization happen at the moment of access for that specific resource, and a granted session does not implicitly grant access to other resources.
+
+The policy decision considers identity, device posture, data sensitivity, behavioral context and risk signals, and can return different answers for the same identity at different moments. Devices, workloads and services are observed continuously, and a device whose posture has degraded loses access until remediated. Re-authentication happens on a cadence appropriate to the resource's sensitivity, with strong authentication, ideally phishing-resistant, as the floor for human users and cryptographic identity for workloads. And telemetry is foundational: the policy engine and the SOC both depend on flow logs, audit logs, posture signals and identity events.
+
+== Reading the tenets
+layout: table
+section: tenets
+row: Tenets | What they demand
+row: 1, 2 and 3 | The architectural shifts
+row: 4 and 6 | A real policy engine, not just static rules
+row: 5 and 7 | A telemetry investment
+You cannot have dynamic, posture-aware access decisions without the signals that feed them.
+notes:
+The page's pragmatic reading groups the tenets. Tenets 1, 2 and 3 are the architectural shifts. Tenets 4 and 6 require a real policy engine, not just static rules. Tenets 5 and 7 are why a Zero Trust program is also necessarily a telemetry investment. You cannot have dynamic, posture-aware access decisions without the signals that feed them.
+
+== The logical components
+layout: table
+section: components
+row: Component | Role | In practice
+row: Policy Decision Point | The brain: returns allow, deny or step-up | Control plane of your IdP, ZTNA or mesh authorization
+row: Policy Enforcement Point | The muscle: allows or blocks in the data path | Identity-aware proxy, sidecar, admission controller, API gateway
+row: Policy Engine | The rules and the Trust Algorithm | OPA and Rego, Cedar, conditional access policies
+row: Trust Algorithm | Combines signals into a decision | A deterministic rule, a scored model or a weighted policy
+row: Policy Administrator | Issues credentials, sets up or revokes sessions | The IdP in SAML or OIDC; Istiod in a mesh
+notes:
+NIST 800-207 abstracts the architecture into a small number of logical components, and every product you evaluate maps to one or more of them. The Policy Decision Point evaluates a request, identity A wants resource B in context C, and returns allow, deny or step-up. It is composed of the Policy Engine and the Policy Administrator. The Policy Enforcement Point sits in the data path and allows or blocks the request: Google IAP, Cloudflare Access, an Envoy sidecar in Istio, a Kubernetes admission controller, an API gateway, or a host-based agent.
+
+The Policy Engine holds the rules and the Trust Algorithm. The work of a Zero Trust program is keeping its policy current, testable and version-controlled. The Trust Algorithm combines identity confidence, device posture, behavioral risk, data sensitivity and threat intel into a decision. The Policy Administrator issues the credential, establishes or revokes the session and configures the PEP; product literature often collapses it into the PDP.
+
+The Trust Algorithm consumes data sources: IdP claims, MFA strength, device posture from MDM and EDR, geolocation, behavioral analytics, threat intel and data classification tags. The quality of these signals upper-bounds the quality of the decisions.
+
+The mental model: the PEP is on the data path and must be fast; the PDP is on the control path and may be more expensive; both are continuously fed by signal sources. When you evaluate a Zero Trust product, ask which boxes it occupies and where it expects the others to come from.
+
+== Identity-aware proxy: the shape
+layout: timeline
+section: ztna
+event: Request | The user opens an internal app in a browser
+event: Authenticate | Redirected to the IdP, the user signs in with MFA
+event: Evaluate | The proxy checks this user, this device, this app, this time
+event: Broker | If allowed, the proxy connects the user to the application
+The application can sit anywhere and is not reachable except through the proxy. The user never gets a network-level handle on the resource.
+notes:
+This is the most visible Zero Trust pattern, and the one most often mistaken for the whole thing. Instead of giving a remote user a VPN tunnel into the corporate network, where they then have broad lateral access, you terminate them at an identity-aware proxy that brokers access to specific applications, based on identity and device posture, per request.
+
+The user opens a browser, hits app.internal.example.com, is redirected to the IdP and authenticates with MFA. The proxy evaluates a policy: this user, this device, this app, this time. If allowed, it brokers the connection to the application. The application can sit anywhere, on-prem, in a VPC or in another cloud, and is not reachable except through the proxy.
+
+== ZTNA vs VPN, in practice
+layout: table
+section: ztna
+row: Dimension | Traditional VPN | ZTNA or identity-aware proxy
+row: Trust unit | Network segment: anything routable | Per application, per request
+row: Lateral movement | Easy once authenticated | Effectively impossible: no network-level reachability
+row: Device posture | Typically checked at connect time only | Re-evaluated per request or per session
+row: East-west protection | None inherently | None inherently: still requires microsegmentation
+ZTNA is the easiest entry point, and it gets you one pillar. The east-west, workload-to-workload and data tiers remain untouched.
+notes:
+This is an excerpt of the page's comparison. On a VPN the trust unit is the network segment: once on the VPN, you can reach anything routable. With ZTNA it is per application, per request. Authorization moves from coarse firewall ACLs on IP and port to user, device, app and context. Lateral movement goes from easy once authenticated to effectively impossible, because there is no network-level reachability. The page's table also compares visibility, per-tunnel IP logs against per-request identity-aware logs, and user experience.
+
+Note the last row. Neither protects east-west traffic inherently; that still requires microsegmentation.
+
+The product landscape includes Cloudflare Access, Zscaler Private Access, Tailscale, Twingate, Google Cloud IAP, Microsoft Entra Application Proxy, broader SSE and SASE platforms with ZTNA as a component, and open-source options such as Pomerium and Ory Oathkeeper.
+
+The page's vendor-neutral take: ZTNA is the easiest entry point to a Zero Trust program because the user-visible win is real, no more VPN. But shipping ZTNA gets you one pillar, Applications and Workloads, for human-to-app traffic. The east-west, workload-to-workload and data tiers remain untouched.
+
+== Microsegmentation: three flavors
+layout: compare
+section: microseg
+col: Host-based | An agent on each host enforces connection rules | Rules use workload identity tags, not IP | Best for hybrid and on-prem; survives IP churn
+col: Network or cloud-native | Security groups, NSGs, firewall rules, eBPF data plane | Cheap and ubiquitous | Granularity limited to the CIDR or tag model
+col: Service mesh | L7 authorization between services | mTLS and per-call policy | Identity is the workload's SPIFFE ID, not its IP
+ZTNA handles north-south traffic, user to app. Microsegmentation handles east-west traffic, workload to workload, enforced at the workload or a sidecar.
+notes:
+If ZTNA handles north-south traffic, from user to app, microsegmentation handles east-west traffic, from workload to workload. The goal is the same, no implicit trust based on network location, but the enforcement point is at the workload itself or at a service-mesh sidecar, not a centralized proxy.
+
+Host-based tools put an agent on each host that allows or denies connections based on workload identity tags, not IP. The page says this is best for hybrid and on-prem and survives IP churn; examples are Illumio, Akamai Guardicore, Zero Networks and ColorTokens.
+
+Network or cloud-native segmentation uses cloud security groups, NSGs, firewall rules and eBPF data planes. It is cheap and ubiquitous, but granularity is limited to the CIDR or tag model. Examples include AWS security groups and Network Firewall, Azure NSGs and Azure Firewall, GCP firewall rules and VPC Service Controls, Calico and Cilium.
+
+A service mesh gives L7 authorization between services with mTLS and per-call policy, where identity is the workload's SPIFFE ID rather than its IP: Istio, Linkerd, Consul Connect, or Cloud Service Mesh on GCP.
+
+== Layer the flavors, then discover before you enforce
+layout: layers
+section: microseg
+layer: Most sensitive services | Service mesh L7 authorization
+layer: Pod to pod | Kubernetes NetworkPolicies with Calico or Cilium
+layer: VPC and subnet | Cloud-native segmentation for blast radius
+The flavors are complementary; layer them with one naming and identity scheme. Discovery is the hard part: most projects run audit mode for 60-90 days, build the dependency map, then ratchet to enforce.
+notes:
+The three flavors are complementary, not exclusive. A mature program runs cloud-native segmentation at the VPC and subnet level for blast radius, Kubernetes NetworkPolicies with Calico or Cilium for pod-to-pod traffic, and a service mesh for L7 authorization on the most sensitive services, with the same naming and identity scheme across layers.
+
+The hardest part of microsegmentation is discovery rather than enforcement. You cannot write a deny-by-default rule until you know what the legitimate east-west flows are. Most projects start with audit-mode policies for 60-90 days, build the dependency map, then ratchet to enforce. Tools like Illumio, Guardicore and Cilium Hubble exist primarily to make this discovery tractable.
+
+== The device-posture stack
+layout: table
+section: device-posture
+row: Category | What it contributes
+row: MDM or UEM | Enrolls the device, applies policy, attests management state
+row: EDR | Real-time process telemetry; the trust score that feeds the PDP
+row: Posture-only tools | Lightweight posture checks surfaced to the user
+row: Browser as endpoint | The browser is the controlled endpoint when you don't own the OS
+row: Device-bound credentials | Bind the credential to the device; phishing-resistant
+Verifying every device on every request only works with a real-time posture signal.
+notes:
+The tenet that every device is verified on every request only works if there is a real-time posture signal, and the device-posture stack produces it.
+
+MDM and UEM tools, such as Jamf, Microsoft Intune, VMware Workspace ONE, Kandji and the open-source Fleet, enroll the device, apply configuration policy and attest management state. EDR, such as CrowdStrike Falcon, SentinelOne and Microsoft Defender for Endpoint, gives real-time telemetry on process behavior and produces the trust score that feeds the PDP. The page cites CrowdStrike's Falcon Zero Trust Assessment score as an example of an EDR vendor surfacing posture explicitly for Zero Trust decisions.
+
+Posture-only tools such as Kolide, now part of 1Password, run lightweight checks surfaced to the user through Slack rather than IT enforcement. Browser-as-endpoint products such as Island, Talon and Chrome Enterprise treat the browser as the controlled endpoint, useful for contractor and BYOD scenarios. Device-bound credentials, FIDO2 and WebAuthn, platform passkeys, Windows Hello, Touch ID and hardware tokens, cryptographically bind the credential to the device; the page calls them the gold standard for the auth half of the device and identity check.
+
+== CAEP keeps verification continuous
+layout: text
+section: device-posture
+With the Continuous Access Evaluation Profile (CAEP), a device falling out of compliance can revoke an active session in seconds. Without it, access is verified at login and hopefully still true an hour later.
+notes:
+The posture data is only useful if your PDP can consume it. Microsoft Conditional Access pulls device-compliance state from Intune natively. Okta, Ping and others pull from EDR and MDM through the Continuous Access Evaluation Profile, CAEP, an OpenID Foundation spec built on the Shared Signals Framework, so a device falling out of compliance can revoke an active session in seconds.
+
+The page calls CAEP the most underappreciated piece of plumbing in the modern Zero Trust stack. Without it, continuous verification becomes "verified at login, hopefully still true an hour later."
+
+== Workload to workload: identity, not IP
+layout: compare
+section: workload
+col: SPIFFE and SPIRE | A standard workload identity: the SPIFFE ID, a URI | Issued as an X.509 SVID or a JWT | SPIRE is the reference implementation
+col: mTLS | Both parties present and verify certificates | In a mesh, sidecars handle it; app code is unchanged
+col: Cloud workload identity | AWS: IAM roles, IRSA, EKS Pod Identity | Azure: Managed Identities, AKS Workload Identity | GCP: Workload Identity Federation
+The principle: each workload gets short-lived, attestable credentials and no long-lived secrets, and every call is tied cryptographically to a known identity.
+notes:
+The page calls this the piece most Zero Trust writeups under-cover. Once the network is not a trust boundary, every service-to-service call needs an authenticated, authorized identity, and that identity cannot be an IP address.
+
+SPIFFE defines a standard for workload identity: a SPIFFE ID, which is a URI, issued as an X.509 certificate called an SVID or as a JWT, attestable from runtime metadata such as a Kubernetes service account or an AWS instance role. SPIRE is the reference implementation: a server that issues identities and an agent on each node that attests workloads. SPIFFE is the CNCF graduated standard, and Istio, Linkerd, Consul and several proprietary platforms embed it or interoperate with it.
+
+Mutual TLS is the data-plane mechanic. In a service mesh, sidecars take plaintext from the application and re-emit it as mTLS to the next hop, so the application code doesn't change. Outside a mesh, mTLS is configurable at any modern HTTP client or server, with more boilerplate.
+
+Each cloud has native workload identity, and on AWS every API call is already identity-authenticated via SigV4. The principle in all three is the same. For calls between clouds or between cloud and on-prem, SPIFFE is the lingua franca; for service-to-cloud-API calls, the provider's native workload identity is usually the right answer.
+
+== An AI agent is a non-human identity
+layout: text
+section: ai-agents
+The same tenets apply unchanged: verify explicitly, enforce least privilege, assume breach. Agents add new wrinkles: non-deterministic behavior, susceptibility to injected instructions, and a tendency to reach for tools they were never meant to touch.
+notes:
+The page treats an AI agent, an LLM wired to tools, data and the ability to act on its own, as the newest and fastest-growing class of non-human identity. The same tenets that govern any workload apply unchanged: verify explicitly, enforce least privilege, and assume breach. NIST SP 800-207 deliberately speaks of subjects rather than users, so that services, workloads and now agents fall inside the zero trust boundary.
+
+What agents add are new wrinkles: non-deterministic behavior, susceptibility to injected instructions, and a tendency to reach for tools they were never meant to touch.
+
+Prompt injection is OWASP LLM01, the top risk for LLM applications, and indirect injection means the hostile instruction can arrive inside a web page, a document or a calendar invite the agent merely reads. A prompt-injected agent will confidently try to call tools it should not. So never treat model output as an authorization decision.
+
+== Zero Trust controls for agents
+layout: checklist
+section: ai-agents
+check: Give each agent a short-lived, attestable, per-agent identity
+check: Scope tool and data access to the minimum the task requires
+check: Log every action to a tamper-evident audit trail
+check: Enforce authorization at the tool and API boundary, in code
+check: Require human approval before high-impact actions
+check: Make the MCP server a broker that denies by default
+check: Baseline each agent's tool pattern; revoke the session on anomaly
+notes:
+Give every agent its own short-lived, attestable identity, not a shared API key copied into an environment variable. The 2026 CISA and Five Eyes guide Careful Adoption of Agentic AI Services says to construct each agent as a distinct principal with a cryptographically anchored identity and short-lived credentials. Then scope its tool and data access to the minimum the task requires, and log every action to a tamper-evident audit trail.
+
+Enforce authorization at the tool and API boundary, in code, not in the prompt. OWASP says to give the application its own tokens, handle privileged functions in code, and restrict the model to the minimum access it needs.
+
+Require step-up verification, an explicit human approval, before an agent can spend money, delete data, grant access, or send anything to an external recipient. Keep that gate at the enforcement layer so the model cannot argue, cajole or be injected past it.
+
+The MCP authorization specification now classifies MCP servers as OAuth 2.1 resource servers with audience-bound tokens. Treat the MCP server as a broker that authenticates the calling agent, checks scope per tool and denies by default.
+
+Verification must be continuous. Baseline each agent's normal tool and scope pattern and alert when it steps outside it, such as a read-only reporting agent suddenly invoking a delete tool. Revoke the session on anomaly rather than waiting for the task to finish.
+
+== Zero Trust building blocks in each cloud
+layout: compare
+section: cloud-patterns
+col: AWS | IAM Identity Center, external IdP | Verified Access, PrivateLink | VPC Lattice | Verified Permissions (Cedar)
+col: Azure | Conditional Access with Intune | Private Link, private endpoints | Entra Application Proxy | Entra and AKS workload identity
+col: GCP | Chrome Enterprise Premium, IAP | VPC Service Controls | Access Context Manager | Workload Identity Federation
+Every cloud ships a credible toolkit; none ships a complete program. Policy decisions, cross-pillar telemetry, device-posture coupling and exception workflows are yours.
+notes:
+None of these is the Zero Trust button; they are the pieces you assemble.
+
+On AWS: IAM Identity Center with an external IdP, paired with permissions boundaries and SCPs for guardrails; VPC Lattice, which the page calls the closest AWS-native analog to a managed service mesh; Verified Access, AWS's ZTNA-style identity-aware proxy, with PrivateLink removing network reachability between accounts and VPCs; IRSA and Pod Identity with IAM Access Analyzer; and Verified Permissions, using Cedar, for authorization in your own apps.
+
+On Azure: Conditional Access, which the page calls the canonical Microsoft Zero Trust enforcement point, weighing user risk, device compliance from Intune, location and sign-in risk; Private Link and private endpoints with Managed Identities; Entra Application Proxy for on-prem web apps; Entra and AKS workload identities with no client secrets in code; and Defender for Cloud feeding posture and runtime signals.
+
+On GCP: Chrome Enterprise Premium, formerly BeyondCorp Enterprise, is productized BeyondCorp. IAP is the building block, for HTTPS apps and, via TCP forwarding, SSH, RDP and arbitrary TCP. VPC Service Controls put a perimeter around managed-service APIs that prevents data exfiltration even by authenticated identities outside it. Access Context Manager defines the access levels IAP and VPC Service Controls consume, and Workload Identity Federation and Cloud Service Mesh cover workloads.
+
+== AWS, Azure and GCP side by side
+layout: table
+section: comparison
+row: Capability | AWS | Azure | GCP
+row: Identity-aware proxy | Verified Access | Entra Application Proxy | IAP, Chrome Enterprise Premium
+row: Data-tier perimeter | Resource, SCP and bucket policies | Storage firewall, Private Endpoints | VPC Service Controls
+row: Device posture | Verified Access trust providers | Conditional Access, Intune | Access Context Manager
+row: Session revocation | Short-lived STS tokens; CAEP via partners | Continuous Access Evaluation | Context-Aware Access re-evaluation
+For orientation, not procurement: every cell is one of multiple options.
+notes:
+This is an excerpt of the page's side-by-side table. Every cell is one of multiple options, and the table is for orientation, not procurement. The full table also covers workforce identity, risk-based policy, workload identity, service-to-service traffic, private connectivity, fine-grained app authorization, and posture and telemetry services. On AWS the data-tier perimeter has no single primitive; you combine resource policies, SCPs and bucket policies.
+
+The page reads the table this way. Azure's strength is its out-of-the-box Trust Algorithm through Conditional Access, Intune and Continuous Access Evaluation. GCP's is data-tier control through VPC Service Controls, plus the BeyondCorp lineage. AWS offers a large set of primitives and leaves more of the assembly to you.
+
+Multi-cloud Zero Trust is most easily anchored on a common identity layer, such as Okta or Entra ID, and a SPIFFE or workload-identity-federation backbone for workloads.
+
+== CISA's five pillars
+layout: table
+section: cisa
+row: Pillar | What it covers
+row: Identity | Phishing-resistant MFA, risk-based authentication, just-in-time access
+row: Devices | Inventory, posture, compliance enforcement
+row: Networks | Segmentation, mTLS by default, dynamic policy
+row: Applications & Workloads | Identity-aware app access, continuous workload authorization
+row: Data | Classification, encryption, DLP, access logging
+Three cross-cutting capabilities span all five: Visibility & Analytics, Automation & Orchestration, and Governance.
+notes:
+CISA's Zero Trust Maturity Model, v2.0 from April 2023, was built for federal civilian agencies and has been widely adopted in the private sector, because it does what NIST 800-207 doesn't: it gives you a road map.
+
+Identity is how users and entities prove who they are, and it is the pillar most orgs start with. Devices covers inventory, posture and compliance enforcement, including supply-chain integrity; a device must be known and healthy to access anything. Networks is the "no implicit trust based on network location" pillar. Applications and Workloads is where ZTNA and service-mesh authorization live. Data is the eventual destination of all the above.
+
+Visibility and Analytics is telemetry across all five pillars, fed to a SIEM or detection pipeline: the signal layer the Trust Algorithm needs. Automation and Orchestration is automated response to policy violations and posture changes, where SOAR and CAEP-driven session revocation live. Governance is policy, exception management, audit and compliance mapping: the GRC layer for the program.
+
+== Four maturity stages, per pillar
+layout: table
+section: cisa
+row: Stage | What it looks like
+row: Traditional | Static, manual controls; the network perimeter is the trust boundary
+row: Initial | Some automation, MFA on most users, coarse segmentation
+row: Advanced | Risk-based policy, enforced device posture, east-west microsegmentation
+row: Optimal | Fully dynamic policy; few orgs are here in all pillars
+Each pillar moves independently. Most orgs are Advanced in Identity, Initial in Devices and Traditional in Data at once. A pillar two stages behind the rest is usually the right next project.
+notes:
+Each pillar moves through the four stages independently, so you will not be at the same stage in every pillar.
+
+Traditional means static, manually configured controls, the network perimeter as the trust boundary, annual access reviews and no real telemetry pipeline; most legacy enterprises start here. Initial adds some automation, MFA on most users, basic identity for cloud workloads, coarse segmentation, and telemetry that is collected but not yet correlated; most cloud-native startups land here by default.
+
+Advanced means centralized identity with risk-based policy, enforced device posture, east-west microsegmentation, workload identity as standard, a CAEP-driven session lifecycle, and correlated telemetry with automation handling common responses. Optimal is fully dynamic policy across all pillars, continuous automated authorization, data-tier enforcement, an AI-assisted Trust Algorithm and self-healing posture: the aspirational target.
+
+The model's practical value is that per-pillar maturity scores surface where to invest next.
+
+== The DoD model: seven pillars
+layout: stats
+section: dod
+stat: 45 | Capabilities | Listed across the seven pillars
+stat: 152 | Activities | Each assigned a level: target or advanced
+Seven pillars: User, Device, Application & Workload, Data, Network & Environment, Automation & Orchestration, Visibility & Analytics. The department must reach the target level by the end of FY2027.
+notes:
+The DoD Zero Trust Reference Architecture v2.0, from September 2022, and the accompanying DoD Zero Trust Strategy define their own model with seven pillars. The page says CISA's five pillars are a simplification of it, and the DoD version goes deeper.
+
+The DoD model lists 45 capabilities and 152 activities across the seven pillars and assigns each activity to a level, target or advanced. The department must reach the target level by the end of FY2027.
+
+If you work in defense, federal or contracting, this is the document your customer is grading you against. If you don't, CISA's model is more accessible, but the DoD's enumeration of capabilities is useful as a checklist when you want to be sure you haven't missed something.
+
+== A practitioner staging model
+layout: table
+section: maturity
+row: Move | Concrete deliverables
+row: Traditional to Initial | Phishing-resistant MFA, one workforce IdP, no static workload keys, CSPM
+row: Initial to Advanced: identity and apps | ZTNA replaces VPN, posture in access decisions, PAM and JIT
+row: Initial to Advanced: networks and workloads | Microsegmentation audit then enforce, mesh authorization, east-west mTLS
+row: Advanced to Optimal: data | Automated classification, HYOK or external KMS, DLP in the policy engine
+Sequence pillars by risk reduction per dollar. Identity is almost always first, because every other decision depends on it.
+notes:
+The page offers a practitioner staging model for a cloud-native org, mapped to CISA's stages with concrete deliverables.
+
+Traditional to Initial: phishing-resistant MFA for all employees, a single workforce IdP, cloud-native workload identity with no long-lived static keys, a complete asset inventory, SSO for at least the top-20 applications, and CSPM running. Most orgs reach this within 12-18 months.
+
+Initial to Advanced, on identity and apps: ZTNA replaces the VPN for all internal apps, device posture is integrated into access decisions, risk-based session policy is live, privileged access goes through PAM and JIT, and in-house apps get externalized authorization. On networks and workloads: microsegmentation in audit mode, then enforce; service-mesh authorization on the most sensitive services; SPIFFE or workload identity for cross-cluster and hybrid calls; east-west mTLS by default; and cloud-API traffic through private endpoints.
+
+Advanced to Optimal, on data: automated classification, customer-managed keys with HYOK or external KMS for the most sensitive tiers, DLP integrated into the policy engine, just-in-time decryption with audit, and CAEP-driven revocation across all pillars.
+
+The skip-stage cost is real: the page says a program that buys microsegmentation before fixing identity has built a fortress with the front door open.
+
+== Common pitfalls
+layout: list
+section: pitfalls
+item: "We bought ZTNA, so we have Zero Trust"
+item: Treating Zero Trust as a one-time project
+item: Ignoring east-west traffic
+item: Authentication without authorization
+item: Enforcing microsegmentation before the discovery phase
+item: Policy without telemetry
+item: Long-lived static credentials in workloads
+The page lists three more: vendor solution theater, forgetting the human session lifecycle, and compliance-first framing.
+notes:
+The page calls the first one the most common mistake. ZTNA covers human-to-app north-south traffic and does nothing for workload-to-workload or the data tier. A Zero Trust initiative with an end date is a transformation; what comes after is the operating model, so plan for it from day one. Skipping east-west because it is hard is, in the page's words, the most expensive shortcut in the field, because that is where the attacker lateral movement happens.
+
+Making every request authenticated is necessary; making every request authorized against a meaningful policy is the goal. mTLS everywhere without per-call authorization is encrypted trust, not Zero Trust. Day-one deny-by-default microsegmentation breaks production, so run audit mode for 60-90 days, build the dependency map, and plan for the cycle to repeat with each major service. Without device posture, behavioral analytics and threat-intel feeds, your Trust Algorithm is a static rule set with a fancy name. Any hard-coded API key or long-lived service-account JSON file in a workload is an artifact from the pre-Zero-Trust era: if a credential exists on disk for more than a few minutes, redesign.
+
+The other three: for vendor theater, ask which 800-207 components a product implements and what it expects from elsewhere. Authentication at login plus a 12-hour token without continuous evaluation is session-aware-once trust. And compliance-first framing produces architecture heavy on documentation and light on posture change: map for the auditor, but optimize for the attacker.
+
+== Is Zero Trust the same as ZTNA?
+layout: question
+section: faq
+ZTNA is the most visible pattern. Think about what it covers, and what it leaves on implicit trust.
+notes:
+This is a question from the page's FAQ. Ask it and let the room answer before moving on.
+
+== No: ZTNA is one product category
+layout: answer
+section: faq
+ZTNA applies Zero Trust principles to remote user access, typically an identity-aware proxy that replaces a VPN. Zero Trust Architecture also covers workload-to-workload traffic, microsegmentation, device posture, data access and the policy engine.
+notes:
+No. ZTNA, Zero Trust Network Access, is one product category that applies Zero Trust principles to remote user access, typically an identity-aware proxy that replaces a VPN. Zero Trust Architecture is much broader: it covers workload-to-workload communication, microsegmentation, device posture, data access, and the policy engine that ties it all together.
+
+Deploying ZTNA gets you one pillar. The page says calling that Zero Trust is a category error vendors actively encourage.
+
+== Does Zero Trust replace the firewall?
+layout: question
+section: faq
+Think about where trust decisions now live, and what perimeter controls still do.
+notes:
+This is the second FAQ question. Again, ask it before showing the answer.
+
+== Not entirely
+layout: answer
+section: faq
+Zero Trust moves the primary enforcement point from the perimeter to per-request, identity-aware decisions. Perimeter and egress controls still matter for defense in depth, blast-radius reduction and compliance. The firewall is no longer the trust boundary.
+notes:
+Not entirely. Zero Trust shifts the primary enforcement point from the network perimeter to per-request, identity-aware decisions, but perimeter and egress controls still matter for defense in depth, blast-radius reduction and regulatory compliance.
+
+The page's framing: the firewall is no longer the trust boundary, but it is still a useful coarse-grained filter. East-west microsegmentation, with VPC security groups, Calico, Cilium or Istio authorization policies, is the cloud-native evolution of the same idea, applied workload to workload.
