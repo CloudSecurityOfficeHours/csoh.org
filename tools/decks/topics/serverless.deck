@@ -32,9 +32,9 @@ The third is the execution role, the cloud identity the function assumes when it
 == When an event arrives
 layout: text
 section: what-is
-The platform allocates an isolated environment, copies your code in and runs it for at most a few minutes, varying by provider. Later invocations can reuse that environment until the platform discards it.
+The platform allocates an isolated environment, copies your code in and runs it for a capped time, varying by provider. Later invocations can reuse that environment until the platform discards it.
 notes:
-When an event arrives, the platform allocates an isolated execution environment: a Firecracker micro-VM on AWS, and equivalents on Azure and GCP. It copies your code in and runs it for at most a few minutes. That varies by provider; Lambda's default cap is 15 minutes per invocation. Then it keeps the environment so later invocations can reuse it, until the platform discards it.
+When an event arrives, the platform allocates an isolated execution environment: a Firecracker micro-VM on AWS, and equivalents on Azure and GCP. It copies your code in and runs it for a capped time. That varies by provider; Lambda defaults to 3 seconds and allows up to 30 minutes per invocation. Then it keeps the environment so later invocations can reuse it, until the platform discards it.
 
 From your side, there are no servers visible, no nodes to patch and no operating system to maintain. The platform handles all of that.
 
@@ -73,17 +73,17 @@ This is an excerpt of the page's tradeoff matrix. At low traffic the cost is pen
 
 There are no nodes, patches or OS to manage, but debugging a misbehaving function in production is harder: there is no shell and no kubectl exec, only logs and traces. The platform scales from zero to thousands in seconds, but concurrency limits, cold starts and downstream throttling remain. The platform scales; the database the function calls may not. Warm invocations add single-digit milliseconds of overhead, while cold starts add 100ms to several seconds, which is bad for latency-sensitive paths unless you use provisioned concurrency, which costs more.
 
-The hard caps are Lambda 15 minutes, Cloud Run functions 60 minutes for HTTP, and Azure Functions Premium 60 minutes by default. Work that exceeds them doesn't fit. On security, there is no host kernel to share, but the attack surface shifts to identity, events, dependencies and cost. The page says the total surface is the same, with a different shape.
+The hard caps are Lambda 30 minutes, Cloud Run functions 60 minutes for HTTP, and Azure Functions Consumption 10 minutes. Work that exceeds them doesn't fit. On security, there is no host kernel to share, but the attack surface shifts to identity, events, dependencies and cost. The page says the total surface is the same, with a different shape.
 
 The full table also covers stateful work, local testing and vendor lock: the code itself is portable, but event wiring, IAM, observability and orchestration are not.
 
 == A working heuristic
 layout: compare
 section: good-bad
-col: Serverless is usually the right default when all hold | Event-driven | Intermittent | Mostly stateless | Finishes in under 15 minutes
+col: Serverless is usually the right default when all hold | Event-driven | Intermittent | Mostly stateless | Finishes well inside the timeout
 col: Containers or VMs usually fit better when any holds | Sustained throughput | Long-running | A hard latency budget under 100ms p99
 notes:
-The page offers a working heuristic. If your workload is event-driven, intermittent, mostly stateless, and finishes in under 15 minutes, serverless is usually the right default.
+The page offers a working heuristic. If your workload is event-driven, intermittent, mostly stateless, and finishes well inside the provider's timeout, 30 minutes on Lambda, serverless is usually the right default.
 
 If it is sustained throughput, long-running, or has a hard latency budget under 100ms at p99, containers or VMs are usually a better fit.
 
@@ -291,16 +291,16 @@ What good looks like: structured JSON logs with consistent keys, shipped out of 
 layout: table
 section: comparison
 row: Building block | AWS Lambda | Azure Functions | Cloud Run functions
-row: Max execution time | 15 min | 5 min Consumption; unlimited Premium and Dedicated | 60 min (HTTP)
+row: Max execution time | 30 min | 10 min Consumption; no maximum on Premium and Dedicated | 60 min (HTTP)
 row: Isolation | Firecracker micro-VM | Sandboxed worker on Consumption; container on Premium | gVisor or microVM, by generation
 row: Identity | IAM execution role per function | Managed identity per function app | Per-function service account
 row: Runtime threat detection | GuardDuty Lambda Protection | Defender for Cloud / App Service | Security Command Center, Cloud Run-shared signals
 notes:
 The three major FaaS platforms are broadly similar in shape and different in details. This is an excerpt of the page's table, which also covers public invocation, secrets integration, VPC attach, concurrency control, signing and native observability.
 
-Lambda caps execution at 15 minutes. Azure Functions caps it at 5 minutes on Consumption and leaves it unlimited on Premium and Dedicated, and Cloud Run functions allow 60 minutes for HTTP. Lambda isolates with Firecracker micro-VMs. Azure uses a sandboxed worker on Consumption and a container on Premium. Cloud Run functions run on a sandboxed Cloud Run instance: gVisor in the first generation or a microVM in the second.
+Lambda caps execution at 30 minutes. Azure Functions caps it at 10 minutes on Consumption and sets no maximum on Flex Consumption, Premium and Dedicated, and Cloud Run functions allow 60 minutes for HTTP. Lambda isolates with Firecracker micro-VMs. Azure uses a sandboxed worker on Consumption and a container on Premium. Cloud Run functions run on a sandboxed Cloud Run instance: gVisor in the first generation or a microVM in the second.
 
-The page says the three converge over time as each picks up the others' best ideas. The differences it calls worth caring about are max execution time, where the 15-minute cap on Lambda is sometimes a deal-breaker, VPC attach behavior, and how secrets are referenced.
+The page says the three converge over time as each picks up the others' best ideas. The differences it calls worth caring about are max execution time, where the 30-minute cap on Lambda is sometimes a deal-breaker, VPC attach behavior, and how secrets are referenced.
 
 == The hardening checklist
 layout: table
@@ -346,9 +346,9 @@ This is a question from the page's FAQ. Ask it and let the room answer before mo
 == No: keep functions for the shapes they fit
 layout: answer
 section: faq
-Functions suit event-driven, intermittent, mostly stateless work that finishes in under 15 minutes. They get expensive at high sustained throughput, awkward for long-running work, and lock you to one cloud's event wiring.
+Functions suit event-driven, intermittent, mostly stateless work that finishes well inside the provider's timeout. They get expensive at high sustained throughput, awkward for long-running work, and lock you to one cloud's event wiring.
 notes:
-No. Functions are great for event-driven, intermittent, mostly stateless workloads that finish in under 15 minutes. They get expensive at high sustained throughput, awkward for long-running work, and lock you to one cloud's event-source wiring.
+No. Functions are great for event-driven, intermittent, mostly stateless workloads that finish well inside the provider's timeout, which is 30 minutes on Lambda. They get expensive at high sustained throughput, awkward for long-running work, and lock you to one cloud's event-source wiring.
 
 The page says the "rebuild everything as Lambdas" pattern from 2018 burned a lot of teams. Most have since migrated steady-state services back to containers and kept serverless for the parts where it fits.
 
