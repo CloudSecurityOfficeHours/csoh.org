@@ -1,0 +1,459 @@
+title: Backup, DR & Ransomware Resilience
+page: backup-dr.html
+as-of: 2026-11-25
+promise: Cloud ransomware goes for backups first: make them immutable, isolated and tested.
+
+== The 30-second version
+layout: text
+section: top
+Cloud ransomware encrypts your production data, but it encrypts your backups first. Backup and DR moved from operations to security the day attackers learned that destroying the recovery path makes a ransom non-negotiable.
+notes:
+Cloud ransomware encrypts your production data, but it encrypts your backups first. The discipline of backup and disaster recovery moved from operations to security the day attackers learned that destroying the recovery path is what makes a ransom non-negotiable.
+
+The page puts it as "immutability is the new MFA". A backup that any production identity can delete is, in the page's words, a liability with a retention policy.
+
+The cloud-native pattern the page says holds has four parts. First, 3-2-1-1-0: three copies, two media types, one offsite, one immutable, and zero errors, verified by restore. Second, a pull-based backup architecture into a separate account, subscription or project with no admin trust to production. Third, Compliance-mode Object Lock or Vault Lock, with KMS keys in a different trust domain. Fourth, a quarterly restoration drill that proves you can do this under stress. The page calls everything else documentation.
+
+== Why backup is now a security control
+layout: text
+section: why-security
+A victim with viable backups will not pay, so attackers hit the backups first. Four implications follow:
+- Immutability is the new MFA
+- The backup destination is a security boundary
+- Restoration is proven by testing
+- Insurance carriers now require it
+notes:
+For most of computing's history, backup was an operations problem. The threats were tape failures, disk failures, building fires and an accidental rm -rf, and the control objective was availability.
+
+Ransomware changed that. Once attackers learned that a victim with viable backups will not pay, the rational move became to destroy or encrypt the backups before the production data. Modern ransomware operators now spend days to weeks in a target environment to find, enumerate and corrupt every backup destination they can reach. The attack on production is the last step, not the first. So the question becomes whether you can recover from a thinking adversary who has spent two weeks in your cloud account learning where the backups live and who can delete them.
+
+The page draws four implications. Immutability, a write-once guarantee that even a privileged identity cannot bypass, moved from premium feature to table stakes. The backup destination needs its own IAM model, network controls, logging, detection rules and incident-response runbooks. The auditor's question is now when you last restored, at what scale, in how long, and against what threat model. And carriers demand documented immutability, separate-account isolation, MFA on the recovery role and tested restore.
+
+The page's warning: backup reporting into pure infrastructure, with no security review of the destination architecture, is a 2018 program defending a 2026 threat model.
+
+== From 3-2-1 to 3-2-1-1-0
+layout: table
+section: three-two-one
+row: Rule | What it asks for
+row: 3 | Copies of the data
+row: 2 | Different storage media, or in cloud, different storage classes or services
+row: 1 | Copy offsite: cross-region, cross-account, cross-cloud or on-prem
+row: 1 | Copy immutable or air-gapped
+row: 0 | Errors: every restore is verified
+The immutable 1 and the verified 0 are the security additions, and the page calls both non-negotiable.
+notes:
+The classic 3-2-1 rule was coined by photographer Peter Krogh in 2005 for protecting digital negatives, and it held up for two decades of tape and disk. Cloud and ransomware exposed two gaps. Nothing in the rule stopped an attacker from deleting all three copies with the right credentials, and nothing required that the copies be readable.
+
+Veeam popularized the updated formulation, 3-2-1-1-0, now widely adopted. The extra 1 is a copy that cannot be modified or deleted within retention. The 0 is zero errors: every restore is verified, and if you don't restore, you don't have a backup.
+
+The page adds a footnote on "different media". The original rule tried to stop a single technology failure from wiping all copies; in cloud, the equivalent is a single service or account failure or compromise. Two S3 buckets in the same account are not two media. S3 in one account, plus S3 in a separate account with cross-region replication, plus an S3 Glacier Deep Archive copy under Compliance-mode Object Lock, is closer in spirit: three copies, three trust boundaries, three failure modes.
+
+== RTO and RPO, set per tier
+layout: table
+section: rto-rpo
+row: Tier | Typical RTO | Typical RPO | Cost
+row: 0: life safety, regulated | Seconds to minutes | Seconds (zero acceptable) | 2-3× single-region
+row: 1: revenue critical | Minutes to 1 hour | Minutes | 1.5-2×
+row: 2: business critical | 4-24 hours | 1 hour | ~1.2×
+row: 3: important | 1-3 days | 24 hours | ~1.05×
+row: 4: bulk, archive | 1 week+ | 7 days | ~1.01×
+RTO is how long a service can be down before the impact is unacceptable. RPO is how much data, measured in time, you can afford to lose. One number for the whole org is an anti-pattern.
+notes:
+RTO and RPO are business decisions disguised as engineering parameters. The security team's job is to translate the business intent into a defensible target, then deliver against it.
+
+RTO, the recovery time objective, is the elapsed time from outage to restoration before the impact becomes unacceptable. A trading platform may demand seconds; a quarterly batch job can live with days. RTO drives the architecture of recovery: hot, warm or cold standby, replicated databases or a nightly restore.
+
+RPO, the recovery point objective, is how much data you can lose, measured in time. An RPO of 5 minutes needs minute-level snapshots or replication; 24 hours means a nightly backup is enough. RPO drives backup frequency, and the page calls it the budget line most often quietly relaxed when the math gets uncomfortable.
+
+The patterns behind the tiers run from active-active multi-region with synchronous replication at tier 0, through active-passive with async replication and immutable backup at tier 1, cross-region snapshots at tier 2 and daily backups at tier 3, to weekly backup to cold storage at tier 4.
+
+An RTO of minutes for everything sounds great until the bill arrives; an RTO of days for everything is cheap until a tier-1 system has an incident. Tiering is the answer. The security team is responsible for forcing the conversation, not for the answer.
+
+== Four disciplines, four threat models
+layout: table
+section: disciplines
+row: Discipline | Protects against | Does not protect against
+row: High availability | Single-instance or single-AZ failure | Region failure, data corruption, ransomware
+row: Replication | Single-region infrastructure failure | Corruption, deletion, ransomware: all faithfully copied
+row: Disaster recovery | Loss of a region, site or data center | Logical corruption that replicated before failover
+row: Backup | Corruption, deletion, ransomware, time-travel needs | Real-time failures, with RTO in hours rather than seconds
+The mature program runs all four. The immature program runs one and calls it the others.
+notes:
+These four terms get conflated constantly, and each has a different threat model. The page lists the conflations that cause real outages.
+
+"We use S3 cross-region replication, so we have a backup." Replication copies deletions and overwrites, so if ransomware encrypts the primary, it encrypts the secondary too. Replication is not backup.
+
+"We use multi-AZ RDS, so we have DR." Multi-AZ is high availability. A regional outage takes both availability zones with it; cross-region read replicas or snapshots are DR.
+
+"We have automated RDS backups, so we have ransomware protection." Maybe. It depends on whether the backups sit in a separate account, whether retention is locked, and whether the production IAM role can delete them. Without those, an attacker with sufficient RDS permissions can delete the snapshots before the encryption attack.
+
+"We have a DR site, so we have backup." A DR site protects against site loss but inherits any logical corruption that propagated before failover. The hot standby of a ransomware-encrypted database is a ransomware-encrypted database.
+
+== Immutability: what the clouds offer
+layout: compare
+section: immutability
+col: AWS S3 Object Lock | Governance mode: bypassable with a permission | Compliance mode: not even root can shorten it
+col: Azure Blob | Time-based retention, locked or unlocked | Legal hold and version-level immutability
+col: GCP Bucket Lock | Locked retention, permanent for the bucket | Not even the project owner or org admin can shorten it
+In the strongest modes the provider's control plane enforces retention, outside your IAM domain.
+notes:
+Immutability means that once written, an object cannot be modified or deleted until its retention period expires, even by the account root or a global admin. The page calls it the most important technical control against cloud-native ransomware, and the details differ by cloud.
+
+On AWS, S3 Object Lock needs versioning on the bucket. Governance mode can be shortened or removed by principals with the s3:BypassGovernanceRetention permission, so it helps against accidental deletion but not against sufficiently privileged attackers; do not rely on it for ransomware defense. Compliance mode is the only setting that gives the "even root can't delete" property. A legal hold, independent of retention, pins an object until it is removed. A locked version keeps its lock when a lifecycle rule moves it to the S3 Glacier storage classes.
+
+On Azure, locked time-based retention cannot be shortened even by the subscription owner, while unlocked can be shortened up to five times; lock the policy in production. Recovery Services Vaults add soft delete, default 14 days and extendable to 180, and multi-user authorization, which needs approval from a separate Resource Guard owner, ideally in a second tenant.
+
+On GCP, a locked retention policy is permanent for the bucket's lifetime; deleting the bucket requires it to be empty, which is impossible while objects are within retention. Pair it with object versioning, and put VPC Service Controls around the backup project.
+
+This differs from IAM rules that stop admins deleting, which an attacker who escalates to admin can undo. Set retention longer than your worst-case dwell-time-plus-recovery window. The page says a common floor is 30 days and many regulated environments run 90 or more. Ransomware operators dwell for months, so a 7-day window is theater.
+
+== The virtual air gap
+layout: figure
+section: air-gap
+figure: air-gap-ladder
+Cloud has no physical air gap, but IAM, network and KMS boundaries can make the path from production to backup effectively one-way.
+notes:
+Classical air-gapping is a physical separation: backup tape in a vault no network can reach. The figure shows the virtual air gap one step further each time, each step further from the production identity: cross-account, cross-tenant, cross-cloud and offline. As the caption says, the common thread is that production cannot delete the destination.
+
+Cross-account means backups land in a separate AWS account, Azure subscription or GCP project. The backup account has no trust that lets production identities write or delete; the backup service pulls from production through a read-only role. Even full compromise of the production account does not grant write or delete on the destination.
+
+Cross-tenant goes one step further, to a different AWS Organization, Azure tenant or GCP organization. The page says it is required for the most sensitive workloads and increasingly demanded by cyber-insurance underwriters.
+
+Cross-cloud means production in AWS with immutable backups in Azure, or the reverse. The cost and complexity are real, but it meaningfully reduces the threat model, including the rare but real provider account-level compromise.
+
+Offline means periodic copies to on-prem or tape, still sometimes warranted for the most critical data. For tier-0 systems the cost is often paid.
+
+== Backup keys belong in another trust domain
+layout: checklist
+section: kms-custody
+If one key encrypts production and its backup, an attacker who compromises that key wins twice.
+check: Backup keys live in the backup account
+check: Key administration and key usage are separate roles
+check: HSM-backed keys for the most sensitive workloads
+check: Multi-region key replication for DR
+check: Maximum deletion window, and alerts on any scheduled deletion
+check: A normally disabled break-glass role for emergencies
+notes:
+Every cloud backup is encrypted, which the page calls necessary but not sufficient. The threat that matters is an attacker with credentials in your environment looking for ways to make your backups unrecoverable, and key compromise is one such way.
+
+If the same key encrypts production and its backup, the attacker can read or destroy both copies. Worse, if they can schedule deletion of the key, they can make every backup encrypted by it permanently unrecoverable in a week without touching the backup data. AWS KMS allows scheduled deletion with a minimum 7-day window; Azure Key Vault supports purge protection.
+
+So the backup keys live in the backup account, and neither key administration nor key usage is held by a production identity. For the most sensitive workloads, use HSM-backed keys, such as AWS CloudHSM, Azure Managed HSM or GCP Cloud HSM, at FIPS 140-2 or 140-3 Level 3. Replicate keys across regions, because if a region disappears you still need the key to decrypt the backups elsewhere.
+
+Enable purge protection on Azure, or the maximum scheduled-deletion window on AWS, which is 30 days, and alert immediately on any attempt to schedule key deletion. The page calls a scheduled key deletion a high-fidelity ransomware indicator. The identity that runs daily backups has no permission to disable or delete keys. A separate, normally disabled break-glass role handles emergency operations and needs a documented approval flow to activate.
+
+The page says closing this gap is rarely expensive: it is mostly moving keys into the right accounts and editing IAM.
+
+== The cloud ransomware kill chain
+layout: figure
+section: kill-chain
+figure: ransom-chain
+The kill chain has adapted to the cloud: its control plane and data plane are both API-accessible to anyone with credentials.
+notes:
+The figure shows seven steps from initial access through the ransom note, and the caption names step 5, where the backups go before the data does.
+
+Initial access is most often compromised credentials, but also exposed access keys in a public git repo, a vulnerable web app with a path to an instance profile, a phished console session, or an over-scoped SaaS connector. Discovery and enumeration maps IAM, accounts, buckets, KMS keys, snapshots and databases, with tools like Pacu, ScoutSuite and ROADtools, and crucially finds your backups. Persistence and privilege escalation adds backdoor users, access keys or service principals, changes trust policies and adds federation, so the attacker outlives detection of the first compromise.
+
+Exfiltration comes next, because modern ransomware is double extortion: encrypt for ransom and leak for pressure. Then the attacker breaks the backups, then encrypts production. The ransom note often arrives through the compromised cloud console, sometimes by email or Slack, and modern operators research the target's revenue and insurance posture and price the demand accordingly.
+
+== Step 5: the backups go first
+layout: list
+section: kill-chain
+If the attacker can reach your backups with the credentials gathered during dwell time, nothing done for step 6 helps. The defensive strategy is to make step 5 fail.
+item: Snapshots deleted
+item: KMS keys scheduled for deletion
+item: S3 versions deleted, or versioning disabled and objects overwritten
+item: Backup retention shortened
+item: Replication destinations encrypted with attacker keys
+item: Recovery Services Vaults soft-deleted, then hard-deleted
+notes:
+The page calls step 5 the step that makes cloud-native ransomware brutal. With the credentials collected in step 3, the attacker destroys, encrypts or sabotages every backup destination they can reach: snapshots deleted, KMS keys scheduled for deletion, S3 versions deleted or versioning disabled and objects overwritten, retention shortened, cross-region replication destinations encrypted with attacker keys, and Recovery Services Vaults soft-deleted and then hard-deleted after the soft-delete window.
+
+Only then does step 6 encrypt production: EBS volumes re-encrypted with attacker keys, RDS instances dropped, S3 objects overwritten with encrypted versions. The blast radius depends on the privilege the attacker has accumulated.
+
+The page calls the order of step 5 before step 6 the most important technical fact on the page. If your backup architecture cannot survive step 5, no amount of preparation in step 6 helps, and the whole defensive strategy is to make step 5 fail.
+
+== Cloud techniques and their counters
+layout: table
+section: cloud-techniques
+row: Technique | Counter
+row: KMS key deletion | Alert on kms:ScheduleKeyDeletion; enforce the 30-day maximum
+row: Versioning rollback | Compliance Object Lock, MFA delete, cross-account replication
+row: Snapshot deletion | Cross-account copies, AWS Backup vaults with Vault Lock
+row: Account lockout | Out-of-band root credentials, root MFA, root activity alerts
+row: Tier downgrade | Monitor lifecycle changes; alert on bulk tier transitions
+row: Replication redirect | SCP-restricted destinations, alerts on replication changes
+The page lists two more: backup configuration drift and identity-provider compromise.
+notes:
+These techniques come from reported incidents and red-team engagements in cloud environments. The page says to map your detection coverage against them explicitly.
+
+After a key's deletion window, every object it encrypted is permanently unrecoverable, destroyed by the cloud platform itself. Where versioning is on but Object Lock is not, an attacker can delete every non-current version and leave only the encrypted overwrite, so the versioning defense fails silently. Snapshots can typically be deleted by anyone with the matching delete permission, and most production roles are far broader than needed, so review snapshot share permissions too.
+
+In an account lockout, the attacker rotates root credentials, replaces MFA devices, denies the legitimate admins and changes the SAML trust, and the access itself is the ransom. The counters include MFA on root with multiple devices kept in a physical safe, organization-level controls, and GuardDuty, Defender for Cloud or SCC alerts on root activity.
+
+A storage tier downgrade moves large datasets to a cold tier, where retrieval costs are significant, sometimes more than the ransom. It is a quieter variant, so also block ad-hoc tier changes with SCPs or Azure Policy. Replication redirect points the replication configuration at an attacker-controlled bucket, then encrypts the source.
+
+Backup configuration drift disables jobs, shortens retention or changes schedules during dwell time; counter it with CSPM or CNAPP baselines, drift alerts and separation of duties. Identity-provider compromise lets the attacker grant themselves any role in every cloud the IdP federates to; counter it with hardware-key MFA on IdP admins, conditional access, non-federated break-glass accounts and IdP-specific detection.
+
+== Pull from prod, not push to backup
+layout: figure
+section: architectures
+figure: pull-vs-push
+The backup destination is the active party: it assumes a read-only role into production. Production holds no credential that can write or delete backups.
+notes:
+The figure compares the two shapes. On one side, the backup account pulls from production with a read-only role. On the other, production holds a credential that can delete the backups. The caption says pull is the pattern and push is the failure, because a compromised production admin can delete both copies.
+
+The page calls this the most important pattern. The backup service runs in a separate account, assumes a read-only role into production, reads the data and writes to its own immutable storage, so compromise of production does not yield access to backups.
+
+The page gives four reasons. Least privilege flows the right way: the destination is granted read on the source, and the source is never granted write on the destination. An attacker with full production credentials still cannot reach the destination. The backup service's role can be scoped to the read APIs it needs, with no permission to change or delete production. And auditing is simple, because the backup account's IAM grants are the entire trust surface.
+
+The anti-pattern is production IAM roles with write permissions on a "backup bucket" in the same account. The page calls it common, easy to set up, and useless against ransomware.
+
+== The canonical architecture
+layout: code
+section: architectures
+The page's sketch: a one-way, read-only pull into a backup account with its own keys, admins and alerting.
+```
+Production Account (or Sub, or Project)
+   │
+   ├─ Workloads, data, primary KMS keys (production trust domain)
+   │
+   ▼  (one-way pull, read-only role)
+Backup Account (separate trust domain)
+   ├─ Backup service (AWS Backup / Azure Backup / GCP Backup & DR)
+   ├─ Immutable destination buckets/vaults (Object Lock / Vault Lock)
+   ├─ Backup KMS keys (separate from prod keys, HSM-backed for tier-0)
+   ├─ Separate IAM admins, separate KMS admins
+   ├─ MFA-enforced break-glass restore role (normally disabled)
+   └─ Alerting: every privileged action logged + alerted
+```
+notes:
+The destination lives in its own organizational unit with no admin trust from production: separate IAM admins, separate KMS admins, separate logging, separate monitoring, and separate billing if practical. The page says to treat it as a tenant of one.
+
+On AWS that is a dedicated account in a Security or Backup OU, SCP-restricted to block deletion of backup vaults, KMS keys and snapshots, with vault policies that explicitly deny bulk operations. On Azure it is a dedicated subscription, optionally a dedicated tenant, and a multi-user authorization Resource Guard placed in a different tenant gives the strongest separation. On GCP it is a dedicated project, optionally a separate folder or organization, with a VPC Service Controls perimeter and org-policy constraints that prevent data moving out.
+
+The page's sketch continues below this excerpt with an optional further step: an out-of-cloud, cross-cloud or on-prem destination for tier-0 data.
+
+Layer DR on top. The backup architecture is independent of, and often orthogonal to, the DR architecture. Multi-region active-passive DR with replication serves the regional-failure RTO; the backup architecture serves the logical-corruption RTO. Both are needed.
+
+== AWS reference architecture
+layout: checklist
+section: aws-landscape
+AWS has consolidated most of its backup story under AWS Backup.
+check: A dedicated Backup Account in a Security OU
+check: SCPs prevent deletion of backup vaults, backup keys and Vault Lock policies
+check: Organization Backup Policies apply backup plans to member accounts
+check: Vaults locked in Compliance mode, retention sized for RPO plus dwell time
+check: S3 versioning, Compliance Object Lock and replication into the Backup Account
+check: Backup keys in the Backup Account, with deletion alerts
+check: A quarterly Game-Day restore into a clean DR account
+notes:
+This is the page's AWS pattern for a regulated org. Backup plans are defined in the management account and applied through Organization Backup Policies. Vault retention is sized to the highest data-class RPO plus a dwell-time buffer. The backup KMS keys sit in the Backup Account with separate admins, use multi-region keys for DR, and alert on kms:ScheduleKeyDeletion.
+
+Once an AWS Backup vault is locked in Compliance mode, its retention cannot be shortened or removed, even by root. AWS Backup covers EBS, EC2 AMIs, RDS, Aurora, DynamoDB, EFS, FSx, Storage Gateway, S3, VMware on AWS and more, with cross-account and cross-region copy as first-class operations. Around it, S3 uses versioning, Compliance-mode Object Lock, cross-account replication and MFA delete on the source. RDS automated backups are retained up to 35 days, manual snapshots persist until deleted, and RDS Multi-AZ is HA, not backup. DynamoDB point-in-time recovery covers 35 days.
+
+AWS Elastic Disaster Recovery replicates servers continuously at the block level and fails over within minutes; the page says it complements backup and does not replace it. Logically air-gapped vaults store backup data in AWS-managed accounts the customer never touches, reachable only through the AWS Backup API, at higher cost and with stronger isolation.
+
+For new long-term immutable archives, the page points to the S3 Glacier storage classes under Compliance-mode Object Lock rather than Glacier Vault Lock.
+
+== Azure and GCP reference architectures
+layout: compare
+section: azure-landscape | gcp-landscape
+col: Azure | Dedicated subscription, optionally a separate tenant | Immutable vaults, enforced soft delete, MUA via Resource Guard | Customer-managed keys in Key Vault with purge protection
+col: GCP | Dedicated backup project, optionally a separate org | Locked retention, versioning, CMEK from a backup-only keyring | VPC Service Controls perimeter around the backup project
+Azure splits backup from DR more explicitly than AWS. GCP consolidated around the Backup and DR Service.
+notes:
+Azure uses Azure Backup for backup and Azure Site Recovery for DR. The page's pattern puts backup in a dedicated management group and subscription, with ASR for tier-0/1 DR complementing Azure Backup. Recovery Services Vaults cover VMs, file shares and on-prem servers. Their immutability primitives are soft delete, default 14 days and extensible, and immutable vaults, which prevent destructive operations during retention. Multi-user authorization needs approval from whoever controls the Resource Guard, which Microsoft recommends placing in a different tenant. The page's pattern adds Azure Policy initiatives that enforce backup configuration and alert on drift, key admins in the backup subscription only, and immutable storage policies on every backup destination container. Azure SQL keeps automated backups for 7 to 35 days, and long-term retention extends to 10 years.
+
+GCP's Backup and DR Service originates from Google's 2021 acquisition of Actifio, and its appliances sit in the backup project with IAM grants from production scoped to the read APIs needed. It gives application-consistent backups for Compute Engine, VMware Engine, databases and file systems. Under it sit Bucket Lock, Persistent Disk snapshot policies, Cloud SQL backups for 7 to 365 days with point-in-time recovery, Spanner backups retained up to 1 year, and BigQuery time travel, 7 days by default. The page's pattern adds org policy constraints that prevent disabling locked retention, public bucket creation and broad service-account key creation, and multi-regional or dual-regional storage for backup data.
+
+== Database DR: replica plus immutable snapshot
+layout: table
+section: database-dr
+row: Pattern | Right for | Note
+row: Cross-region read replicas | Infrastructure failure | RPO is the replication lag, seconds to minutes
+row: Point-in-time recovery | A bad schema change, or a dropped table | Restore to any second in the retention window
+row: Cross-region snapshots | Region loss, or corruption that replicated | Slower restore, cleaner trust boundary
+row: Native multi-region replication | RTO measured in seconds | Spanner is the clearest example
+The combination that holds: native replication for HA and DR, plus immutable snapshots in a separate trust domain for ransomware resilience.
+notes:
+Databases have their own RTO and RPO economics, because the data volume is usually large, the change rate is high and consistency requirements are strict.
+
+Read replicas replicate a primary asynchronously, and failover promotes a replica. RTO depends on whether promotion is automatic or manual. Examples are RDS and Aurora cross-region replicas, with Aurora Global Database for sub-second lag and one-minute RTO, Azure SQL geo-replicas with auto-failover groups, and Cloud SQL cross-region replicas.
+
+Point-in-time recovery captures changes continuously so you can restore to any second in the window. RDS and Aurora go up to 35 days, and on RDS the latest restorable time is typically within the last five minutes. Azure SQL also goes up to 35 days.
+
+Cross-region snapshots cover the cold start: a complete region loss, or corruption that propagated through replication. The snapshot is independent of the live database.
+
+Spanner offers externally consistent transactions across continents. Aurora Global, Azure SQL geo-replication and Cosmos DB multi-region writes are similar, at lower consistency guarantees.
+
+The replica protects against infrastructure failure; the immutable snapshot protects against logical corruption.
+
+== What a restore at scale runs into
+layout: list
+section: drills
+Every provider's documentation makes restoration look like a button-click. The gap only shows when you do the restore.
+item: Missing IAM permissions on the restore role
+item: KMS keys not available in the target region
+item: Target network configuration that does not match production
+item: DNS pointing at the broken primary
+item: Restore-rate limits: 50 TB takes hours
+item: Dependencies that must be restored in the right order
+item: A team that has never done this together at scale
+notes:
+The page calls restoration drills the most underinvested practice in cloud backup programs. The gap between "we have backups" and "we can restore at scale within RTO under stress" is enormous, and only doing the restore reveals it.
+
+The restore role is missing permissions no one noticed, because daily backups never exercised that path. The KMS keys are not available in the target region. The target environment's security groups, subnets, NACLs and routing do not match production. DNS still points at the broken primary, and cutover needs a parallel runbook nobody has run. Bringing back 50 TB takes hours, regardless of how fast the read APIs are documented to be. Services depend on other services that need restoring first.
+
+And the team has never done this together at this scale, and it is now 2am during a real incident.
+
+== Drills and tabletops
+layout: table
+section: drills | tabletop
+row: Cadence | Scope | Effort
+row: Monthly | A random database restored to a sandbox, integrity verified | 30 minutes
+row: Quarterly | One tier-1 system, from immutable backup to a clean recovery account | 4-8 hours
+row: Annual | Multiple systems against a defined scenario | Day-long exercise
+row: Continuous | Sampling by a job with no write access anywhere | Most mature programs
+Drills validate the technical capability. Tabletops validate decisions, coordination and communications under pressure. Both are necessary; neither is sufficient.
+notes:
+The monthly restore surfaces the small drift, the quarterly one the medium drift, with the runbook driving the work. The annual drill runs against a scenario such as a lost region, lost production identities and an unavailable KMS key, and surfaces the systemic gaps. Continuous validation catches silent corruption between scheduled drills.
+
+The page suggests tabletop scenarios such as these. All production IAM access keys are revoked and the production KMS key is scheduled for deletion: you have 30 days to recover the last 7 days of customer data into a new account. Or: the backup account itself is compromised, the cross-cloud copy is the only known-good one, and tier-1 services must be restored into a clean AWS Organization within 24 hours.
+
+A useful tabletop has a specific, plausible scenario, cross-functional attendance across security, engineering, legal, communications, finance and executive leadership, a facilitator who injects realistic obstacles, time pressure, and written findings. The page says ransomware response is a business event, not a security event.
+
+Every drill and every tabletop should produce a list of runbook fixes, and the program matures by closing those gaps before the next one.
+
+== Encryption key custody: two key sets
+layout: compare
+section: key-custody-pattern
+col: Working keys | Used by the daily backup service | Encrypt newly written backups | The daily runner cannot read its own backups
+col: Custody keys | HSM-backed and dormant | Their principals enabled only by a documented approval flow | Required to decrypt for restore; usage heavily monitored
+The pattern is reserved for the highest-impact data. For tier-0 systems the friction is the point: even a fully compromised cloud account cannot decrypt the backups without independent approval.
+notes:
+The page describes this as an advanced control increasingly seen in regulated and high-target organizations. The keys for backups are HSM-backed and reachable only through a break-glass process, not by the identity that runs daily backups.
+
+There are two key sets. The working key set encrypts newly written backups. The custody key set is needed to decrypt and read them for restore. The page calls this asymmetric capability separation: only a restoration-authorized identity using the custody key can read the backups.
+
+Custody keys live in AWS CloudHSM, Azure Managed HSM or GCP Cloud HSM, where the key material is FIPS-validated and cannot be exfiltrated, and usage is audited inside the HSM. The principals allowed to use them are normally disabled, and enabling them typically takes a security ticket, a two-person rule and a time-bounded grant.
+
+Custody keys are replicated across regions, ideally across cloud providers for the most critical data, because losing the custody key set loses every backup encrypted by it. Any usage event is high-fidelity: it should be either a documented restoration or an incident, with SOC alerting on first principal use.
+
+The pattern adds operational friction, and the page says not every workload needs it. For tier-0 systems handling regulated, financial or otherwise irreplaceable data, the friction is the point.
+
+== What cyber-insurance carriers ask for
+layout: checklist
+section: insurance
+Minimum hygiene is now a precondition for coverage, and certain failures lead to non-payment after a loss.
+check: Immutable backups, with evidence beyond a spreadsheet attestation
+check: Backups isolated in a separate account, subscription or tenant
+check: MFA on privileged identities, including backup, restore and root
+check: EDR on all administrative endpoints
+check: Documented and tested restoration
+check: An isolated recovery environment to restore into
+check: An IR runbook, an IR firm retainer and a communication plan
+notes:
+The cyber insurance market reset between 2021 and 2022: premiums tripled or worse, and ransomware got its own sublimits. Rates have eased since mid-2023, but the page says minimum hygiene is now a precondition for coverage.
+
+Carriers ask for evidence of immutability, such as policy documents, CSPM exports and audit reports. Same-account backups disqualify many policies outright or carry significant exclusions. The page calls documented and tested restoration the most-asked-about control of the last 18 months: carriers want the drill cadence, the last drill date and the time-to-restore metric. An isolated recovery environment is becoming standard for tier-1 insureds. Carriers also ask about vulnerability management.
+
+On what carriers pay, the page describes common patterns in 2024-2026. Ransom payment is covered in many policies but increasingly sublimited, often $1-5M, and some sanctioned-actor payments are flatly excluded. Restoration costs are typically covered when the backup architecture meets the stated controls. Misrepresentation on the application is universally a path to non-payment: if the application said "immutable backups" and they were not, expect a denial.
+
+The page's takeaway is to build to the carrier's expected controls whether or not you seek coverage. If you cannot answer yes to immutability, isolation, MFA, EDR and tested restore, you have program gaps, not insurance gaps.
+
+== Maturity stages
+layout: table
+section: maturity
+row: Stage | Where the program is
+row: 1. Backups exist | Untested at scale; likely in production's trust domain
+row: 2. Restored once | Gaps found; still no immutability and no separation
+row: 3. Tested quarterly | Regular drills, per-tier RTO and RPO, some immutability
+row: 4. Immutable, isolated | Compliance mode on tier-1+, separate account and keys
+row: 5. Continuous validation | Integrity verified continuously, custody keys, cross-cloud copies
+Skipping stages buys cost and complexity without resilience. Immutability without restore testing leaves intact backups you cannot use under pressure.
+notes:
+Stage 1 is the default state of most cloud programs at year 1-2: some backups run and retention is set, but configuration may have drifted, restoration has not been tested at scale, and backups likely share production's trust domain.
+
+At stage 2 at least one restore has succeeded, the team has found the gaps that only surface when you do it, and runbooks exist for the most critical systems.
+
+Stage 3 adds a regular drill cadence, per-system and per-tier targets, time-to-restore measured and trending, and cross-region snapshots. There is some immutability, possibly not in compliance mode.
+
+Stage 4 has Compliance-mode immutability on tier-1 and above, separate backup accounts, KMS keys in a separate trust domain, cross-account and cross-region replication, cyber-insurance-grade controls, and an annual cross-functional tabletop.
+
+Stage 5 verifies backup integrity continuously from an isolated process, keeps cross-cloud copies of the most critical data, uses HSM-backed custody keys with break-glass access, pre-stages an isolated recovery environment, and measures restore time continuously. The page says the program becomes a competitive advantage in regulated sales.
+
+As with most maturity models, skipping stages is a recipe for cost and complexity without resilience.
+
+== Native capabilities side by side
+layout: table
+section: comparison | third-party
+row: Capability | AWS | Azure | GCP
+row: Vault-level immutability | AWS Backup Vault Lock, Compliance mode | Immutable vault and MUA Resource Guard | Backup and DR retention enforcement
+row: Two-person rule on delete | No single feature: SCP, KMS grants, MFA | MUA via Resource Guard | No MUA primitive: org policy, IAM separation
+row: Cross-account isolation | Organizations and SCPs | Multi-subscription, optionally multi-tenant | Multi-project and VPC Service Controls
+row: Replication-based DR | Elastic Disaster Recovery | Azure Site Recovery | Backup and DR Service, custom replication
+The native services do not cross clouds, so multi-cloud organizations still typically add a third-party overlay.
+notes:
+This is an excerpt of the page's side-by-side table. The centralized services are AWS Backup, Azure Backup and the Backup and DR Service, and the full table also covers archive-tier immutability, database point-in-time recovery, cross-region copy, air-gapped vaults, HSM-backed keys, ransomware detection and SaaS backup.
+
+The page says native cloud backup is excellent for within-cloud, single-cloud scenarios, and lists when to add a third party on top. The first is multi-cloud: AWS Backup doesn't back up Azure, and Azure Backup doesn't back up GCS. Others are cross-cloud recovery, since native services don't cross cloud boundaries, unified RBAC and audit across a mixed environment, and specialized features such as anomaly detection on backup metadata and isolated recovery environment orchestration.
+
+Another is SaaS coverage. Microsoft 365, Google Workspace, Salesforce, ServiceNow, Atlassian and GitHub keep your data durable, but durability is not backup. Some sell native backup as a paid add-on with a fixed scope, such as Microsoft 365 Backup for SharePoint, OneDrive and Exchange Online. Otherwise the provider does not back up your data to your specification, and third parties fill the gap.
+
+The page lists enterprise platforms such as Veeam, Rubrik, Cohesity and Commvault, and cloud-native or SaaS platforms such as Druva, Clumio, HYCU, N-able and Acronis. Many mature programs run both: native services for within-cloud day-to-day backup, and a third party as the cross-environment, cyber-resilience overlay. The right answer depends on where your data lives and what your restore scenarios look like.
+
+== Common pitfalls
+layout: list
+section: pitfalls
+The page also lists replication treated as backup, replication into an account the attacker also controls, no alerts on backup-destination changes, and trusting SaaS vendors to back up your data.
+item: Backups in the same account as production
+item: No immutability, or Governance mode only
+item: Restoration never tested at scale
+item: One encryption key for prod and backup
+item: Retention shorter than ransomware dwell time
+item: Runbooks stored only in the system that is down
+notes:
+Backups in the same account, subscription or project as production are the page's most common and most consequential mistake: a single compromise destroys both, so move them. Bypassable retention is theater; Compliance mode, or an equivalent locked policy, is the floor. "We have backups" without "we have restored" is documentation, not a control, and the page sets quarterly drills as the minimum.
+
+A key reused for production and backup means a single key compromise destroys both copies, so backup keys belong in a separate trust domain without exception. A 7-day retention against a 90-day dwell-time attacker leaves nothing to restore: size retention against the threat model, not the storage budget.
+
+If the restore runbook lives in a wiki that runs on the compromised cloud account, it is unreachable. Copy runbooks to an out-of-band location, such as a printed binder, an offline wiki or a separate SaaS the IR team can reach.
+
+The other four: replication faithfully copies deletions and encryption, so you need both replication and backup; cross-region replication is isolation only when it is cross-account too; retention shortening, vault deletion attempts and KMS deletion scheduling are high-fidelity ransomware indicators, so alert on each; and SaaS vendors guarantee durability, not customer-specified restoration, so use a third-party SaaS backup for any business-critical SaaS.
+
+== Should I pay the ransom?
+layout: question
+section: faq
+Consider who has to be involved before any decision, and how often paying gets the data back.
+notes:
+This is a question from the page's FAQ. Ask it and let the room answer before moving on.
+
+== Engage law enforcement and counsel first
+layout: answer
+section: faq
+Paying certain sanctioned actors is illegal in some jurisdictions. Sophos's 2022 survey, the last to report it, found only 4% of payers got all their data back. Tested, immutable, isolated backups are the best determinant of not paying.
+notes:
+Engage law enforcement, the FBI or your country's equivalent, and counsel before any decision, because in some jurisdictions paying certain sanctioned actors is illegal.
+
+Paying does not reliably restore data. Sophos's 2022 ransomware survey, the last edition to report the figure, found that only 4% of organizations that paid got all their data back. Decryption tools are often slow and buggy, and paid victims are statistically more likely to be hit again. Insurance carriers increasingly will not reimburse a ransom without documented exhaustion of alternatives.
+
+The page says the best determinant of not paying is having tested, immutable, isolated backups you can restore from in a known RTO.
+
+== Does S3 Object Lock prevent ransomware?
+layout: question
+section: faq
+Consider what Object Lock protects, which mode you use, and what it leaves open.
+notes:
+This is the second FAQ question. Again, ask it before showing the answer.
+
+== Only in Compliance mode, and not on its own
+layout: answer
+section: faq
+It prevents deletion and overwrite for the duration of the lock. It does not protect versions with no retention or legal hold, stop KMS key disablement, or stop retention being set too short before an attack.
+notes:
+Object Lock prevents object deletion and overwrite for the duration of the lock, which the page calls the most important property, but only in Compliance mode. Governance mode is bypassable by IAM principals with the right permission.
+
+It does not protect object versions that carry no retention period or legal hold, so set a default retention on the bucket. It does not prevent KMS key disablement that makes objects unreadable. And it does not prevent retention being set too short before an attack.
+
+The full pattern the page gives is Compliance-mode Object Lock, bucket versioning, replication to a separate account, KMS keys whose admin and usage roles are in a different trust domain, and MFA delete on the source bucket.
