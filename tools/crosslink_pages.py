@@ -10,8 +10,8 @@ Skip zones (no linking inside any of these):
   - <h1>-<h6>
   - <header>, <footer>, <nav>
   - <div>/<span> with class code-block, tag-example or no-glossary
-  - deck lines: a <p> carrying data-breach-deck, data-howto-deck or
-    data-topic-deck
+  - deck lines: a <p> (or a topic deck's <details> preview) carrying
+    data-breach-deck, data-howto-deck or data-topic-deck
   - HTML comments
   - HTML attribute values
   - JSON-LD blocks
@@ -395,9 +395,9 @@ def mask_skip_zones(content: str) -> tuple[str, list[str]]:
     #     glossary link inside one would fail CI. A deck line opens and closes
     #     on one line, so the match stops at the line's end: a line missing
     #     its </p> is left for --check to report rather than masking prose
-    #     below it.
+    #     below it. A topic deck's preview panel is a <details> deck line.
     content = re.sub(
-        r"<p\b[^>\n]*\bdata-(?:breach|howto|topic)-deck\b[^>\n]*>[^\n]*?</p>",
+        r"<(p|details)\b[^>\n]*\bdata-(?:breach|howto|topic)-deck\b[^>\n]*>[^\n]*?</\1>",
         stash,
         content,
         flags=re.IGNORECASE,

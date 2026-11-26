@@ -120,7 +120,8 @@ TITLE_RE = re.compile(r"<title\b[^>]*>(.*?)</title\s*>", re.S | re.I)
 GLOSSARY_A_RE = re.compile(r"<a\b[^>]*" + _class_re("glossary-link") + r"[^>]*>(.*?)</a\s*>", re.S | re.I)
 GLOSSARY_HREF_RE = re.compile(r"(?:\.\./)?glossary\.html#term-")
 # The one line --stamp writes, and the page-meta line it goes after.
-TOPIC_DECK_LINE_RE = bbd.deck_line_re(TOPIC_DECK_ATTR)
+TOPIC_DECK_TAGS = ("p", "details")
+TOPIC_DECK_LINE_RE = bbd.deck_line_re(TOPIC_DECK_ATTR, TOPIC_DECK_TAGS)
 PAGE_META_LINE_RE = re.compile(
     r"^([ \t]*)<p\b[^>\n]*" + _class_re("page-meta") + r"[^>\n]*>(?:(?!</p>)[^\n])*</p>[ \t]*$", re.M
 )
@@ -633,6 +634,18 @@ def extract(slug: str, only: list[str] | None = None) -> str:
 # ---------------------------------------------------------------------------
 
 
+def preview_line_html(pres_id: str, indent: str) -> str:
+    """The line --stamp writes under the topic deck line: a closed panel
+    holding Google's slide viewer. While it is closed the lazy iframe is not
+    rendered, so nothing loads from Google until a reader opens it."""
+    src = f"https://docs.google.com/presentation/d/{pres_id}/embed"
+    return (
+        f'{indent}<details class="deck-preview" {TOPIC_DECK_ATTR}><summary>Preview the slides</summary>'
+        f'<div class="deck-frame"><iframe src="{src}" title="Preview of this page\'s slides" '
+        'loading="lazy" allowfullscreen></iframe></div></details>'
+    )
+
+
 def insert_deck_line(html: str, pres_id: str) -> str:
     main = MAIN_OPEN_RE.search(html)
     m = PAGE_META_LINE_RE.search(html, main.end()) if main else None
@@ -819,6 +832,8 @@ TOPIC = bbd.DeckKind(
     outline_dir=Path("tools") / "decks" / "topics",
     mapping_path=Path("tools") / "decks" / "topics" / "published.json",
     deck_attr=TOPIC_DECK_ATTR,
+    deck_line_tags=TOPIC_DECK_TAGS,
+    deck_line_extra=preview_line_html,
     header_keys=("title", "page", "as-of", "promise"),
     page_re=TOPIC_PAGE_RE,
     layouts=frozenset({
@@ -1406,8 +1421,13 @@ def _case_stamp_after_page_meta(tmp: Path) -> None:
     line = bbd.deck_line_html(ID_A, "        ", TOPIC)
     assert line.startswith('        <p class="page-meta" data-topic-deck><strong>Slides:</strong> '), line
     assert out == _plant(PAGE, META_LINE + "\n", META_LINE + "\n" + line + "\n"), out
-    # The breach deck line's link text, behind the topic deck line's tag.
-    assert line.split(">", 1)[1] == bbd.deck_line_html(ID_A).split(">", 1)[1]
+    # The breach deck line's link text, behind the topic deck line's tag,
+    # and under it one closed preview panel embedding the same deck.
+    first, preview = line.split("\n")
+    assert first.split(">", 1)[1] == bbd.deck_line_html(ID_A).split(">", 1)[1]
+    assert preview.startswith('        <details class="deck-preview" data-topic-deck><summary>'), preview
+    assert f'src="https://docs.google.com/presentation/d/{ID_A}/embed"' in preview and 'loading="lazy"' in preview
+    assert " open" not in preview.split(">", 1)[0], "the preview must start closed"
     # A page-meta line at column 0 gets a deck line at column 0.
     flush = _plant(PAGE, META_LINE, META_LINE.lstrip())
     assert bbd.deck_line_html(ID_A, "", TOPIC) + "\n" in bbd.stamp_page(flush, ID_A, TOPIC)
@@ -1427,6 +1447,23 @@ def _case_stamp_after_page_meta(tmp: Path) -> None:
                    line + "\n        <div class=\"info-box--blue\">")
     _only(bbd.link_findings("kube", moved, mapping, TOPIC), "right after the page-meta line")
     _only(bbd.link_findings("kube", out, {}, TOPIC), "not in the mapping")
+    # A deck line without its preview, a preview of another deck, or a second
+    # preview is not what --stamp writes; a stray embed elsewhere is a link
+    # outside the deck lines.
+    _only(bbd.link_findings("kube", _plant(out, preview + "\n", ""), mapping, TOPIC), "not the one --stamp writes")
+    _only(bbd.link_findings("kube", _plant(out, f"d/{ID_A}/embed", f"d/{ID_B}/embed"), mapping, TOPIC),
+          "not the one --stamp writes")
+    _only(bbd.link_findings("kube", _plant(out, preview + "\n", preview + "\n" + preview + "\n"), mapping, TOPIC),
+          "it must have exactly 2")
+    _only(bbd.link_findings("kube", _plant(out, first + "\n" + preview + "\n", preview + "\n" + first + "\n"),
+                            mapping, TOPIC), "not the one --stamp writes")
+    # Stray deck markup names the topic kind's own line shapes.
+    broken = bbd.link_findings("kube", _plant(out, "</summary>", "</summary>\n"), mapping, TOPIC)
+    assert any("(one <p> or <details> alone on its line" in f for f in broken), broken
+    stray = _plant(out, "        <div class=\"info-box--blue\">",
+                   f'        <p><iframe src="https://docs.google.com/presentation/d/{ID_A}/embed"></iframe></p>\n'
+                   "        <div class=\"info-box--blue\">")
+    _only(bbd.link_findings("kube", stray, mapping, TOPIC), "outside its deck line")
 
 
 def _case_stamp_idempotent(tmp: Path) -> None:
@@ -1434,7 +1471,7 @@ def _case_stamp_idempotent(tmp: Path) -> None:
     assert bbd.stamp_page(once, ID_A, TOPIC) == once
     assert bbd.stamp_page(once, None, TOPIC) == PAGE
     swapped = bbd.stamp_page(once, ID_B, TOPIC)
-    assert swapped.count("data-topic-deck") == 1 and ID_B in swapped and ID_A not in swapped
+    assert swapped.count("data-topic-deck") == 2 and ID_B in swapped and ID_A not in swapped
     # A breach stamp leaves a topic deck line alone, and the reverse.
     assert bbd.stamp_page(once, None) == once
     breach_line = bbd.deck_line_html(ID_B)
@@ -1442,7 +1479,7 @@ def _case_stamp_idempotent(tmp: Path) -> None:
                   "            <h2>Supply chain</h2>\n" + breach_line + "\n")
     assert bbd.stamp_page(both, None, TOPIC) == both
     topic = bbd.stamp_page(both, ID_A, TOPIC)
-    assert topic.count(breach_line + "\n") == 1 and topic.count("data-topic-deck") == 1, topic
+    assert topic.count(breach_line + "\n") == 1 and topic.count("data-topic-deck") == 2, topic
     assert bbd.stamp_page(topic, None, TOPIC) == both
 
 
@@ -1465,6 +1502,16 @@ def _case_crosslink_skips_topic_deck_line(tmp: Path) -> None:
         assert line + "\n" in once and once.count(link) == 1 and link in once.split(line)[1], once
         cp.crosslink_page(page, patterns, slugs)
         assert page.read_text(encoding="utf-8") == once
+        # The preview panel is a deck line too: a term in its summary takes no
+        # link, while the same term in prose below does.
+        pv_patterns, pv_slugs = cp.build_term_regexes(["slides"]), {"slides": "term-slides"}
+        pv_link = '<a class="glossary-link" href="glossary.html#term-slides">slides</a>'
+        page.write_text(f"<html><body><main>\n{line}\n<p>Read the slides first.</p>\n</main></body></html>\n",
+                        encoding="utf-8")
+        cp.crosslink_page(page, pv_patterns, pv_slugs)
+        pv = page.read_text(encoding="utf-8")
+        assert line + "\n" in pv and pv.count(pv_link) == 1 and pv_link in pv.split(line)[1], pv
+        page.write_text(html, encoding="utf-8")
         # Control: without its deck attribute the line takes the link.
         page.write_text(_plant(html, " data-topic-deck>", ">"), encoding="utf-8")
         cp.crosslink_page(page, patterns, slugs)

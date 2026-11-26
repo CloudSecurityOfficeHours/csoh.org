@@ -272,6 +272,11 @@ class DeckKind:
     # (deck, mapping entry, page html) -> why the page moved since --record,
     # or [].
     page_changes: Callable[[BDeck, dict, str], list[str]]
+    # The elements a deck line may be. Each opens and closes on its own line.
+    deck_line_tags: tuple[str, ...] = ("p",)
+    # (presentation id, indentation) -> more whole lines --stamp writes under
+    # the deck line, or None for none.
+    deck_line_extra: Callable[[str, str], str] | None = None
 
 
 # The callables name functions defined further down; a lambda reads the name
@@ -680,12 +685,20 @@ def style_findings(deck: BDeck, kind: DeckKind = BREACH) -> list[str]:
 DECK_ATTR = BREACH.deck_attr
 
 
-def deck_line_re(attr: str) -> re.Pattern[str]:
-    """A deck line: one <p> carrying attr, alone on its line and closed on
-    that line. Nothing it matches can reach past the line, so removing a
-    match never takes other page content with it."""
+def deck_line_re(attr: str, tags: tuple[str, ...] = ("p",)) -> re.Pattern[str]:
+    """A deck line: one element of tags (a <p> unless a kind says otherwise)
+    carrying attr, alone on its line and closed on that line. Nothing it
+    matches can reach past the line, so removing a match never takes other
+    page content with it."""
+    if tags == ("p",):
+        return re.compile(
+            r"^[ \t]*<p[^>\n]*\b" + re.escape(attr) + r"\b[^>\n]*>(?:(?!</p>)[^\n])*</p>[ \t]*(?:\n|\Z)",
+            re.MULTILINE,
+        )
+    names = "|".join(re.escape(t) for t in tags)
     return re.compile(
-        r"^[ \t]*<p[^>\n]*\b" + re.escape(attr) + r"\b[^>\n]*>(?:(?!</p>)[^\n])*</p>[ \t]*(?:\n|\Z)",
+        r"^[ \t]*<(" + names + r")(?=[\s>])[^>\n]*\b" + re.escape(attr)
+        + r"\b[^>\n]*>(?:(?!</\1>)[^\n])*</\1>[ \t]*(?:\n|\Z)",
         re.MULTILINE,
     )
 
@@ -1120,14 +1133,20 @@ def deck_line_html(pres_id: str, indent: str = PM_INDENT, kind: DeckKind = BREAC
         f'<a href="{base}/copy" {ext}>make your own editable copy</a> '
         "(copying needs a Google account). The slides are licensed "
         f'<a href="{licence}" {ext}>CC BY-NC 4.0</a>.</p>'
-    )
+    ) + (f"\n{kind.deck_line_extra(pres_id, indent)}" if kind.deck_line_extra else "")
+
+
+def _line_shape(kind: DeckKind) -> str:
+    """How a deck line of this kind looks, for messages."""
+    tags = " or ".join(f"<{t}>" for t in kind.deck_line_tags)
+    return f"(one {tags} alone on its line, closed on that line)"
 
 
 def loose_deck_markup(html: str, kind: DeckKind = BREACH) -> int:
     """Deck attribute mentions that are not part of a whole deck line: a
     line missing its </p>, one written inline after other markup, or two on
     one line. --stamp cannot remove these without guessing."""
-    return deck_line_re(kind.deck_attr).sub("", html).count(kind.deck_attr)
+    return deck_line_re(kind.deck_attr, kind.deck_line_tags).sub("", html).count(kind.deck_attr)
 
 
 def _last_pm_link_end(html: str) -> tuple[int, str] | None:
@@ -1175,12 +1194,12 @@ def stamp_page(html: str, pres_id: str | None, kind: DeckKind = BREACH) -> str:
     loose = loose_deck_markup(html, kind)
     if loose:
         raise ValueError(
-            f"{loose} {kind.deck_attr} mention(s) outside a whole deck line (one <p> "
-            "alone on its line, closed on that line); fix the markup by hand"
+            f"{loose} {kind.deck_attr} mention(s) outside a whole deck line "
+            f"{_line_shape(kind)}; fix the markup by hand"
         )
     if pres_id is not None and not PRES_ID_RE.fullmatch(pres_id):
         raise ValueError(f"{pres_id!r} is not a Google Slides presentation id")
-    bare = deck_line_re(kind.deck_attr).sub("", html)
+    bare = deck_line_re(kind.deck_attr, kind.deck_line_tags).sub("", html)
     return bare if pres_id is None else kind.insert_deck_line(bare, pres_id)
 
 
@@ -1197,14 +1216,14 @@ def link_findings(slug: str, html: str, mapping: dict, kind: DeckKind = BREACH) 
     Slides link outside the deck line is a finding either way."""
     page = page_rel(slug, kind)
     findings: list[str] = []
-    line_re = deck_line_re(kind.deck_attr)
-    lines = line_re.findall(html)
+    line_re = deck_line_re(kind.deck_attr, kind.deck_line_tags)
+    lines = [m.group(0) for m in line_re.finditer(html)]
     rest = line_re.sub("", html)
     loose = rest.count(kind.deck_attr)
     if loose:
         findings.append(
             f"{page}: {loose} {kind.deck_attr} mention(s) outside a whole deck line "
-            "(one <p> alone on its line, closed on that line)"
+            f"{_line_shape(kind)}"
         )
     if PRESENTATION_RE.search(rest) and not loose:
         findings.append(f"{page}: links a Google Slides deck outside its deck line")
@@ -1216,12 +1235,13 @@ def link_findings(slug: str, html: str, mapping: dict, kind: DeckKind = BREACH) 
     pres_id = _entry_id(entry)
     if pres_id is None:
         return findings  # mapping_findings reports the entry itself
-    want = deck_line_html(pres_id, kind=kind).strip()
+    want = [w.strip() for w in deck_line_html(pres_id, kind=kind).splitlines()]
     if not lines and not loose:
         findings.append(f"{page}: {slug!r} is in the mapping but the page has no deck line")
-    elif len(lines) > 1:
-        findings.append(f"{page}: has {len(lines)} deck lines; it must have exactly one")
-    elif lines and lines[0].strip() != want:
+    elif len(lines) > len(want):
+        exactly = "one" if len(want) == 1 else str(len(want))
+        findings.append(f"{page}: has {len(lines)} deck lines; it must have exactly {exactly}")
+    elif lines and [x.strip() for x in lines] != want:
         findings.append(
             f"{page}: deck line is not the one --stamp writes for mapping id {pres_id!r}"
         )

@@ -477,9 +477,15 @@ Speaker notes, on every slide.
   a changed tile image or alt text, makes the deck stale too.
 - The deck line is `<p class="page-meta" data-topic-deck>` with the breach
   deck line's link text, alone on its line right after the page's
-  `page-meta` line at the top of `<main>`. `--stamp` and `--record` write it
-  and plan every page before writing any, as the breach tool does. The
-  glossary cross-linker skips a `<p>` carrying `data-topic-deck`.
+  `page-meta` line at the top of `<main>`. Under it, also alone on its line,
+  `--stamp` writes the preview: `<details class="deck-preview"
+  data-topic-deck>` holding the deck's `/embed` viewer in a `.deck-frame`.
+  It starts closed, and a closed panel does not render its lazy iframe, so
+  nothing loads from Google until a reader opens it. `--check` wants exactly
+  those two lines, in that order, for the mapping's id, and any other Google
+  Slides link or embed on the page is a finding. `--stamp` and `--record`
+  write both and plan every page before writing any, as the breach tool
+  does. The glossary cross-linker skips both lines.
 
 ## Topic build
 
