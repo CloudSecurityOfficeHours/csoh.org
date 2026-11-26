@@ -31,6 +31,7 @@ Per-page rules:
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -554,7 +555,13 @@ def crosslink_page(
     }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    # It takes no options, so any argument (a typo, --self-test, --dry-run)
+    # is a usage error before a page is read, and --help prints usage.
+    argparse.ArgumentParser(
+        description="Rebuild glossary links on every target page. Takes no options: run it bare, "
+        "then review the diff, which touches every target page.",
+    ).parse_args(argv)
     if not GLOSSARY_FILE.exists():
         print(f"glossary not found: {GLOSSARY_FILE}", file=sys.stderr)
         return 1

@@ -4,7 +4,7 @@ The drafter and reviewer briefs for `docs/superpowers/plans/2026-11-25-topic-dec
 
 ## Shared rules (both agents)
 
-- Work from the repository root. Touch only `tools/decks/topics/SLUG.deck`. Never edit an HTML page, and never run `tools/crosslink_pages.py` (it rewrites every page it reaches, and has no argument parsing).
+- Work from the repository root. Touch only `tools/decks/topics/SLUG.deck`. Never edit an HTML page, and never run `tools/crosslink_pages.py`: a bare run rewrites every page it reaches.
 - Read the page only through `python3 tools/build_topic_decks.py --extract SLUG` (add `--sections ID,ID` to narrow it). Never open the page's HTML and never open an image: a figure is chosen and described from its `[figure #id]` line, which carries its title, description and caption.
 - The outline format, layouts and gate are in `tools/DECKS_README.md`: the "Topic decks" section, and the layout table under "Breach outline format" for each layout's typed lines.
 - A slide and its notes say nothing their cited sections do not say. Keep every hedge, quantifier and attribution as the page writes it. Notes on a `figure` slide say only what the figure's title, description, caption and section say.
