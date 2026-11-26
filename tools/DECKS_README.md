@@ -129,15 +129,18 @@ owner re-publishes it, so tell the owner the deck needs re-publishing.
 ## Publishing a deck
 
 1. Build the .pptx locally.
-2. Upload it privately to the "CSOH how-to decks" folder in the owning
-   account's Drive, and confirm the file's owner is the expected account.
+2. Upload it privately to the "CSOH deck staging (private)" folder in the
+   owning account's Drive, never straight to "CSOH how-to decks" (see
+   [Public deck folders](#public-deck-folders)), and confirm the file's owner
+   is the expected account.
 3. Export the PDF, render its pages, and inspect them for overflow, font
    substitution and broken code boxes. Fix the outline or template and repeat.
 4. Fact review: compare every slide with the guide and report anything the
    guide does not say. Fix and repeat until clean.
 5. The owner reviews the private deck and approves it.
-6. On the owner's go, share it publicly (anyone with the link), then run
-   `--record SLUG PRES_ID`, run `--check`, and commit.
+6. On the owner's go, share it publicly (anyone with the link), move it into
+   "CSOH how-to decks", then run `--record SLUG PRES_ID`, run `--check`, and
+   commit.
 
 Uploading, sharing publicly and deleting superseded copies each need the
 owner's explicit go.
@@ -332,9 +335,9 @@ Speaker notes run to the next "== " line. Every slide has them.
   of its skip zones, because each tool's `--check` requires a deck line to be
   exactly the text its `--stamp` writes.
 
-Publishing follows the how-to steps, with one difference in where the file
-sits (see [Public deck folders](#public-deck-folders)): build, upload
-privately to the staging folder, export and inspect the PDF, fact-review
+Publishing follows the how-to steps (see
+[Public deck folders](#public-deck-folders)): build, upload privately to the
+staging folder, export and inspect the PDF, fact-review
 against the page, get the owner's approval, then on the owner's go share it
 publicly, move it into the "CSOH breach decks" folder, run
 `--record SLUG PRES_ID`, run `--check` and commit. Uploading, sharing publicly and deleting superseded
@@ -346,11 +349,12 @@ and last slides carry "Cloud Security Office Hours, csoh.org" and the licence.
 
 ## Public deck folders
 
-`breach-kill-chain-decks.html` and `topics.html` each open with a callout
-(`.deck-folder`) whose button links a Google Drive folder holding every deck
-of that kind: "CSOH breach decks" and "CSOH topic decks". Both folders are
-shared view-only with anyone who has the link, so anything placed in them is
-public at once and appears in the folder a reader is browsing. A deck that
+`cloud-security-how-to.html`, `breach-kill-chain-decks.html` and
+`topics.html` each open with a callout (`.deck-folder`) whose button links a
+Google Drive folder holding every deck of that kind: "CSOH how-to decks",
+"CSOH breach decks" and "CSOH topic decks". All three folders are shared
+view-only with anyone who has the link, so anything placed in them is public
+at once and appears in the folder a reader is browsing. A deck that
 has not passed its render check and review must never be there.
 
 So new and replacement decks are uploaded to the private "CSOH deck staging
@@ -359,8 +363,6 @@ anyone who has the link, then move it into its public folder (the Drive
 connector's `update_file` with `parentId`; a file the connector uploaded can
 be moved). A superseded deck goes to the trash, not to the public folder.
 Each public folder should hold exactly the decks in its `published.json`.
-The "CSOH how-to decks" folder is not linked from any page and stays
-private, so how-to decks still upload straight into it.
 
 ## The deck list page
 
