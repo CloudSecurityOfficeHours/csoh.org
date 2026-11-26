@@ -1,0 +1,406 @@
+title: Cloud SOC & Threat Monitoring
+page: cloud-soc.html
+as-of: 2026-11-25
+promise: A cloud SOC detects, investigates and responds to security events across your cloud accounts by watching logs, because cloud abstracts the network.
+
+== The 30-second version
+layout: text
+section: top
+A cloud SOC detects, investigates and responds to security events across your cloud accounts. It watches logs, because cloud abstracts the network. The work is more like data engineering than staring at an IDS console.
+notes:
+A cloud SOC, a security operations center, is the team and tooling responsible for detecting, investigating and responding to security events across your cloud accounts. Where a traditional SOC watches packets and endpoints, a cloud SOC watches logs, because cloud abstracts the network. Those logs are the control-plane audit trails (CloudTrail, Activity Log and Cloud Audit Logs), identity-provider logs, VPC flow, DNS queries and application telemetry.
+
+The stack: native cloud detectors such as GuardDuty, Defender for Cloud and Security Command Center for fast wins; a SIEM for cross-source correlation and retention; detection engineering as the practice that writes the rules; SOAR or autonomous response for the repetitive work; and threat intel wired in to enrich alerts.
+
+The page says the work is more like data engineering than like staring at an IDS console, and that the mental shift is the hardest part of the transition.
+
+== What cloud threat monitoring is
+layout: text
+section: what-is
+Threat monitoring collects security signals continuously, runs rules and models that find suspicious activity, surfaces alerts worth a human's attention, and feeds an analyst workflow that decides what to do. In cloud, the surface is API-shaped and the telemetry log-shaped.
+notes:
+Threat monitoring is the continuous collection of security-relevant signals from your environment, the rules and models that find suspicious activity in those signals, the alerts that surface what is worth a human's attention, and the analyst workflow that decides what to do about each one. The page puts the payoff this way: done well, it is the difference between learning about a breach from the FBI and getting an alert at 02:14, containing it by 02:31, with the customer never noticing.
+
+Cloud threat monitoring is the same discipline applied to cloud environments. The threat surface is API-shaped, the telemetry is log-shaped, and the dominant attack patterns chain identity compromise into resource manipulation rather than dropping a beacon on a Windows host.
+
+The SOC is the team that runs it. The name comes from the dedicated rooms full of screens of the early 2000s. Today the practice is mostly distributed and mostly remote, working mostly in Slack and Jira with one or two big dashboards on the wall.
+
+== Traditional SOC vs cloud SOC: what you watch
+layout: table
+section: vs-traditional
+row: Dimension | Traditional SOC | Cloud SOC
+row: Primary signal | Packets, endpoint EDR telemetry, firewall logs | Control-plane audit logs, identity events, app telemetry
+row: Perimeter shape | Network: choke points, DMZ, firewall rules | Identity: every API call has an actor and a permission check
+row: Sensor placement | Span ports, taps, IDS sensors on the network | Logs come free from the provider; you choose what to keep
+row: Asset inventory | Hard problem: devices walk in and out | API-queryable, but tens of thousands of ephemeral resources
+For most analysts coming from a traditional SOC, this mental-model shift is the biggest hurdle.
+notes:
+The page calls the mental-model shift from a traditional SOC into cloud the biggest hurdle for most analysts, and the one that takes the longest to internalize, because the muscle memory of network-centric monitoring is deep.
+
+In a traditional SOC the primary signal is packets, endpoint EDR telemetry and firewall logs. In a cloud SOC it is control-plane audit logs, identity events and app telemetry. The perimeter moves from the network, with its choke points, DMZ and firewall rules, to identity, where every API call has an actor and a permission check.
+
+Sensors change too. Instead of span ports, taps and IDS sensors on the network, the logs come for free from the provider, and you only choose what to keep. Asset inventory stops being the hard problem of devices walking in and out: it is API-queryable, but counted in tens of thousands of ephemeral resources.
+
+== Traditional SOC vs cloud SOC: how you respond
+layout: table
+section: vs-traditional
+row: Dimension | Traditional SOC | Cloud SOC
+row: Forensics target | Disk image, memory capture, packet pcap | Log timeline from CloudTrail, identity logs and app logs
+row: Contain action | Isolate the host on the network | Revoke session, rotate credential, detach IAM policy, quarantine resource
+row: Attack pattern | Phish, endpoint, lateral, exfil | Phish or token theft, IAM, resource manipulation, exfil
+row: Skillset | Packet analysis, EDR queries, malware reversing | KQL, SPL or ESQL; cloud API knowledge; IAM understanding
+Traditional SOC experience does not translate to cloud without 6-12 months of cloud-specific learning. The reverse is also true.
+notes:
+Forensics in a traditional SOC targets a disk image of a host, a memory capture and a packet pcap. In cloud it is a log timeline reconstructed from CloudTrail, identity logs and app logs. Containment changes from isolating a host on the network to revoking a session, rotating a credential, detaching an IAM policy or quarantining a resource.
+
+The dominant attack pattern on a traditional network runs phish, endpoint, lateral movement, exfil. In cloud it runs phish or token theft, then IAM, then resource manipulation, then exfil. The skillset moves from packet analysis, EDR queries and malware reversing to query languages such as KQL, SPL and ESQL, cloud API knowledge and IAM understanding.
+
+The overlap is real: incident response judgment, alert triage discipline, and the ability to read a log line and understand what an attacker is doing. But the page says the specific knowledge is different enough that "I ran a SOC for 10 years" does not translate to "I can run a cloud SOC" without 6-12 months of cloud-specific learning, and that the reverse is also true.
+
+== Almost every cloud detection has one shape
+layout: table
+section: detection-model
+This identity did this action on this resource from this context at this time, and that combination is suspicious.
+row: Field | Examples
+row: Identity | User, role, service account, federated subject, automation key
+row: Action | The API call with parameters: iam:CreateAccessKey, s3:GetObject
+row: Resource | ARN, resource ID, bucket name, role name
+row: Context | Source IP, user agent, region, time, MFA used, session origin
+row: Result | Succeeded, denied, rate-limited
+notes:
+The page says almost every credible cloud detection eventually reduces to one shape: this identity did this action on this resource from this context at this time, and that combination is suspicious.
+
+These are the fields that matter. Identity is the user, role, service account, federated subject or automation key. Action is the API call with its parameters, such as iam:CreateAccessKey, s3:GetObject or compute.instances.delete. Resource is the target: an ARN, resource ID, bucket name or role name. Context is the source IP, user agent, region, time, whether MFA was used, the source account and the session origin. Result is whether the call succeeded, was denied or was rate-limited.
+
+== The questions detections ask
+layout: list
+section: detection-model
+Map every detection to one or more MITRE ATT&CK Cloud techniques, for shared language and for coverage analysis.
+item: Did a previously unseen identity do a sensitive action?
+item: Did an identity act from an impossible location, given its recent baseline?
+item: Did a sensitive action happen without MFA?
+item: Did a service account do a human-shaped action?
+item: Did an identity run a high-volume sequence like enumeration or exfiltration?
+item: Did a just-created role get used immediately?
+item: Was the cloud's logging disabled?
+notes:
+Detections then ask combination questions across those fields. Did a previously unseen identity do a sensitive action? Did an identity act from an impossible location relative to its recent baseline? Did a sensitive action happen without MFA? Did a service account do a human-shaped action, such as a console login or an IAM change? Did an identity run a high-volume sequence that looks like enumeration or exfiltration? Did a just-created role get used immediately? Was the cloud's logging disabled?
+
+The vocabulary maps cleanly onto MITRE ATT&CK Cloud. Every detection should map to one or more techniques, both for shared language across the team and for coverage analysis, so you can say things like "we have no detections in the Persistence column".
+
+== Day-one log sources, most important first
+layout: table
+section: log-sources
+The list each cloud can emit is enormous. The list you need on day one is smaller.
+row: Log | Examples | What it gives you
+row: Control-plane audit | CloudTrail, Activity Log, Cloud Audit Logs | Every API call; the most important log
+row: Identity provider | Entra ID, Okta, Cognito, Cloud Identity | Phishing, MFA bypass, suspicious sessions
+row: Network telemetry | VPC Flow Logs, NSG flow logs | Workloads talking to known-bad IPs
+row: DNS query logs | Route 53 Resolver, Azure DNS, Cloud DNS | C2 beacons, DGA traffic, exfiltration via DNS
+notes:
+The full list of logs each cloud can emit is enormous. The list you need on day one is smaller, and the page gives a working priority order.
+
+First is control-plane audit: CloudTrail on AWS, Activity Log on Azure and Cloud Audit Logs on GCP. Every API call, every account, every region. The page calls it the most important log: org-wide, multi-region, no exceptions.
+
+Second come identity-provider logs: Entra ID sign-in and audit, the Okta system log, Cognito events and Cloud Identity. They capture auth events before they reach cloud APIs, and phishing, MFA bypass and suspicious sessions live here.
+
+Third is network telemetry: VPC Flow Logs, NSG flow logs and GCP VPC Flow. It is less interesting than CloudTrail for most cloud-native attacks, but essential when a workload starts talking to known-bad IPs.
+
+Fourth come DNS query logs: Route 53 Resolver logs, Azure DNS and Cloud DNS. C2 beacons, DGA traffic and data exfiltration via DNS are all visible here but not in flow logs.
+
+== Day-one log sources, continued
+layout: table
+section: log-sources
+row: Log | Examples | What it gives you
+row: Data-plane | S3 data events, Azure Storage diagnostics, GCS data access logs | Which data was read; the control plane shows only that it was
+row: Workload and app | Lambda and Functions logs, container logs, stdout and stderr | The evidence for app-vulnerability investigations
+row: Configuration history | AWS Config, Resource Graph history, Cloud Asset Inventory | What a resource looked like before the attacker changed it
+row: SaaS and productivity | Workspace and M365 audit, GitHub audit log, Slack | Often the first signal of a compromised user
+notes:
+Fifth come data-plane logs: S3 access logs and data events, Azure Storage diagnostics and GCS data access logs. They are required to investigate which data was read. The control plane only tells you that data was read, not which.
+
+Sixth, workload and app logs: Lambda and Functions logs, container logs, and app stdout and stderr. This is the application-layer evidence trail, required for app-vulnerability investigations.
+
+Seventh, configuration history: AWS Config, Azure Resource Graph history and Cloud Asset Inventory. It answers what a resource looked like before the attacker changed it, without re-running detections.
+
+Eighth, SaaS and productivity: Workspace and M365 audit logs, the GitHub audit log, Slack and similar. These are auth events outside the cloud's own log feed, and often the first signal of a compromised user.
+
+== Retention: a practical floor
+layout: stats
+section: log-sources
+stat: 90 | Days hot, in the SIEM | You query it directly
+stat: 365+ | Days cold, in object storage | You re-hydrate it for investigations
+CIS and other compliance frameworks often require longer cold retention. Set the policies once at the storage layer, not per source.
+notes:
+The page's practical floor for retention is 90 days hot in the SIEM, which you query directly, and 365 days or more cold in cheap object storage, which you re-hydrate for investigations.
+
+CIS and other compliance frameworks often require longer cold retention. Set the policies once at the bucket or storage layer rather than per source.
+
+== Native detection: turn it all on, day one
+layout: compare
+section: native
+col: AWS GuardDuty | CloudTrail, VPC Flow, DNS, S3, EKS audit, Lambda | Runtime Monitoring and Malware Protection | Org-wide through delegated admin
+col: Defender for Cloud | CSPM plus workload protection plans | Integrates with Sentinel | Most orgs enable workload plans on prod subscriptions only
+col: Security Command Center | Event, Container and VM Threat Detection | Standard tier free; Premium and Enterprise paid
+Each cloud ships a managed threat-detection service. They catch a meaningful percentage of real attacks for very little operational cost.
+notes:
+Each cloud ships its own threat-detection service, and they share more than they differ: managed, ML-driven, fed by the cloud's own internal telemetry, and delivering findings to a central console with minimal setup. The page's pragmatic answer is to turn them on, all of them, on day one.
+
+AWS GuardDuty runs continuous threat detection across CloudTrail, VPC Flow Logs, DNS, S3, EKS audit, Lambda, Runtime Monitoring and Malware Protection. Its InstanceCredentialExfiltration findings, OutsideAWS and InsideAWS, cover EC2 instance credentials used from an external IP address or from another AWS account. That is the exact pattern that produced the Capital One breach. Enable it org-wide through delegated admin to your audit account.
+
+Microsoft Defender for Cloud combines CSPM and workload protection, with plans for servers, app services, databases, storage, key vault, DNS, containers and APIs, and it integrates with Sentinel. The everything plan is expensive at scale, so most orgs enable the workload-protection plans on prod subscriptions only.
+
+Google Security Command Center Premium and Enterprise include Event Threat Detection, Container Threat Detection, Virtual Machine Threat Detection and a CNAPP-style posture layer. The Standard tier is free and covers basic findings.
+
+== What native detection is good and bad at
+layout: compare
+section: native
+col: Good for | Common cloud-attack patterns, out of the box | Near-real-time, where SIEM ingest may lag | Cheap: setup is hours, not weeks
+col: Bad at | Cross-cloud correlation | Custom detections for your environment | Long retention: the findings UI generally caps at 90 days | Your team's alert taxonomy and workflow
+The right pattern: native detectors everywhere as the first line, and the SIEM on top for aggregation, correlation and customization.
+notes:
+Native detection is good for out-of-the-box coverage of the most common cloud-attack patterns. Because these services run inside the cloud and see events near-real-time, they catch things the SIEM ingest may be delayed on. And they are cheap to enable: setup is hours, not weeks.
+
+They are bad at cross-cloud correlation: Defender does not see CloudTrail, and GuardDuty does not see Defender alerts. They are bad at custom detections specific to your environment, and at long retention, since the findings UI generally caps at 90 days and raw signals need to flow to your SIEM for longer history. They also do not align to your team's alert taxonomy and workflow.
+
+So the right pattern is native detectors enabled everywhere as the first line, and the SIEM as the aggregation, correlation and customization layer on top.
+
+== SIEM: where cross-source questions get asked
+layout: table
+section: siem
+With more than one cloud, or cloud plus SaaS or on-prem, the SIEM is the only place to ask cross-source questions.
+row: SIEM | Language | Profile
+row: Splunk Enterprise Security | SPL | Mature, expensive; a real learning curve
+row: Microsoft Sentinel | KQL | Cloud-native; strong in Microsoft-heavy environments
+row: Elastic Security | ESQL, EQL | Open-source roots; cost-effective at scale relative to Splunk
+row: Google Security Operations | YARA-L | Packages with a year of retention included
+row: CrowdStrike Falcon Next-Gen SIEM | CQL | Fast ingest, integrated with the EDR side
+notes:
+SIEM stands for Security Information and Event Management: the platform where logs land, get parsed, get queried, get correlated and produce alerts. Once you have more than one cloud, or one cloud and SaaS, or one cloud and on-prem, the SIEM becomes the only place an analyst can ask cross-source questions.
+
+The page's survey of the landscape is vendor-neutral. Splunk Enterprise Security is mature and expensive, and SPL is its own language with a real learning curve; it is strong in enterprises that have run Splunk for a decade. Microsoft Sentinel is a cloud-native SIEM on Log Analytics using KQL, strong in Microsoft-heavy environments, where Defender XDR plus Sentinel is a credible end-to-end stack. Elastic Security has strong open-source roots, uses ESQL and EQL, and is cost-effective at scale relative to Splunk.
+
+Google Security Operations, formerly Chronicle, sells SIEM and SOAR in ingestion-based packages with a year of retention included, and uses YARA-L for detection content. CrowdStrike Falcon Next-Gen SIEM offers fast ingest and low-overhead retention, integrated with the EDR side, and shares its query language, CQL, with Falcon LogScale. Datadog Cloud SIEM is built on the observability platform and is attractive for orgs that already run Datadog. Panther, Sumo Logic, IBM QRadar, Exabeam, Hunters and Devo are credible mid-market or specialty options.
+
+== How to pick a SIEM
+layout: checklist
+section: siem
+check: Match your observability stack: Datadog Cloud SIEM for Datadog shops, Sentinel for Microsoft
+check: Price your ingest volume: Splunk's per-GB pricing punishes high-volume sources
+check: Small team? The vendor's content library outweighs query flexibility
+check: Count ramp time: the language your team already knows wins ties
+No longer a great differentiator: "ingests CloudTrail." They all do. Meanwhile, CNAPP platforms now ingest audit logs too, and use AI agents to investigate detections.
+notes:
+The page offers four questions for picking a SIEM. What is your existing observability stack? If you run Datadog, Datadog Cloud SIEM has zero ingest plumbing to build; if you are Microsoft-heavy, Sentinel. How much volume do you ingest? Splunk's per-GB pricing punishes high-volume sources, while Google SecOps's package pricing, with a year of retention included, changes the math. Who writes detection content? For a small team, the vendor's content library, such as Splunk ESCU, the Sentinel content hub or Sigma compatibility, matters more than query-language flexibility. What is the team's skill profile? KQL, SPL, ESQL and YARA-L are all real ramp time, and the one your team already knows wins ties.
+
+What is no longer a great differentiator is ingesting CloudTrail. They all do.
+
+The boundary is also moving from the other side. CNAPP platforms now ingest cloud, SaaS and version-control audit logs themselves, correlate them against the same graph that holds posture and code ownership, and use AI agents to investigate detections and return a verdict before an analyst opens them. The site's From CNAPP to AI-APP page walks through one platform's version, Wiz (disclosure: the site's author works at Wiz), alongside the same move at Palo Alto, CrowdStrike and Microsoft, and what a SOC should verify before trusting an automated verdict.
+
+== The detection-engineering loop
+layout: checklist
+section: detection-eng
+Detection rules are code, with the same review, versioning and CI/CD as application code. Cloud SOCs depend on this more, because so many cloud detections are custom.
+check: Threat model the technique: where it sits in ATT&CK, what it requires
+check: Find or generate evidence with Atomic Red Team or Stratus Red Team
+check: Write the detection: a SIEM query or a portable Sigma rule
+check: Tune for noise: the first iteration always over-fires
+check: Test continuously: a log schema change may silently break a rule
+check: Measure efficacy: true and false positive rates, time-to-alert
+notes:
+Detection engineering is the discipline of writing, testing, deploying and maintaining detection rules, treated as code with the same review, versioning and CI/CD as application code. A cloud SOC depends on it more than a traditional SOC did, because so many cloud-specific detections are inherently custom: your IAM model, your service accounts, your business hours.
+
+The loop starts by threat modeling the technique you want to catch: where it sits in MITRE ATT&CK, and what an attacker needs before doing it. Then find or generate evidence in your logs that the technique would leave. Atomic Red Team, Stratus Red Team and similar tools simulate cloud attacks so you can see what they look like in CloudTrail. Write the detection as a query in your SIEM's language or as a portable Sigma rule.
+
+Tune for noise, because the first iteration always over-fires: allow-list legitimate sources, add context conditions, adjust thresholds. Test continuously by re-running the emulation periodically, because when an upstream log schema changes, your rule may silently break.
+
+Finally, measure efficacy: true positive rate, false positive rate and time-to-alert. The page says detection content that fires once a quarter and is always a true positive is good, and content that fires 50 times a day and is always benign is worse than no detection.
+
+== Where detection rules come from
+layout: table
+section: detection-eng
+row: Source | What it is
+row: Sigma | Vendor-neutral format you convert to your SIEM's language; a large open library
+row: Elastic detection-rules | Open, MITRE-mapped, well-maintained
+row: Microsoft Sentinel content | Microsoft-published KQL detections
+row: Splunk ESCU | Splunk's open research catalog
+row: Community researchers | Detection ideas published regularly, and rules shared in community repositories
+Treat all of these as starting points. Every detection needs tuning to your environment before it earns a place in production.
+notes:
+Sigma is a vendor-neutral detection format that you convert to your SIEM's language, with a large open library. Elastic's detection-rules are open, MITRE-mapped and well-maintained. Microsoft publishes KQL detections as Sentinel content, and Splunk ESCU is Splunk's open research catalog.
+
+Cloud security researchers also contribute: Datadog, Permiso, Wiz, Cyera and others publish detection ideas regularly (disclosure: the site's author works at Wiz). Practitioners share rules in community repositories too, such as one for Microsoft Sentinel.
+
+Treat all of these as starting points. Every detection needs tuning to your environment before it earns a place in production.
+
+== Detection categories to cover
+layout: table
+section: categories
+Mapped roughly to MITRE ATT&CK Cloud.
+row: Tactic | Example signals
+row: Initial Access | Impossible travel, anonymizers, password spray, MFA fatigue, suspicious OAuth consent
+row: Credential Access | Unusual AssumeRole or GetSessionToken, IMDS credentials used outside EC2
+row: Privilege Escalation | Admin permissions added, cross-account trust opened, iam:PassRole to a high-privilege role
+row: Persistence | New access keys, federated IdPs, admin-account IAM users, SSH keys, changed Lambda roles
+notes:
+These are the classes of detection the page says every cloud SOC should aim to cover, mapped roughly to MITRE ATT&CK Cloud.
+
+Initial Access covers impossible-travel sign-ins, sign-ins from anonymizing infrastructure such as Tor or known VPN-as-a-service, brute-force and password-spray patterns, MFA fatigue prompts, and OAuth consent grants to suspicious apps.
+
+Credential Access covers GetSessionToken and AssumeRole from unusual contexts, IMDS credential use from outside the EC2 instance, which is the Capital One detection, ConsoleLogin by a service account, and password resets en masse.
+
+Privilege Escalation covers IAM policy changes adding admin permissions, role-trust-policy changes opening cross-account trust, AttachUserPolicy bringing in AdministratorAccess, additions to privileged groups, and iam:PassRole to a high-privilege role.
+
+Persistence covers new access keys, new federated identity providers, new IAM users in admin accounts, new SSH keys on instances, modified Lambda function execution roles, and scheduled jobs created in unusual accounts.
+
+== Detection categories, continued
+layout: table
+section: categories
+For each category, have at least one live detection, at least one quarterly emulation that exercises it, and at least one documented runbook.
+row: Tactic | Example signals
+row: Defense Impairment and Stealth | CloudTrail or detectors disabled, access logs deleted
+row: Discovery | High-volume List and Describe calls, IAM enumeration
+row: Lateral Movement | Cross-account AssumeRole, new service or pod connections, new VPC peering
+row: Collection and Exfiltration | Bulk GetObject, snapshot sharing to unknown accounts
+row: Impact | Mass deletion, attacker-key encryption, public buckets, 0.0.0.0/0 security groups
+notes:
+Defense Impairment and Stealth were one tactic, Defense Evasion, until ATT&CK v19 split it. Signals include CloudTrail disabled or modified, log destinations changed, GuardDuty, Defender or SCC disabled, and KMS key policy changes that block your audit account; on the stealth side, deletion of S3 access logs.
+
+Discovery shows up as high-volume List and Describe API call patterns, bucket enumeration via HeadBucket, IAM enumeration and secret listing. Lateral Movement shows up as cross-account AssumeRole, new service-to-service connections, new pod-to-pod connections in Kubernetes, and new VPC peering or transit-gateway attachments.
+
+Collection and Exfiltration covers large-volume GetObject or CopyObject, bucket replication to external accounts, snapshot sharing with unknown accounts, database export jobs to S3, and an egress spike from a workload. Impact covers mass resource deletion, encryption with an attacker's key as ransomware, public bucket creation, security-group changes opening 0.0.0.0/0, and Route 53 hijacks.
+
+For each category, the SOC should have at least one detection live, at least one quarterly emulation that exercises it, and at least one documented runbook. The page warns that the first time a SOC enumerates "we have zero coverage in Defense Impairment" is usually the day after they needed it.
+
+== Cloud threat intel, and where to wire it in
+layout: compare
+section: threat-intel
+col: What is actionable | Indicators: bad IPs, domains, abused cloud CIDRs | Cloud-specific TTPs | Attack-tool fingerprints, such as Pacu user agents | Industry sharing: ISACs, provider threat reports
+col: Where to wire it in | Enrich every SIEM alert that carries an IP | Auto-block the highest-confidence indicators at the edge | Inform detection content: coverage answered in days, not quarters
+Cloud-specific threat intel is younger than network threat intel, and the data quality varies.
+notes:
+Cloud-specific threat intel is younger than network threat intel, and the data quality varies. The page names the actionable pieces.
+
+Indicators: known-bad IPs, often anonymizers, residential proxies and Tor exits; domains such as C2 infrastructure and exfil destinations; and CIDRs of cloud providers known to be abused. TTPs: attacker techniques specific to cloud, which Permiso, Datadog Security Labs, Wiz Research, Mandiant and CrowdStrike all publish regularly (disclosure: the site's author works at Wiz), with MITRE ATT&CK Cloud as the taxonomy. Attack tooling fingerprints: User-Agent strings from cloud-attack tools such as Pacu, ScoutSuite, cloudtail and gcptokenrip, and CloudTrail signatures of common attacker workflows. Industry sharing: FS-ISAC, H-ISAC, the cloud providers' own threat reports, AWS Security Hub findings, and Microsoft DART and MSTIC public threat content.
+
+Wire it in three places. Enrich alerts at the SIEM: every alert that includes an IP should auto-enrich with reputation, ASN, geo, cloud-provider mapping and known-attacker-tool fingerprints, which is native to most modern SIEMs. Auto-block the highest-confidence indicators at the cloud-provider edge, since Network Firewall, WAF and security groups can ingest threat-intel feeds. And let intel inform detection content: when a new cloud-attack TTP is published, the detection-engineering team asks whether it is covered, and the answer should come in days, not quarters.
+
+== The cloud-IR playbook
+layout: checklist
+section: ir
+Cloud IR differs in two ways: the evidence is log-based, with no disk image, and containment actions are API calls.
+check: Triage: noise, suspicious but unconfirmed, or confirmed compromise
+check: Pivot from one event to the identity's full session
+check: Determine blast radius: what it could reach, and what it touched
+check: Contain: revoke sessions, detach policies, quarantine workloads, disable accounts
+check: Eradicate persistence: new keys, users, SSH keys, IdPs, modified Lambdas
+check: Recover: known-clean snapshots if needed; rotate secrets the attacker may have seen
+check: Post-incident: timeline, root cause, what detection missed it
+notes:
+Cloud IR differs from on-prem IR in two practical ways: the evidence is log-based, with no disk image, and containment actions are API calls.
+
+Triage the alert by identity, action, resource and context, and decide whether it is noise, suspicious but not yet confirmed, or a confirmed compromise. Then pivot from one event to the full session: what else did this identity do, from the same source IP, with the same session token? Filter CloudTrail on the identity's principal ARN, plus the time window, plus the identity-provider session ID.
+
+Determine the blast radius: which resources the identity could reach, and which of those it accessed, using IAM Access Analyzer or Permissions Analyzer with CloudTrail data events. Contain by revoking session tokens, detaching IAM policies, quarantining compromised workloads in a security group of one, and disabling user accounts. Eradicate persistence: newly created keys, new IAM users, new SSH keys, modified Lambda functions and new federated IdPs. Recover from known-clean snapshots if data integrity is in question, and rotate the secrets the attacker may have seen. Close with a post-incident review: timeline, root cause, what detection missed it, what would have detected it earlier, and what the runbook change is.
+
+For tools, the page says a SIEM with a strong query language is the timeline reconstruction tool, and that KQL, SPL or ESQL fluency is the difference between a 1-hour and a 1-day investigation. SOAR automates the repetitive containment steps. Keep runbooks in version control, indexed in the SIEM or alert system, so an analyst paged at 02:14 is not improvising.
+
+== SOC roles in 2026
+layout: figure
+section: team
+figure: soc-roles
+AI-assisted triage is eating tier-1 work faster than other layers, pushing SOCs toward flatter structures with stronger detection engineering and IR.
+notes:
+The figure lays out the SOC roles: tier 1, tier 2 to 3, detection, hunting, incident response and the manager. Its caption says AI is taking the triage work, the senior end is detection and response, and adjacent platform, GRC and cloud roles sit outside this list.
+
+The page says the classic tier 1, tier 2, tier 3 structure persists but is shifting. Junior tier-1 analysts do alert triage, basic enrichment and escalation; it is the role most affected by AI automation today, and its career path runs into detection engineering, IR or threat hunting. Senior tier 2-3 analysts lead investigations, judge noise against real activity, own containment decisions for the alert, and know the cloud APIs cold.
+
+Detection engineers write, tune and maintain detection content, often a software-engineer profile who learned security. Threat hunters look for evidence of compromise no detection caught yet, through hypothesis-driven querying. Incident responders run incidents end to end and are often the most senior SOC role, tightly partnered with Legal and Communications when things go big. The SOC manager or director runs the team, owns metrics such as MTTR, MTTC, false-positive rate and coverage, and owns vendor relationships.
+
+The SOC also depends on security engineering, which builds the platforms, GRC, which defines the controls, and cloud engineering, which operates the cloud the SOC monitors.
+
+== AWS, Azure and GCP side by side
+layout: table
+section: comparison
+Most SOCs end up running a third-party SIEM as the unified plane, with the native detectors below it as sensors.
+row: Building block | AWS | Azure | GCP
+row: Control-plane audit | CloudTrail (org trail) | Activity Log | Cloud Audit Logs (org-aggregated)
+row: Native threat detection | GuardDuty | Defender for Cloud (workload plans) | SCC Premium or Enterprise
+row: Native SIEM | Security Lake + Athena, OpenSearch | Microsoft Sentinel | Google Security Operations
+row: IR workflow | AWS Security Incident Response | Sentinel Incidents, Defender XDR | SCC Cases
+notes:
+This is an excerpt of the page's one-screen reference for native detection and logging on each cloud. The page's table also has rows for identity events, which are IAM Identity Center and a federated IdP on AWS, Entra ID sign-in and audit logs on Azure, and Cloud Identity audit and Cloud Logging on GCP; for network flow, which is VPC Flow Logs on AWS and GCP and NSG or VNet flow logs on Azure; for DNS, which is Route 53 Resolver query logs, Azure DNS analytics and Cloud DNS query logs; and for posture and inventory, which is Security Hub and AWS Config, Defender for Cloud and Azure Resource Graph, and SCC with Cloud Asset Inventory.
+
+On AWS, GuardDuty runs org-wide with all features; on Azure, Defender for Cloud runs its workload plans; on GCP, SCC Premium or Enterprise provides Event and Container Threat Detection. Activity Log on Azure is scoped by subscription or management group. For SOAR and response automation, AWS has Security Hub automation rules, Step Functions and EventBridge to Lambda; Azure has Sentinel Logic Apps and Automation Rules; GCP has SecOps SOAR, formerly Siemplify.
+
+The page's cross-cloud reality: most SOCs end up running one of the third-party SIEMs, such as Splunk, Sentinel, Google SecOps, Elastic, CrowdStrike or Datadog, as the unified plane, with the native cloud detectors enabled below it as sensors. A pure single-cloud-native SIEM works for organizations living entirely in one cloud, and the page says that is rarer than it sounds.
+
+== Maturity stages
+layout: table
+section: maturity
+Skipping stages is expensive: a team that stands up SOAR before it has working alert triage just automates noise.
+row: Stage | Focus | What it looks like
+row: 1 | Visibility | Native detection everywhere, central control-plane logs, 90-day retention, ATT&CK coverage measured
+row: 2 | Triage | SIEM, defined alert taxonomy, triage within minutes, runbooks for the top 20 alert types
+row: 3 | Engineering | Detection-as-code, monthly adversary emulation, SOAR, regular hunting, cross-cloud correlation
+row: 4 | Resilience | Quarterly tabletops, annual red or purple team, SLO-driven metrics, intel-fed hardening
+notes:
+The page offers a staging model for how SOC capability grows over time.
+
+Stage 1 is visibility: native detection enabled in every account, subscription and project, control-plane logs aggregated to a central destination, 90-day retention live, alerts routed to a defined channel, and coverage measured against MITRE ATT&CK Cloud.
+
+Stage 2 is triage: a SIEM stood up with identity, network and DNS logs flowing, a defined alert taxonomy, tier-1 analysts or LLM-assisted automation triaging within minutes, documented runbooks for the top 20 alert types, and MTTR measured.
+
+Stage 3 is engineering: detection-as-code with CI/CD and tests, adversary emulation with Stratus or Atomic Red Team running monthly, SOAR automating the repetitive contain and enrich steps, threat hunting on a regular cadence, and cross-cloud correlation working.
+
+Stage 4 is resilience: quarterly tabletop exercises, a full red-team or purple-team exercise annually, SLO-driven SOC metrics, threat intel feeding both detection and proactive hardening, and post-incident reviews that drive durable changes in the platform.
+
+Skipping stages is expensive in the same way it is for landing zones: a team trying to stand up SOAR before it has working alert triage just automates noise. The page says the honest sequencing matters.
+
+== Common pitfalls
+layout: list
+section: pitfalls
+The page lists three more: a SIEM no one knows how to query, a SOC kept apart from the platform team, and expecting AI to fix the SOC.
+item: Logs collected but never queried
+item: Alert overload, until analysts learn to ignore the channel
+item: No retention strategy: cold logs matter for a breach found 9 months later
+item: Detection content that never gets tested
+item: No documented runbooks
+item: Native detection disabled in non-prod
+item: Buying SOAR before having alerts worth automating
+notes:
+These are the page's pitfalls. Logs collected but never queried is what it calls the 95th-percentile failure mode: compliance ticks the box and no one looks at the data, so define what you will detect before deciding what to log. Alert overload: native detectors emit hundreds of findings and many are informational, so ruthless tuning, severity prioritization and aggregation are essential; analysts who learn to ignore the channel are unfixable.
+
+Hot retention is expensive, and cold retention is critical for the breach you find out about 9 months later, so define both tiers up front. Detection content that never gets tested rots silently as log schemas change and APIs deprecate; adversary emulation re-validates it. Without documented runbooks, the response leaves with your most experienced analyst when they go. Attackers love non-prod because no one watches, so enable native detection everywhere and tune severity per account. SOAR is a force multiplier of whatever process you feed it, so buying it before you have alerts worth automating gives you bad process at scale.
+
+The other three: a SIEM no one knows how to query is useless however expensive the seat, so invest in KQL, SPL, ESQL or YARA-L training as you would in cloud platform certifications. When the SOC is treated as separate from the platform team, the SOC asks for logs and the platform team grumbles and ships them on a six-month timeline; the orgs that ship cloud security well have SOC and platform on the same team, often the same humans. And AI is a real productivity layer for triage and enrichment, but not a substitute for detection engineering, threat hunting, IR judgment or post-incident learning. Adopt it as augmentation, not replacement.
+
+== How big does a cloud SOC need to be?
+layout: question
+section: faq
+Picture a mid-size enterprise, and the tooling a 2026 cloud SOC can run.
+notes:
+This is a question from the page's FAQ. Ask the room how many people they think it takes before showing the answer.
+
+== Smaller than most people assume, if it is well-tooled
+layout: answer
+section: faq
+Native detection, a modern SIEM with good content and LLM-assisted triage can credibly cover a mid-size enterprise with 5-8 humans. Larger orgs scale detection engineering and IR more than tier-1 triage.
+notes:
+Smaller than most people assume, if it is well-tooled. The page says a 2026 cloud SOC running native detection, a modern SIEM with good content and LLM-assisted triage can credibly cover a mid-size enterprise with 5-8 humans.
+
+Larger orgs scale the detection-engineering and IR functions more than tier-1 triage. The traditional 20-seat tier-1 room is not the right model anymore.
+
+== Is MDR a substitute for an in-house SOC?
+layout: question
+section: faq
+A managed detection and response provider can watch your cloud around the clock. Consider what that leaves for the people inside your organization.
+notes:
+This is the second FAQ question. Again, ask it before showing the answer.
+
+== A credible complement, not a substitute
+layout: answer
+section: faq
+MDR handles 24x7 monitoring and tier-1 triage. You still need someone in-house who owns detection engineering, IR judgment and the relationship with the rest of the security org. Pure MDR with no internal expertise is a known anti-pattern.
+notes:
+The page calls MDR a credible complement to an in-house SOC, not a substitute. MDR handles 24x7 monitoring and tier-1 triage. You still need someone in-house who owns detection engineering, IR judgment, and the relationship with the rest of the security org. Pure MDR with no internal expertise is a known anti-pattern.
