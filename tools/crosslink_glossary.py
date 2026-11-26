@@ -21,6 +21,7 @@ next run. Fix the headword or the rules instead.
 Term parsing lives in glossary_terms.py, shared with crosslink_pages.py so the
 two cannot drift apart.
 """
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -251,7 +252,13 @@ def unwrap_all_glossary_links(content: str) -> tuple[str, int]:
     return pattern.sub(replace, content), removed
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    # It takes no options, so any argument (a typo, --self-test, --dry-run)
+    # is a usage error before glossary.html is read, and --help prints usage.
+    argparse.ArgumentParser(
+        description="Rebuild the term ids and cross-links inside glossary.html. Takes no options: "
+        "run it bare, then review the diff.",
+    ).parse_args(argv)
     if not GLOSSARY.exists():
         print(f"glossary not found: {GLOSSARY}", file=sys.stderr)
         return 1
