@@ -28,7 +28,7 @@ Continuous integration means merging code changes into a shared branch frequentl
 
 Continuous delivery extends the pipeline so every passing build is packaged into a deployable artifact and shipped to a staging environment. A human still clicks "release to production." Continuous deployment goes one step further and releases every passing build to production. In practice the acronym "CD" stretches over both.
 
-None of this is cloud-specific in principle. It became essential for cloud because cloud infrastructure is itself code, every account, network and IAM role, and the pipeline is the only sustainable way to keep that code in sync with reality across dozens of environments.
+None of this is cloud-specific in principle. It became essential for cloud because cloud infrastructure is itself code (every account, every network, every IAM role), and the pipeline is the only sustainable way to keep that code in sync with reality across dozens of environments.
 
 == Deploying from a laptop or from a pipeline
 layout: compare
@@ -73,7 +73,7 @@ row: 7. Deploy | Apply the change, with canary or blue/green rollout where possi
 row: 8. Verify and observe | Smoke tests, watch for a defined window, auto-rollback on regression
 Small projects can collapse stages 3, 4 and 5 into one job. Make a missing stage a deliberate choice, because the gaps are where breaches live.
 notes:
-Signing and provenance attestations let the deploy target verify what built the artifact.
+The artifact is signed with Cosign or Sigstore, and SLSA provenance attestations let the deploy target verify what built it.
 
 Authentication is an OIDC token exchange for short-lived credentials, scoped to one repo, one branch and one role. No long-lived access keys are stored in CI.
 
@@ -102,7 +102,7 @@ layout: table
 section: oidc
 row: Trust policy subject | Who can assume the role
 row: repo:org/repo:ref:refs/heads/main | The main branch; not a fork or feature branch
-row: repo:org/repo:* | Every workflow run in the repo, including pull_request_target jobs
+row: repo:org/repo:* | Every workflow run in the repo, including pull_request_target jobs that fork PRs can trigger
 row: Wildcard in the repo name | Every repo in the org
 row: Wildcard in the owner | Repositories you don't control
 Scope to the main branch at minimum, and to environment claims if your CI supports them. Never accept a wildcard subject.
@@ -125,9 +125,9 @@ Most pipelines also need SaaS tokens, signing keys, database credentials and pub
 notes:
 OIDC handles authenticating the pipeline to the cloud, but most real pipelines also need third-party API tokens, signing keys, database credentials for migrations, webhook secrets and npm or PyPI publish tokens.
 
-First choice: federate directly. Most cloud APIs and a growing number of SaaS providers, such as npm, PyPI and Docker Hub through trusted publishing, accept OIDC tokens. Second: authenticate to Vault, AWS Secrets Manager, Azure Key Vault or GCP Secret Manager with the pipeline's OIDC identity, hold the secret in memory for the job and never persist it. The secret rotates in the vault, and the next run picks up the new value.
+First choice: federate directly. Most cloud APIs and a growing number of SaaS providers, such as npm, PyPI and Docker Hub through trusted publishing, accept OIDC tokens. Second: authenticate to Vault, AWS Secrets Manager, Azure Key Vault or GCP Secret Manager with the pipeline's OIDC identity, hold the secret in memory for the job and never persist it. The secret rotates in the vault, and the next run picks up the new value. In Azure DevOps, a variable group linked to Key Vault reads its values from Key Vault at runtime; with a managed-identity service connection, no static secret exists in Azure DevOps.
 
-Third: the CI provider's store, environment-scoped rather than repo-wide, with required approval on the environment. GitHub environment secrets belong to a named environment that can require reviewers, restrict deployment branches and add a wait timer. GitLab protected variables reach only jobs on protected branches and tags. Azure DevOps variable groups linked to Key Vault, with a managed-identity service connection, leave no static secret in Azure DevOps.
+Third, when neither of those is possible: the CI provider's store, environment-scoped rather than repo-wide, with required approval on the environment. GitHub environment secrets belong to a named environment that can require reviewers, restrict deployment branches and add a wait timer. GitLab protected variables reach only jobs on protected branches and tags.
 
 Never plaintext: workflow files, comments, debug logs and Slack DMs to the on-call engineer are how every credential-leak postmortem begins.
 
@@ -173,13 +173,13 @@ section: comparison
 row: Building block | AWS | Azure | GCP
 row: Native CI/CD | CodePipeline, CodeBuild, CodeDeploy | Azure DevOps Pipelines | Cloud Build, Cloud Deploy
 row: OIDC federation | IAM OIDC provider, role trust | Entra ID workload identity federation | WIF pool and provider
-row: Progressive delivery | CodeDeploy | Container Apps revisions | Cloud Run traffic splits
+row: Progressive delivery | CodeDeploy canary, linear, all-at-once | Pipelines strategies, Container Apps revisions | Cloud Deploy rollouts, Cloud Run traffic splits
 row: Secret store | Secrets Manager | Key Vault | Secret Manager
 Most teams run a third-party CI runner for build and test, and the cloud's native primitives to deploy.
 notes:
 Each cloud ships a native CI/CD toolchain, but most teams use a hybrid: a third-party runner such as GitHub Actions or GitLab for build and test, and the cloud's native primitives for deploy and runtime. The capabilities map nearly one-to-one.
 
-This is an excerpt of the page's table. For progressive delivery it also lists Azure Pipelines deployment strategies and Cloud Deploy phased rollouts, and it covers source hosting, artifact registries, container deploy targets, native and vendor-neutral IaC, and GitOps options. Terraform or OpenTofu and Pulumi work on all three.
+This is an excerpt of the page's table. The page's version also covers source hosting, artifact registries, container deploy targets, native and vendor-neutral IaC, and GitOps options. Terraform or OpenTofu and Pulumi work on all three.
 
 Anyone who has built a CI/CD pipeline on one cloud has 80% of the conceptual model needed to build one on another. The remaining 20% is the IAM, Entra or Workload Identity specifics and each platform's deploy primitives.
 
@@ -242,11 +242,11 @@ For a workload that lives entirely on GCP with containerized deploys, the page c
 == Deployment strategies
 layout: table
 section: strategies
-row: Strategy | How it works | Rollback
-row: All-at-once | Replace every instance simultaneously | Outage during the swap if anything fails
-row: Rolling | Replace instances one batch at a time | Slow, back through the same process
-row: Blue/green | Deploy to the idle environment, flip all traffic | Instant: flip back to blue
-row: Canary | Send 1%, ramp up while watching metrics | Automatic on metric regression
+row: Strategy | How it works | If it goes wrong
+row: All-at-once | Replace every instance simultaneously | Outage during the swap
+row: Rolling | Replace instances one batch at a time | Slow rollback, back through the same process
+row: Blue/green | Deploy to the idle environment, smoke-test, flip all traffic | Instant rollback: flip back to blue
+row: Canary | Send 1%, ramp up while watching metrics | Automatic rollback on metric regression
 Pick the simplest strategy that meets the workload's blast radius. A static site can do all-at-once. A payments service should not.
 notes:
 The cloud makes better strategies cheap: elastic capacity, traffic-shifting load balancers and managed control planes.
@@ -295,7 +295,7 @@ The next slides cover an incident from October 2026.
 == Cursor's extension marketplace, October 2026
 layout: timeline
 section: workstation
-event: Collect | Host details; names, not values, of up to 40 KEY or TOKEN variables
+event: Collect | Host details; names, not values, of up to 40 variables like KEY or TOKEN
 event: Key | Attacker's SSH key appended to authorized_keys; tried to enable SSH
 event: Tunnel | Tried an ssh -N -R reverse tunnel, retrying 60 seconds after exit
 event: Persist | A LaunchAgent on macOS, a scheduled task on Windows
@@ -304,11 +304,11 @@ On October 29, 2026, Cursor's marketplace served tampered builds of Anthropic's 
 notes:
 From about 2:27 a.m. to 1:35 p.m. Pacific, the builds for macOS and Windows were on Cursor's marketplace. Microsoft Threat Intelligence confirmed they were never on the Visual Studio Marketplace or the npm package. Cursor's marketplace proxies the Open VSX registry, but neither company has said the builds came through Open VSX, or how they got in. Anthropic told Microsoft its systems were not compromised. Cursor removed the builds, shut the marketplace down, audited access and found no other extension tampered with, then rotated its keys and rebuilt it.
 
-The loader collected the names of environment variables containing strings such as KEY, TOKEN, SECRET, PASS, AWS or GCP; Microsoft notes only the names were sent. It downloaded no separate executable and used built-in tools such as ssh, PowerShell, schtasks and systemsetup. The code also has a Linux path, a crontab @reboot entry, though Cursor lists only macOS and Windows builds as affected.
+The loader collected the names of environment variables containing strings such as KEY, TOKEN, SECRET, PASS, AWS or GCP; Microsoft notes only the names were sent. Microsoft found it downloaded no separate executable and used built-in tools such as ssh, PowerShell, schtasks and systemsetup. The code also has a Linux path, a crontab @reboot entry, though Cursor lists only macOS and Windows builds as affected.
 
-Cursor says the tunnel step would fail outside highly unusual circumstances: bugs broke it unless Cursor ran with administrator privileges, and enabling the SSH server needs administrator rights the extension lacked on most hosts. Where it failed, the attacker could not log in through the tunnel. Cursor says the extension still added the key, installed persistence and sent the host details, and uninstalling it removes none of that, because those files live outside the extension's directory.
+Cursor says the tunnel step would fail outside highly unusual circumstances: bugs broke it unless Cursor ran with administrator privileges, and enabling the SSH server needs administrator rights the extension lacked on most hosts. Where it failed, the attacker could not log in through the tunnel. Cursor says the extension still added the key, installed persistence and sent the host details. Uninstalling it removes none of that, because those files live outside the extension's directory.
 
-Cursor tells affected teams to rotate the credentials and sessions reachable from the machine, working from a trusted system.
+Cursor tells affected teams to rotate the credentials and sessions reachable from the machine, working from a trusted system, because the limited environment-variable collection does not rule out later access over the backdoor.
 
 == A pattern aimed at developer machines
 layout: table
@@ -320,7 +320,7 @@ row: Nx / s1ngularity | Ran local AI CLIs, prompts off, to hunt secrets
 row: Shai-Hulud | Swept the machine with TruffleHog
 row: Mini Shai-Hulud, CHAINDROP | Hooks: opening an infected repo could rerun the payload
 row: CircleCI | Malware on one engineer's laptop
-Earlier incidents and other kill chains fit the pattern.
+Several session members argued for a wider pattern; these incidents fit that reading.
 notes:
 The October 30, 2026 Friday session took the Cursor incident as its first topic. The room debated whether it was a one-off or part of a wider supply-chain problem aimed at developer workstations, and several members argued for treating it as the second, with standing controls.
 
@@ -334,19 +334,19 @@ section: workstation
 row: Control | Against these builds
 row: Install cooldown | Waiting 12 hours after they appeared would have skipped them
 row: Extension allowlist | Real ID passed; exact-version pins would have refused them
-row: Application control | Windows only; refuses dropped scripts, not the loader
+row: AppLocker | Windows; blocks standard users' dropped scripts, not the loader
 row: Detection | Editor writing authorized_keys or persistence, or opening ssh -R
 row: Dev containers | Key and persistence would land in a rebuildable container
 row: Inventory | Finds affected machines quickly, only if it already exists
 A cooldown misses a version that stays up past its window.
 notes:
-Microsoft's write-up recommends a cooldown. The builds were available for about 11 hours. Neither notice says when they were first published, which is when Cursor's team-level install cooldown counts from; it defaults to 0, off. pnpm's minimumReleaseAge defaults to 1440 minutes, and Dependabot applies a three-day cooldown to version updates, exempting security updates. The trojanized Nx packages were live for roughly four hours. The cost is slower uptake of fixes.
+Microsoft's write-up recommends a cooldown. The builds were available for about 11 hours. Neither notice says when they were first published, which is when Cursor's team-level install cooldown counts from; it defaults to 0, off. pnpm's minimumReleaseAge defaults to 1440 minutes, and Dependabot applies a three-day cooldown to version updates by default, exempting security updates. The trojanized Nx packages were live for roughly four hours. The cost is slower uptake of fixes.
 
 VS Code and Cursor share the extensions.allowed setting, and both accept exact versions. VS Code accepts no version ranges, so pinning means approving every update by hand.
 
-AppLocker's default script rules block .bat and .cmd files outside the Windows and Program Files folders for standard users, but let administrators run any script, and by default skip a scheduled task running as SYSTEM. The loader ran inside the editor, which any policy must allow. Microsoft describes AppLocker as defense in depth and recommends App Control for Business where you can deploy it.
+AppLocker's default script rules block .bat and .cmd files outside the Windows and Program Files folders for standard users, but let administrators run any script, and by default skip a scheduled task running as SYSTEM. The loader ran inside the editor, which any policy must allow. Microsoft describes AppLocker as defense in depth, not a defensible Windows security feature, and recommends App Control for Business where you can deploy it.
 
-In a dev container most extensions run inside the container, but anything shared into it, such as Git credentials or a mounted home directory, is still exposed. Prebuild images with pinned tools and rebuild them on a schedule in CI.
+In a dev container most extensions run inside the container, and a payload like this one in such an extension would write its key and persistence into a container you can rebuild instead of onto the laptop. Anything shared into it, such as Git credentials or a mounted home directory, is still exposed. VS Code advises prebuilding images with pinned tools and rebuilding them on a schedule in CI.
 
 == Infrastructure-as-code in the pipeline
 layout: checklist
@@ -364,7 +364,7 @@ Posting the plan on the pull request lets reviewers see exactly what will change
 
 Drift detection alerts when someone clicked something in the console. The page calls drift the canary for broken IaC discipline.
 
-Terraform or OpenTofu, Pulumi, or each cloud's native IaC all fit; pick what your team already operates. For Kubernetes, GitOps controllers such as Argo CD and Flux go further: the pipeline updates a Git repo, the in-cluster controller pulls and reconciles, and the cluster trusts only the repo and the controller's identity, not the CI runner.
+Terraform or OpenTofu and Pulumi are the vendor-neutral choices, and each cloud's native IaC is a credible single-cloud alternative; pick what your team already operates. For Kubernetes, GitOps controllers such as Argo CD and Flux go further: the pipeline updates a Git repo, the in-cluster controller pulls and reconciles, and the cluster trusts only the repo and the controller's identity, not the CI runner.
 
 == Bootstrapping path
 layout: checklist
