@@ -10,7 +10,7 @@ A service mesh is a dedicated infrastructure layer for service-to-service commun
 notes:
 A service mesh is a dedicated infrastructure layer for service-to-service communication inside a Kubernetes cluster. Without changing application code, it gives every east-west call three things: encryption with mTLS, identity in the form of a cryptographic workload identity, usually SPIFFE-based, and policy, meaning authorization decisions on every hop.
 
-The page names four meshes that matter in 2026. Istio is powerful and complex, CNCF graduated, with sidecar and ambient modes. Linkerd keeps the operational surface small, is CNCF graduated and uses a Rust micro-proxy. Cilium Service Mesh has no sidecar, runs on eBPF and comes bundled with the CNI. Consul Connect, from HashiCorp, has a strong multi-runtime story that includes VMs.
+The page names four meshes that matter in 2026. Istio is the most powerful and the most complex, CNCF graduated, with sidecar and ambient modes. Linkerd has the smallest operational surface, is CNCF graduated and uses a Rust micro-proxy. Cilium Service Mesh has no sidecar, runs on eBPF and comes bundled with the CNI. Consul Connect, from HashiCorp, has a strong multi-runtime story that includes VMs.
 
 The major architecture shift since 2024 is the move away from per-pod sidecars toward ambient (Istio) and sidecarless (Cilium) data planes, with the same outcomes and, in the page's words, dramatically less operational tax.
 
@@ -36,7 +36,7 @@ layout: stats
 section: sidecar-pattern
 stat: 50-200 | MB of memory per sidecar Envoy | Plus a fraction of a CPU per pod
 stat: 1-3 | Usual ms added per direction | Two extra proxy hops on every call; sometimes worse under load
-stat: 5,000 | Pods in a cluster | Hundreds of GB of RAM and dozens of cores spent on proxies
+stat: 5,000 | Pods in an example cluster | Hundreds of GB of RAM and dozens of cores spent on proxies
 Every Envoy CVE means rolling every workload to pick up a new sidecar image, and a misconfigured sidecar can take down its application pod.
 notes:
 The original mesh architecture put a proxy container, almost always Envoy, into every application pod as a sidecar. iptables rules installed by an init container redirect every packet leaving the application container into the local sidecar, which handles mTLS, policy, observability and traffic management before sending it on to another sidecar that reverses the process.
@@ -127,7 +127,7 @@ row: Istio | AuthorizationPolicy | ALLOW, DENY, AUDIT, CUSTOM; DENY always wins
 row: Linkerd | Server and ServerAuthorization | The port to protect, plus who may connect; deliberately small
 row: Cilium | CiliumNetworkPolicy | NetworkPolicy with L7 awareness; Hubble shows decisions live
 row: Consul | Intentions | Service A intends to talk to service B: allow or deny
-Shared by all: rules reference identity, not IP; they match HTTP method and path; and audit modes log what would be blocked without blocking it.
+Shared by all: rules reference identity, not IP; they can match HTTP method and path; and audit modes log what would be blocked without blocking it.
 notes:
 Encryption proves who is calling; authorization decides whether they are allowed. Each mesh ships its own policy language.
 
@@ -176,7 +176,7 @@ row: Zero-trust principle | How the mesh implements it
 row: Never trust, always verify | Every call presents and verifies an mTLS certificate
 row: Verify explicitly | Workload identity plus, where applicable, a request-level JWT
 row: Least privilege | Policy restricts each service to the calls it needs
-row: Assume breach | Short-lived certs and deny-by-default policy bound a breached pod
+row: Assume breach | Policy, not network reachability, bounds a breached pod's blast radius
 row: Continuous validation | Every call re-evaluated; identity rotates every 24 hours or less
 The mesh does not reach the user-to-service edge, the host kernel or the data store.
 notes:
@@ -191,7 +191,7 @@ layout: table
 section: mesh-vs-gateway | faq
 row: Dimension | API gateway | Service mesh
 row: Traffic | North-south: external clients into the cluster | East-west: service to service inside the cluster
-row: Caller identity | End users, partner APIs, mobile apps: JWTs, API keys | Workloads: SPIFFE or mesh-issued identity
+row: Caller identity | End users, partner APIs, mobile apps: usually JWTs, API keys | Workloads: SPIFFE or mesh-issued identity
 row: Primary auth | OAuth 2, OIDC, API keys, JWTs from the IdP | mTLS workload identity; secondary JWT validation
 row: Topology | Centralized at the edge: a few gateway pods | A proxy at every pod or every node
 Both are Envoy-based proxies handling authentication, authorization and observability, at different layers. The answer usually involves both.
@@ -271,7 +271,7 @@ section: ambient | sidecar-pattern
 col: Istio Ambient | ztunnel: per-node L4 proxy for mTLS and identity | Optional waypoint Envoy for L7 | GA at Istio 1.22
 col: Cilium Service Mesh | Has never used sidecars | L4 in eBPF, in the kernel | L7 in one Envoy per node
 col: Linkerd | Still uses sidecars | A Rust micro-proxy much smaller than Envoy | Evaluating ambient-style architectures
-A sidecar fails per pod; a node-level proxy fails per node. Different failure modes need different SLOs and different troubleshooting.
+A sidecar fails per pod; a node-level proxy fails per node. Different failure modes need different SLOs. You troubleshoot at the node-level proxy or eBPF flow store.
 notes:
 The page calls this the biggest architectural shift in service mesh in 2024-2026. The reasons are operational: thousands of sidecars consume tens or hundreds of GB of memory, every Envoy CVE means rolling everything, and per-pod attribution of cost, latency and failures is a real burden.
 
@@ -339,7 +339,7 @@ event: Stage 1: Pilot | One non-production cluster, a handful of services, permi
 event: Stage 2: Production | Strict mTLS in selected namespaces; deny-by-default for new services
 event: Stage 3: Default | Strict mTLS cluster-wide; every service has an AuthorizationPolicy
 event: Stage 4: Platform | Automatic enrollment via golden-path tooling; invisible to most developers
-Going straight from a Stage 1 pilot to Stage 3 usually means meeting the failures of Stage 2 in production.
+An organization that goes straight from a Stage 1 pilot to Stage 3 usually meets the operational failures it did not learn at Stage 2, in production.
 notes:
 The page offers a staging model for mesh adoption in a real organization. Stage 1, Pilot: one mesh chosen and deployed in one non-production cluster, a handful of services enrolled, and mTLS in permissive mode. The team learns the failure modes, the upgrade story and the observability story; three to six months at this stage is normal.
 
@@ -383,7 +383,7 @@ layout: answer
 section: faq
 Below ten or so services that talk to each other, NetworkPolicy, application-level mTLS and per-service tracing are cheaper. Once you cross fifty services, multi-team ownership and any meaningful regulatory requirement on encryption in transit, the math flips.
 notes:
-A mesh earns its operational cost when pinning identity, encrypting east-west traffic, applying L7 authorization and observing service-to-service behavior all become important at the same time.
+A mesh earns its operational cost when you have enough services that pinning identity, encrypting east-west traffic, applying L7 authorization and observing service-to-service behavior all become important at the same time.
 
 Below ten or so services that talk to each other, the same outcomes are cheaper to reach with NetworkPolicy, application-level mTLS via an SDK or cert-manager, and per-service tracing. Once you cross fifty services, multi-team ownership, and any meaningful regulatory requirement around encryption in transit between services, the math flips.
 
@@ -394,12 +394,12 @@ layout: question
 section: faq
 Consider how long each sidecarless option has run in production, and what changes when one proxy serves a whole node.
 notes:
-This is the second FAQ question. Again, ask it before showing the answer.
+This is the deck's second question, and the third in the page's FAQ. Again, ask it before showing the answer.
 
 == Yes, with caveats
 layout: answer
 section: faq
-Cilium Service Mesh has run in production at significant scale for several years and is GA. Istio Ambient is GA at 1.22 and still maturing. Its L7 features need a waypoint proxy, and blast radius becomes node-level.
+Cilium Service Mesh has run in production at significant scale for several years and is GA. Istio Ambient is GA at 1.22 and still maturing. Caveats: L7 needs a waypoint proxy, some advanced features lag, and blast radius is node-level.
 notes:
 Cilium Service Mesh has been in production at significant scale for several years and is GA. Istio Ambient was declared GA at 1.22 and continues to mature, and many teams have moved production workloads to it specifically to escape the sidecar operational tax.
 
