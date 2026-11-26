@@ -26,7 +26,7 @@ The shared responsibility model is the answer. It is a contract, partly explicit
 == One model, several versions
 layout: list
 section: why-it-exists
-item: Not a regulation or a single specification
+item: Not a regulatory document or a single specification
 item: Each provider publishes its own version
 item: CSA Cloud Controls Matrix is a vendor-neutral attempt
 item: NIST SP 800-145 defines IaaS, PaaS and SaaS
@@ -66,9 +66,9 @@ Network controls, in configuration terms, are yours on IaaS and PaaS and limited
 == IaaS and PaaS
 layout: compare
 section: by-service-model
-col: IaaS | You pick the OS image | You own its patching and hardening | The provider's job ends at "the VM boots and the network works"
+col: IaaS | You pick the OS image | You own its patching, hardening and monitoring | The provider's job ends at "the VM boots and the network works"
 col: PaaS | The runtime is patched for you | You own schema, IAM, endpoints and code | A database with a default password is still yours
-Cloud Run runs your container image, so its OS packages are yours to patch.
+Exception: Cloud Run runs your image, so its OS packages are yours to patch, unless you use Google's buildpack bases with automatic updates on.
 notes:
 On IaaS, such as EC2, Azure Virtual Machines and GCE, you picked the OS image, so you own its patching, hardening and runtime monitoring. You also own the security group rules, the VPC layout and the code on top. If the OS in your EC2 instance is unpatched and gets popped, that is not AWS's problem.
 
@@ -91,15 +91,14 @@ You also own the OAuth grants you forgot about. Providers will keep the logs, bu
 
 == Snowflake and UNC5537
 layout: text
-section: by-provider
-Customers could leave MFA off per account. About 165 customer organizations were notified as potentially exposed.
+section: by-service-model | by-provider
+UNC5537 used infostealer-harvested credentials on accounts without MFA enforcement. About 165 customer organizations were notified as potentially exposed.
 - Pre-2024 default: MFA available, not required
-- MFA enrollment later the default for new password users
-- Mandatory MFA phased in through 2025 and 2026
+- After the incidents, new MFA defaults and a phased mandate moved more responsibility to Snowflake
 notes:
 Snowflake is an instructive case. It is SaaS: Snowflake patches the database, runs the infrastructure and manages the underlying clouds. But customers could leave MFA off per account, and the pre-2024 default was MFA available but not required.
 
-That choice put MFA enforcement on the customer's side of the line, and the UNC5537 campaign exploited it. Mandiant and Snowflake found no evidence that Snowflake's own platform was breached. The weak point was customer account configuration.
+That choice put MFA enforcement on the customer's side of the line, and the UNC5537 campaign exploited it. The 2024 wave is the canonical SaaS-side breach pattern: customers using Snowflake without MFA enforcement, and an attacker using infostealer-harvested credentials to log in and exfiltrate data. About 165 customer organizations were notified as potentially exposed. Mandiant and Snowflake found no evidence that Snowflake's own platform was breached. The weak point was customer account configuration.
 
 After the incidents, Snowflake made MFA enrollment the default for password users in new accounts, rolled out from late 2024 into early 2025, and then phased in mandatory MFA for human users who sign in with a password, outside reader and trial accounts, through 2025 and 2026. That moved more of the responsibility to their side.
 
@@ -108,17 +107,17 @@ layout: text
 section: by-service-model
 The provider owns the OS and runtime. The code, dependencies, function IAM permissions and event sources are yours.
 - You cannot run an EDR agent on Lambda
-- Detection relies on provider telemetry: CloudTrail, function logs, X-Ray
+- CWPP coverage relies almost entirely on provider telemetry: CloudTrail, function logs, X-Ray
 notes:
 For Lambda, Cloud Run functions and Azure Functions, the OS, the runtime and, for fully managed serverless, even much of the network is the provider's. But the code is yours, the dependencies are yours, the function's IAM permissions are yours, and the event sources you wire up, such as S3 buckets, API Gateways and queues, are yours.
 
-You cannot run an EDR agent on Lambda. CWPP coverage of serverless workloads relies almost entirely on provider-side telemetry, because there is no syscall stream to monitor. That shifts more of the practical detection burden onto the provider's logging without explicitly shifting the contractual responsibility.
+You cannot run an EDR agent on Lambda. CWPP coverage of serverless workloads relies almost entirely on provider-side telemetry: CloudTrail, function logs and X-Ray. There is no syscall stream to monitor. That shifts more of the practical detection burden onto the provider's logging without explicitly shifting the contractual responsibility.
 
 == Reading across AWS, Azure and GCP
 layout: figure
 section: by-provider
 figure: svc-title
-Translation is not one to one. Read across vendors; it is not a hard equivalence.
+Equivalent service names across the three major clouds, by category.
 notes:
 The figure translates equivalent service names across the three major clouds, by category.
 
@@ -157,20 +156,20 @@ The provider cannot tell you which data is sensitive. Who gets in, with what per
 The provider offers MFA, encryption and logging, and turning them on is yours. The provider gives raw compliance data and you assemble it for your auditor. The provider may detect an incident, but coordinating comms, notifications and disclosure is yours.
 
 == What is always the provider's
-layout: checklist
+layout: list
 section: always-theirs
-check: Physical security of data centers
-check: Hypervisor and tenant isolation
-check: Hardware-level security
-check: Backbone network
-check: Managed service internals
-check: Logging integrity
+item: Physical security of data centers
+item: Hypervisor and tenant isolation
+item: Hardware-level security
+item: Backbone network
+item: Managed service internals
+item: Logging integrity, such as CloudTrail's tamper resistance (durable storage stays yours)
 notes:
-These stay on the provider's side: data centers, badge access, environmental controls and media destruction. Tenant-to-tenant isolation, so cross-tenant escapes are the provider's problem. Server lifecycle and supply-chain integrity at the hardware level.
+These stay on the provider's side: physical security, meaning data centers, badge access, environmental controls and media destruction. Tenant-to-tenant isolation, so cross-tenant escapes are the provider's problem. Server lifecycle and supply-chain integrity at the hardware level.
 
 Also the backbone network: provider-internal links, region-to-region encryption, and BGP and DDoS protection at the edge. The code running managed services such as RDS, Snowflake, Cosmos DB and Cloud Run.
 
-Logging integrity is split: CloudTrail's tamper resistance is AWS's, while durable storage is yours.
+Logging integrity comes with a split: CloudTrail's tamper resistance is AWS's, while durable storage is yours.
 
 == Gotchas that cause incidents
 layout: list
@@ -178,7 +177,7 @@ section: gotchas
 item: "Managed" means different splits for different services
 item: Features that are available but not enabled
 item: "We offer" is not "we do"
-item: Subprocessors one layer further down the chain
+item: Subprocessors: your SaaS vendor's own vendors
 item: Region-specific data residency obligations
 notes:
 Two services with "managed" in the name can have vastly different splits. EKS means AWS manages the control plane while you still manage worker nodes, workload security and pod-level config. Aurora Serverless v2 means AWS manages essentially everything below the schema. Assumptions do not transfer.
@@ -190,7 +189,7 @@ SaaS vendors use other SaaS vendors, so your CRM's email-delivery vendor's secur
 == Storm-0558, a provider-side breach
 layout: text
 section: gotchas
-Most cloud breaches are customer-side. In Storm-0558 (2023), a compromised 2016 Microsoft consumer signing key let the attacker forge tokens and read victims' mail.
+Most cloud breaches are customer-side. In Storm-0558 (2023), a compromised 2016 Microsoft consumer signing key let the attacker forge tokens and read victims' mail. Customers still had to investigate, at first without the logs they needed.
 notes:
 Storm-0558 is one of the few high-profile exceptions to the rule that most cloud breaches are customer-side. A 2016 Microsoft consumer signing key was compromised, allowing the attacker to forge tokens for victim accounts and read their mail through Outlook Web Access.
 
@@ -200,8 +199,10 @@ Microsoft owned the failure. Even so, the customer-side investigation question, 
 layout: figure
 section: contractual
 figure: contractual-layer
-Attestations audit the provider, not your configuration.
+The model is partly framework, partly contract, and the two layers are not always aligned.
 notes:
+The shared responsibility model is partly framework and partly contract. Both layers matter, and they are not always aligned.
+
 The figure shows the contractual layer: the provider agreement, attestations, your customer contracts and BAAs.
 
 The caption says attestations audit the provider. They do not audit your configuration.
@@ -212,33 +213,47 @@ section: contractual
 item: Provider agreements state the split in binding language
 item: SOC 2, ISO 27001, FedRAMP and PCI DSS cover the provider's controls
 item: Your customer contracts may flow down more than the provider accepts
-item: A HIPAA BAA covers only BAA-eligible services
+item: PHI on a service outside the BAA-eligible list is your problem
 notes:
 Master Service Agreements spell out the split in legally binding language, covering service-level commitments, breach notification timelines, data handling, audit rights and limited liability.
 
-Provider attestations tell you what audited controls the provider has in place. They do not audit your configurations. Your customer may require encryption with customer-managed keys, which the cloud provider does not promise to you, and bridging that gap is on you. Using a non-BAA-eligible service for PHI is your problem.
+Provider attestations tell you what audited controls the provider has in place. They do not audit your configurations. Your customer may require encryption with customer-managed keys, which the cloud provider does not promise to you, and bridging that gap is on you. HIPAA Business Associate Agreements explicitly assign responsibility for handling PHI. Major cloud providers offer lists of BAA-eligible services, and using a non-BAA-eligible service for PHI is your problem.
 
 The practical question when scoping a service is who is responsible for what, who accepts that responsibility contractually, and where the gaps fall.
 
 == Shared fate
 layout: text
 section: shared-fate
-Google introduced "shared fate" in 2021: opinionated defaults and customer-side tooling. Contractual responsibility stays where it is.
-- Microsoft and AWS have evolved similarly
-- Examples: secure-by-default S3 settings, MFA enforcement defaults
+Google introduced "shared fate" in 2021: opinionated defaults and customer-side tooling. Microsoft and AWS have evolved similarly without using the term.
+- Providers take more practical responsibility
+- Contractual responsibility stays where it is
 notes:
 The original model has a fairness problem: it asks customers to operate enterprise-grade security on infrastructure they did not design. Google introduced the term shared fate in 2021 to extend the model, with opinionated defaults such as organization policies that prevent common misconfigurations, customer-side tooling and partnership on insurance and incident response.
 
-Microsoft and AWS have evolved similarly even without using the term. The trend is toward providers taking more practical responsibility while the contractual responsibility stays where it is.
+Microsoft and AWS have evolved similarly even without using the term: secure-by-default S3 settings, MFA enforcement defaults, and Center for Internet Security benchmarks integrated into native posture tools. The trend is toward providers taking more practical responsibility while the contractual responsibility stays where it is.
 
 The page's practitioner take is that this is good: defaults that prevent the default failure modes are an order of magnitude more valuable than any documentation about who is responsible for what.
+
+== Where does Kubernetes fit?
+layout: question
+section: faq
+Consider the control plane and the worker nodes separately.
+notes:
+This is the first question in the page's FAQ. Ask it and let the room answer before showing the answer.
+
+== Roughly PaaS for the control plane, IaaS for workers
+layout: answer
+section: faq
+Managed Kubernetes (EKS, AKS, GKE) is roughly PaaS for the control plane and IaaS for the workers. Pod security, Network Policies, RBAC and admission control are all yours.
+notes:
+The provider patches the API server. You patch the worker node images and operate the workloads. Pod-level security, Network Policies, RBAC and admission control are all yours.
 
 == Who is responsible if I get DDoSed?
 layout: question
 section: faq
 Think about which layer of the stack the traffic hits.
 notes:
-This is a question from the page's FAQ. Ask it and let the room answer before moving on.
+This is the next question in the page's FAQ. Ask it and let the room answer before moving on.
 
 == The provider takes the network layer
 layout: answer
@@ -248,17 +263,3 @@ notes:
 Generally, the provider absorbs the network-layer DDoS because it hits their pipes, and you handle the application-layer DDoS because the requests are legitimate-looking traffic to your app.
 
 AWS Shield Standard, Azure DDoS infrastructure protection and Cloud Armor's standard tier handle the network layer. Advanced application-layer protection is a paid add-on you would typically buy if you are a high-value target.
-
-== Where does Kubernetes fit?
-layout: question
-section: faq
-Consider the control plane and the worker nodes separately.
-notes:
-This is the first question in the page's FAQ. Ask it before showing the answer.
-
-== Roughly PaaS for the control plane, IaaS for workers
-layout: answer
-section: faq
-Managed Kubernetes (EKS, AKS, GKE) is roughly PaaS for the control plane and IaaS for the workers. Pod security, Network Policies, RBAC and admission control are all yours.
-notes:
-The provider patches the API server. You patch the worker node images and operate the workloads. Pod-level security, Network Policies, RBAC and admission control are all yours.
