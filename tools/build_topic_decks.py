@@ -28,7 +28,7 @@ Outline format (what differs from a breach outline):
   on. An id is the id of the <section> wrapping an h2 in <main>; an h2 with
   no such section gets a slug of its text; the text before the first h2 is
   section "top". `--extract SLUG` lists them.
-- Layouts: text, stats, checklist, links, layers, timeline, compare, table,
+- Layouts: text, stats, checklist, list, links, layers, timeline, compare, table,
   bars, matrix, question, answer and figure. A figure slide names one of the
   page's diagram figures, inside a section it cites, and the builder places
   the rendered diagram with the page's own caption under it. A deck whose
@@ -822,7 +822,7 @@ TOPIC = bbd.DeckKind(
     header_keys=("title", "page", "as-of", "promise"),
     page_re=TOPIC_PAGE_RE,
     layouts=frozenset({
-        "text", "stats", "checklist", "links", "layers", "timeline", "compare", "table", "bars",
+        "text", "stats", "checklist", "list", "links", "layers", "timeline", "compare", "table", "bars",
         "matrix", "question", "answer", "figure",
     }),
     control_keys=frozenset({"layout", "section", "figure", "source", "credit"}),
@@ -1135,6 +1135,9 @@ def _case_layout_not_allowed(tmp: Path) -> None:
     _raises(lambda: _tparse(_tslide("section: what-is", "stage: 01", "Text.")), "unknown line key 'stage'")
     # Control: the topic layouts parse, and a breach outline cannot use figure.
     assert _tparse(_tslide("section: what-is", "layout: figure", "figure: x")).slides[0].layout == "figure"
+    assert _tparse(_tslide("section: what-is", "layout: list", "item: a", "item: b")).slides[0].layout == "list"
+    _raises(lambda: bbd.parse_outline_text(
+        bbd.HEADER + "== S\nlayout: list\nitem: a\nitem: b\nnotes:\nN.\n", "d.deck"), "unknown layout 'list'")
     _raises(lambda: bbd.parse_outline_text(
         bbd.HEADER + "== S\nlayout: figure\nnotes:\nN.\n", "d.deck"), "unknown layout 'figure'")
     _raises(lambda: bbd.parse_outline_text(

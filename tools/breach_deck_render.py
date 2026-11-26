@@ -990,19 +990,36 @@ def _render_answer(page, s) -> None:
 
 
 def _render_checklist(page, s) -> None:
-    """A box and its text per check. Each item's height comes from
-    measuring its text, so items that fit on one line are evenly spaced and
-    an item that wraps gets the room for its extra lines."""
+    """A box and its text per check."""
+    _render_items(page, s, "check", "check")
+
+
+def _render_list(page, s) -> None:
+    """The checklist's layout with a dot in place of each box, for items
+    that are not things to do."""
+    _render_items(page, s, "item", "list")
+
+
+def _render_items(page, s, key: str, prefix: str) -> None:
+    """A marker and its text per item: a box for a checklist, a dot for a
+    list. Each item's height comes from measuring its text, so items that
+    fit on one line are evenly spaced and an item that wraps gets the room
+    for its extra lines."""
     y = _heading(page, s.heading, Y) + STYLE["block_gap"]
     y = _body(page, s.paragraphs, s.bullets, y)
     pt, box, indent = LOOK["list_pt"], LOOK["check_box"], LOOK["check_indent"]
     line = _line_h(pt)
+    dot = box * 0.4
     y += STYLE["block_gap"]
-    for (text,) in s.items.get("check", []):
+    for (text,) in s.items.get(key, []):
         h = _measured_rows(text, W - indent, pt) * line + 0.05
-        page.box("check-box", X, y + (line - box) / 2, box, box, fill=STYLE["white"],
-                 line=(STYLE["bar"], 2), kind=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.15)
-        page.box("check-text", X + indent, y, W - indent, h, [_p(text, pt, STYLE["text"])])
+        if prefix == "check":
+            page.box("check-box", X, y + (line - box) / 2, box, box, fill=STYLE["white"],
+                     line=(STYLE["bar"], 2), kind=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.15)
+        else:
+            page.box("list-dot", X + (box - dot) / 2, y + (line - dot) / 2, dot, dot,
+                     fill=STYLE["bar"], kind=MSO_SHAPE.OVAL)
+        page.box(f"{prefix}-text", X + indent, y, W - indent, h, [_p(text, pt, STYLE["text"])])
         y += h + LOOK["check_gap"]
 
 

@@ -433,10 +433,13 @@ Speaker notes, on every slide.
   extract.
 - Control lines are `layout`, `section`, `figure`, `source` and `credit`;
   there is no `stage`, `stages` or `phase`.
-- Layouts: `text`, `stats`, `checklist`, `links`, `layers`, `timeline`,
-  `compare`, `table`, `bars`, `matrix`, `question`, `answer` and `figure`,
-  with the breach layouts' typed lines. There is no `stage`, `stage-group`,
-  `flow` or `background`.
+- Layouts: `text`, `stats`, `checklist`, `list`, `links`, `layers`,
+  `timeline`, `compare`, `table`, `bars`, `matrix`, `question`, `answer` and
+  `figure`, with the breach layouts' typed lines. There is no `stage`,
+  `stage-group`, `flow` or `background`.
+- A `list` slide takes 2 to 7 `item:` lines and draws each with a dot where a
+  `checklist` draws a tick box, so pitfalls and anti-patterns do not read as
+  things to do. Like `check:` lines, items are typed fields, not prose.
 - A `figure` slide has one `figure: <id>` line naming one of the page's
   diagrams, which must sit in a section the slide cites; its id is the
   `[figure #id]` in the extract (the figure's own `id`, or its SVG

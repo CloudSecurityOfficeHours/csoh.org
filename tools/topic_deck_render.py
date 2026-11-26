@@ -48,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import breach_deck_render as r  # noqa: E402
 import build_breach_decks as bbd  # noqa: E402
 import build_topic_decks as btd  # noqa: E402
-from pptx.enum.shapes import MSO_SHAPE_TYPE  # noqa: E402
+from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE  # noqa: E402
 from pptx.enum.text import PP_ALIGN  # noqa: E402
 from pptx.util import Inches  # noqa: E402
 
@@ -274,8 +274,7 @@ class _TopicPage(r._Page):
     NOTES_LINK = "Full page"
     PAGE_NOUN = "page"
     HOW_TO_INTRO = (
-        "Read it on your own or present it. Every slide draws on the csoh.org page and the "
-        "sources it cites.",
+        "Read it on your own or present it. Every slide draws on the csoh.org page.",
         "The diagrams are the page's own, with the page's captions. The speaker notes are a "
         "presenter's script.",
     )
@@ -342,7 +341,7 @@ def _render_cover(page: _TopicPage) -> None:
                  LOOK["cover_title_pt"], LOOK["cover_promise_pt"])
 
 
-RENDERERS = {**r.RENDERERS, "figure": _render_figure}
+RENDERERS = {**r.RENDERERS, "figure": _render_figure, "list": r._render_list}
 
 
 def _cover_art(deck, html: str, art: dict[str, Path]) -> tuple[Path, str]:
@@ -573,6 +572,24 @@ def _case_figure_resolution(tmp: Path) -> None:
     assert any("pixels per point" in x for x in f), f
 
 
+def _case_list_has_dots_not_boxes(tmp: Path) -> None:
+    items = [["One giant cluster for every environment"], ["No NetworkPolicy"], ["Namespaces as boundaries"]]
+    s = _slide("Common pitfalls", "list", section=["what-is"], items={"item": items})
+    s.where = "t.deck:90"
+    deck = _deck(FIG_A)
+    deck.slides.append(s)
+    out = _render(tmp, deck, _art(tmp), name="l.pptx")
+    sl = next(x for x in r.reopen(out).slides if any(sh.name == "list-text" for sh in x.shapes))
+    texts = [sh.text_frame.text for sh in sl.shapes if sh.name == "list-text"]
+    dots = [sh for sh in sl.shapes if sh.name == "list-dot"]
+    assert texts == [t for (t,) in items], texts
+    assert len(dots) == 3 and all(d.auto_shape_type == MSO_SHAPE.OVAL for d in dots), dots
+    # Control: a list draws no checklist boxes, and each dot sits beside its item.
+    assert not any(sh.name == "check-box" for sh in sl.shapes)
+    tops = [sh.top for sh in sl.shapes if sh.name == "list-text"]
+    assert all(t <= d.top <= t + 400000 for t, d in zip(tops, dots)), (tops, [d.top for d in dots])
+
+
 def _case_caption_from_page(tmp: Path) -> None:
     deck = _deck(FIG_A, FIG_B)
     out = _render(tmp, deck, _art(tmp))
@@ -722,6 +739,7 @@ def _case_render_png_cached_and_checked(tmp: Path) -> None:
 RENDER_CASES: list = [
     ("figure_fits_and_keeps_ratio", _case_figure_fits_and_keeps_ratio),
     ("figure_resolution", _case_figure_resolution),
+    ("list_has_dots_not_boxes", _case_list_has_dots_not_boxes),
     ("caption_from_page", _case_caption_from_page),
     ("picture_alt_text", _case_picture_alt_text),
     ("blank_png_refused", _case_blank_png_refused),

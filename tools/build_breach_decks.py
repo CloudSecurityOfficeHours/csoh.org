@@ -174,6 +174,9 @@ LAYOUTS: dict[str, LayoutSpec] = {
     "question": LayoutSpec({}, "prose-only"),
     "answer": LayoutSpec({}, "required"),
     "checklist": LayoutSpec({"check": (2, 7, 1, 1)}, "optional"),
+    # The checklist's items without its boxes, for a list that is not things
+    # to do (pitfalls, anti-patterns). Only the topic kind takes it.
+    "list": LayoutSpec({"item": (2, 7, 1, 1)}, "optional"),
     "links": LayoutSpec({"link": (1, 8, 2, 2)}, "optional"),
     # A step's technique field is NO_TECHNIQUE for a stage with none. A chain
     # of more than eight stages takes more than one flow slide.
@@ -281,7 +284,7 @@ BREACH = DeckKind(
     header_keys=HEADER_KEYS,
     page_re=PAGE_RE,
     # Every layout but figure: breach slides carry no pictures.
-    layouts=frozenset(LAYOUTS) - {"figure"},
+    layouts=frozenset(LAYOUTS) - {"figure", "list"},
     control_keys=frozenset(CONTROL_KEYS),
     min_slides=MIN_SLIDES,
     max_slides=MAX_SLIDES,
@@ -3576,8 +3579,8 @@ def _matrix_marks(slide) -> set[tuple[str, str]]:
 def _case_render_diagrams(tmp: Path) -> None:
     import breach_deck_render as r
 
-    # Every breach layout has a renderer here; the figure layout's renderer
-    # is topic_deck_render.py's.
+    # Every breach layout has a renderer here; topic_deck_render.py registers
+    # the renderers of the layouts only topic decks take (figure, list).
     assert set(r.RENDERERS) == BREACH.layouts, set(r.RENDERERS) ^ BREACH.layouts
     deck = _diagram_sample()
     assert tuple(s.layout for s in deck.slides) == DIAGRAMS
