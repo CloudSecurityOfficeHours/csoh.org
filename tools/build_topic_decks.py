@@ -24,16 +24,31 @@ Outline format (what differs from a breach outline):
     notes:
     Speaker notes run to the next "== " line.
 
+    == <slide heading>
+    layout: code
+    section: <id>
+    Prose, above the code.
+    ```hcl
+    whole lines copied from one <pre> in the extract
+    ```
+    notes:
+    Speaker notes.
+
 - Every slide carries section:, naming the ids of the page sections it draws
   on. An id is the id of the <section> wrapping an h2 in <main>; an h2 with
   no such section gets a slug of its text; the text before the first h2 is
   section "top". `--extract SLUG` lists them.
 - Layouts: text, stats, checklist, list, links, layers, timeline, compare, table,
-  bars, matrix, question, answer and figure. A figure slide names one of the
+  bars, matrix, question, answer, figure and code. A figure slide names one of the
   page's diagram figures, inside a section it cites, and the builder places
   the rendered diagram with the page's own caption under it. A deck whose
   page has a diagram figure has at least one figure slide, and shows each
   figure once.
+- A code slide holds one fenced code block, as a how-to outline writes it:
+  whole, consecutive lines of one <pre> in a section the slide cites, at
+  most 12 rows once long lines wrap. The builder draws it in the how-to
+  renderer's code box, with the page's language label on its tab. Findings
+  about the excerpt name the fence's line. No other layout takes a fence.
 - Every number, technique ID and link in a slide's text and notes appears in
   the sections it cites; the title and promise are held to the whole page.
 - On a page that carries the Wiz disclosure, the first slide that shows Wiz
@@ -82,6 +97,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build_breach_decks as bbd  # noqa: E402
 from build_breach_decks import OutlineError, _capture, _plant, _raises, _rooted, _run_cases  # noqa: E402
+from build_howto_decks import is_contiguous_run  # noqa: E402
 
 # Carded on topics.html, but reference pages rather than teaching topics.
 EXCLUDED = frozenset({"glossary.html", "faq.html", "vendor-landscape.html"})
@@ -235,6 +251,10 @@ class Section:
     plain: list[str] = field(default_factory=list)
     hrefs: list[str] = field(default_factory=list)
     figures: list[str] = field(default_factory=list)
+    # Each <pre> in the section, as the lines a reader sees (entities
+    # decoded, trailing whitespace dropped): what a code slide's excerpt is
+    # held to. They are in `lines` too, between ``` lines.
+    codes: list[list[str]] = field(default_factory=list)
     numbers: set[str] = field(default_factory=set)
     techniques: set[str] = field(default_factory=set)
     links: set[str] = field(default_factory=set)
@@ -478,6 +498,7 @@ class _Walker(HTMLParser):
             for line in code:
                 self._emit(line.rstrip(), line.strip())
             self._emit("```", "")
+            self.cur.codes.append([line.rstrip() for line in code])
         elif tag in ("td", "th") and self.cell is not None and self.row is not None:
             self.row.append((_norm("".join(self.cell[0])), _norm("".join(self.cell[1]))))
             self.cell = None
@@ -864,6 +885,21 @@ def _scope(page: TopicPage, ids) -> _Scope:
     )
 
 
+def _code_findings(s: bbd.BSlide, page: TopicPage, known: list[str], on: str) -> list[str]:
+    """A code slide's excerpt must be whole, consecutive lines of one <pre>
+    in a section it cites, so the slide shows code exactly as the page
+    does. The finding names the fence's line."""
+    def holds(sec: Section) -> bool:
+        return any(is_contiguous_run(s.code, block) for block in sec.codes)
+
+    if any(holds(page.sections[i]) for i in known):
+        return []
+    elsewhere = next((k for k, sec in page.sections.items() if k not in known and holds(sec)), None)
+    if elsewhere is not None:
+        return [f"{s.code_where}: code is from a <pre> block in section {elsewhere}, which this slide does not cite"]
+    return [f"{s.code_where}: code is not whole, consecutive lines of one <pre> block {on}"]
+
+
 def _slide_findings(s: bbd.BSlide, page: TopicPage) -> list[str]:
     if not s.section:
         return [f"{s.where}: slide has no section: line; cite the ids of the sections it draws on"]
@@ -879,6 +915,8 @@ def _slide_findings(s: bbd.BSlide, page: TopicPage) -> list[str]:
         for url in urls:
             if bbd.normalize_url(url) not in scope.links:
                 out.append(f"{s.where}: link {url} is not linked from {on[3:]}")
+        if s.code is not None:
+            out += _code_findings(s, page, known, on)
     if s.layout == "figure" and s.figure:
         fig = page.figures.get(s.figure)
         if fig is None:
@@ -930,7 +968,7 @@ def _wiz_findings(deck: bbd.BDeck, page: TopicPage) -> list[str]:
     for s in deck.slides:
         if shown_yet and notes_done:
             break
-        shown = bbd._slide_text_fields(s, notes=False) + ([s.source[0]] if s.source else [])
+        shown = bbd._slide_text_fields(s, notes=False) + ([s.source[0]] if s.source else []) + (s.code or [])
         if s.layout == "figure":
             shown += _figure_shown_text(page, s.figure)
         if not shown_yet and _names_wiz(shown):
@@ -951,8 +989,10 @@ def topic_page_findings(deck: bbd.BDeck, html: str, today: date | None = None,
     """Every way the deck says something its cited sections do not, or
     breaks a topic deck rule: a page that is not a topic page, a section or
     figure that is not on the page, a figure outside the slide's sections or
-    shown twice, no figure slide on a page with diagrams, and the Wiz
-    disclosure. Raises OutlineError when the page cannot be read."""
+    shown twice, no figure slide on a page with diagrams, a code excerpt
+    that is not whole, consecutive lines of one <pre> in the slide's
+    sections, and the Wiz disclosure. Raises OutlineError when the page
+    cannot be read."""
     where = f"{deck.slug}.deck"
     pages = topic_pages() if pages is None else pages
     if deck.page not in pages:
@@ -1036,7 +1076,7 @@ TOPIC = bbd.DeckKind(
     page_re=TOPIC_PAGE_RE,
     layouts=frozenset({
         "text", "stats", "checklist", "list", "links", "layers", "timeline", "compare", "table", "bars",
-        "matrix", "question", "answer", "figure",
+        "matrix", "question", "answer", "figure", "code",
     }),
     control_keys=frozenset({"layout", "section", "figure", "source", "credit"}),
     min_slides=15,
@@ -1952,7 +1992,13 @@ def _page_invariants(name: str, html: str) -> None:
     assert all(f.section in page.sections for f in page.figures.values()), name
     text = extract_text(html, name)
     assert all(s.lines[0] in text.splitlines() for s in page.sections.values()), name
-    bare = bbd.stamp_page(html, None, TOPIC) if not bbd.loose_deck_markup(html, TOPIC) else html
+    # Every <pre> in <main> is one section's code block, and the extract
+    # shows each between ``` lines, line for line, for a drafter to copy.
+    main = bbd.COMMENT_RE.sub("", bbd.MAIN_RE.search(html).group(1))
+    blocks = [b for s in page.sections.values() for b in s.codes]
+    assert len(blocks) == len(re.findall(r"<pre\b", main, re.I)), name
+    assert all("\n".join(["```", *b, "```"]) in text for b in blocks), name
+    bare =bbd.stamp_page(html, None, TOPIC) if not bbd.loose_deck_markup(html, TOPIC) else html
     try:
         stamped = bbd.stamp_page(bare, ID_A, TOPIC)
     except ValueError:
@@ -2002,6 +2048,180 @@ def _case_slide_count_bounds(tmp: Path) -> None:
             _only(f, f"{total} slides", "15 to 30")
 
 
+# A page with code, in the markup the Build it pages use: in one section a
+# <pre> in a labelled code-block wrapper, holding an entity and a blank line,
+# then an unlabelled <pre>; in the next section one more <pre>.
+HCL_PRE = (
+    '            <div class="code-block" data-lang="hcl"><pre>terraform {\n'
+    '  required_version = "&gt;= 1.6.0"\n'
+    "\n"
+    '  backend "gcs" {\n'
+    '    bucket = "tf-state"\n'
+    "  }\n"
+    "}</pre></div>\n"
+)
+SHELL_PRE = "            <pre>terraform init\nterraform plan</pre>\n"
+STATE_PRE = (
+    '            <div class="code-block" data-lang="hcl"><pre>resource "aws_s3_bucket" "site" {\n'
+    "  bucket = var.bucket_name\n"
+    "}</pre></div>\n"
+)
+CODE_PAGE = _plant(PAGE, '        <section class="cta-section">', (
+    '        <section id="build">\n'
+    "            <h2>Build it</h2>\n"
+    "            <p>Pin the CLI, then plan.</p>\n"
+    f"{HCL_PRE}{SHELL_PRE}"
+    "        </section>\n\n"
+    '        <section id="state">\n'
+    "            <h2>State</h2>\n"
+    "            <p>One bucket holds the state.</p>\n"
+    f"{STATE_PRE}"
+    "        </section>\n\n"
+    '        <section class="cta-section">'
+))
+# The three blocks as a reader sees them.
+HCL_LINES = (
+    "terraform {", '  required_version = ">= 1.6.0"', "", '  backend "gcs" {', '    bucket = "tf-state"', "  }", "}",
+)
+SHELL_LINES = ("terraform init", "terraform plan")
+STATE_LINES = ('resource "aws_s3_bucket" "site" {', "  bucket = var.bucket_name", "}")
+
+
+def _code(*code: str, section: str = "build", layout: str = "code", prose: str = "Pin the CLI.") -> tuple[str, ...]:
+    """A code slide's lines. Under THEADER the heading is line 6, so the
+    fence that opens the excerpt is line 10."""
+    return (f"layout: {layout}", f"section: {section}", prose, "```hcl", *code, "```")
+
+
+def _cgate(*lines: str, html: str = CODE_PAGE) -> list[str]:
+    """The page gate's findings that name an outline line, for one slide.
+    A code finding names the fence's line, not the heading's."""
+    deck = _tparse(_tslide(*lines))
+    return [f for f in topic_page_findings(deck, html, pages=PAGES) if re.match(r"d\.deck:\d+:", f)]
+
+
+def _case_code_excerpt_clean(tmp: Path) -> None:
+    """Control: whole, consecutive lines of one <pre> in a cited section
+    are clean, whether the whole block or a run inside it."""
+    for code in (HCL_LINES, HCL_LINES[3:6], SHELL_LINES, SHELL_LINES[1:]):
+        assert _cgate(*_code(*code)) == [], code
+    # Trailing whitespace is not part of a line.
+    assert _cgate(*_code("terraform init   ")) == []
+    # With two sections cited, the excerpt may come from either.
+    assert _cgate(*_code(*STATE_LINES, section="what-is | state")) == []
+    deck = _tparse(_tslide(*_code(*HCL_LINES)))
+    s = deck.slides[0]
+    assert (s.layout, s.code, s.code_lang, s.code_where) == ("code", list(HCL_LINES), "hcl", "d.deck:10"), s
+    assert s.paragraphs == ["Pin the CLI."] and bbd.slide_findings(s, TOPIC) == []
+
+
+def _case_code_two_blocks(tmp: Path) -> None:
+    # The last line of one <pre> and the first of the next, in one section.
+    _only(_cgate(*_code("}", "terraform init")), "d.deck:10:", "one <pre>", "section build")
+    # Across two cited sections.
+    f = _cgate(*_code("terraform plan", STATE_LINES[0], section="build | state"))
+    _only(f, "d.deck:10:", "one <pre>")
+
+
+def _case_code_line_not_on_page(tmp: Path) -> None:
+    _only(_cgate(*_code("terraform init", "terraform apply")), "d.deck:10:", "one <pre>")
+    _only(_cgate(*_code("terraform destroy")), "d.deck:10:")
+
+
+def _case_code_partial_lines(tmp: Path) -> None:
+    for code in (
+        ("terraform",),                                      # a line cut short
+        ('required_version = ">= 1.6.0"',),                  # its indentation dropped
+        ('  required_version = ">= 1.6"',),                  # its end cut off
+        ('  required_version = "&gt;= 1.6.0"',),             # the markup, not what a reader sees
+        ("terraform {", '  backend "gcs" {'),                # lines skipped between two
+    ):
+        _only(_cgate(*_code(*code)), "d.deck:10:", "whole, consecutive lines")
+
+
+def _case_code_outside_section(tmp: Path) -> None:
+    _only(_cgate(*_code(*STATE_LINES)), "d.deck:10:", "section state", "does not cite")
+    # Control: citing the section the <pre> is in clears it.
+    assert _cgate(*_code(*STATE_LINES, section="state")) == []
+    # A <pre> in the text above the first h2 is section top's.
+    top = _plant(CODE_PAGE, "<p><strong>The 30-second version:", "<pre>kubectl get pods</pre><p><strong>The 30-second version:")
+    _only(_cgate(*_code("kubectl get pods"), html=top), "section top", "does not cite")
+    assert _cgate(*_code("kubectl get pods", section="top"), html=top) == []
+
+
+def _case_code_refused_for_breach(tmp: Path) -> None:
+    assert "code" not in bbd.BREACH.layouts and "code" in TOPIC.layouts
+    _raises(lambda: bbd.parse_outline_text(
+        bbd.HEADER + "== S\nlayout: code\nText.\nnotes:\nN.\n", "d.deck"), "unknown layout 'code'")
+    _raises(lambda: bbd.parse_outline_text(
+        bbd.HEADER + "== S\nText.\n```\nterraform init\n```\nnotes:\nN.\n", "d.deck"),
+        "breach outlines have no code fences")
+    # Control: the same fence parses on a topic code slide.
+    assert _tparse(_tslide("layout: code", "section: build", "```", "terraform init", "```")).slides[0].code
+
+
+def _case_code_parse(tmp: Path) -> None:
+    # A code block on any other layout is refused at the fence's line.
+    e = _raises(lambda: _tparse(_tslide("section: build", "Text.", "```", "terraform init", "```")),
+                "a text slide does not take a code block")
+    assert str(e).startswith("d.deck:9:"), e
+    # A code slide needs one.
+    _only(bbd.slide_findings(_tparse(_tslide("layout: code", "section: build", "Text.")).slides[0], TOPIC),
+          "needs a code block")
+    _raises(lambda: _tparse(_tslide(*_code("terraform init"), "```", "terraform plan", "```")), "one code block")
+    e = _raises(lambda: _tparse("== S\nlayout: code\nsection: build\n```\nterraform init\n== T\n"), "never closed")
+    assert str(e).startswith("d.deck:9:"), e
+    _raises(lambda: _tparse(_tslide(*_code("   "))), "empty code block")
+    _raises(lambda: _tparse(_tslide(*_code("terraform init"), notes="Say it.\n```\nx\n```")), "notes")
+    # Inside the fence every line is code, a slide marker or notes: included.
+    s = _tparse(_tslide(*_code("== not a slide", "notes:", "layout: text"))).slides[0]
+    assert s.code == ["== not a slide", "notes:", "layout: text"] and s.layout == "code", s
+
+
+def _case_code_limits(tmp: Path) -> None:
+    def style(*code: str, prose: str = "Pin the CLI.") -> list[str]:
+        return bbd.slide_findings(_tparse(_tslide(*_code(*code, prose=prose))).slides[0], TOPIC)
+
+    assert style(*[f"line {i}" for i in range(12)]) == []
+    _only(style(*[f"line {i}" for i in range(13)]), "d.deck:10:", "13 rows", "the limit is 12")
+    # A line longer than the code box is wide wraps, and counts the rows it takes.
+    long = " ".join(["word"] * 20)
+    assert len(long) > 84
+    _only(style(*[f"line {i}" for i in range(11)], long), "13 rows")
+    # The prose limit is the text slide's.
+    assert style("x", prose=" ".join(["word"] * 40)) == []
+    _only(style("x", prose=" ".join(["word"] * 41)), "41 words of prose; the limit is 40")
+
+
+def _case_code_shows_wiz(tmp: Path) -> None:
+    """A code box is shown, so an excerpt that names Wiz makes its slide the
+    first to show Wiz on a page with the disclosure."""
+    html = _plant(CODE_PAGE, "terraform plan</pre>", "terraform plan -var vendor=Wiz</pre>")
+    deck = _tparse(_tslide(*_code("terraform plan -var vendor=Wiz")))
+    f = [x for x in topic_page_findings(deck, html, pages=PAGES) if "Wiz" in x]
+    _only(f, "first slide to show Wiz")
+    # Control: the disclosure in the slide's prose satisfies it.
+    deck = _tparse(_tslide(*_code("terraform plan -var vendor=Wiz", prose=f"It names Wiz {DISCLOSURE}.")))
+    assert [x for x in topic_page_findings(deck, html, pages=PAGES) if "Wiz" in x] == []
+
+
+def _case_extract_prints_code(tmp: Path) -> None:
+    """Each <pre> prints between ``` lines in its section, line for line as
+    a reader sees it, so a drafter can copy whole lines of one block; and
+    adding code changes no other section's hash."""
+    # The heading list comes first, so the section starts at its last heading line.
+    got = extract_text(CODE_PAGE, PAGE_PATH, ["build"]).rsplit("## Build it {#build}\n", 1)[1]
+    fence = "```"
+    want = "\n".join(["Pin the CLI, then plan.", fence, *HCL_LINES, fence, fence, *SHELL_LINES, fence]) + "\n"
+    assert got == want, "\n" + got
+    page = parse_topic_page(CODE_PAGE, PAGE_PATH)
+    assert page.sections["build"].codes == [list(HCL_LINES), list(SHELL_LINES)], page.sections["build"].codes
+    assert page.sections["state"].codes == [list(STATE_LINES)]
+    assert all(not s.codes for k, s in page.sections.items() if k not in ("build", "state"))
+    base, new = section_hashes(PAGE), section_hashes(CODE_PAGE)
+    assert {k: new[k] for k in base} == base
+
+
 CASES: list = [
     ("figure_keyed_by_title_id", _case_figure_keyed_by_title_id),
     ("section_unknown", _case_section_unknown),
@@ -2038,6 +2258,16 @@ CASES: list = [
     ("stale_sees_cover", _case_stale_sees_cover),
     ("slug_from_plain_text", _case_slug_from_plain_text),
     ("slide_count_bounds", _case_slide_count_bounds),
+    ("code_excerpt_clean", _case_code_excerpt_clean),
+    ("code_two_blocks", _case_code_two_blocks),
+    ("code_line_not_on_page", _case_code_line_not_on_page),
+    ("code_partial_lines", _case_code_partial_lines),
+    ("code_outside_section", _case_code_outside_section),
+    ("code_refused_for_breach", _case_code_refused_for_breach),
+    ("code_parse", _case_code_parse),
+    ("code_limits", _case_code_limits),
+    ("code_shows_wiz", _case_code_shows_wiz),
+    ("extract_prints_code", _case_extract_prints_code),
 ]
 
 

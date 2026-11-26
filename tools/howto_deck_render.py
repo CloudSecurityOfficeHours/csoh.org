@@ -130,6 +130,82 @@ def _heading_height(text: str) -> float:
     return n * STYLE["heading_pt"] * STYLE["line_heading"] / 72 + 0.1
 
 
+def _add_rect(slide, name, x, y, w, h, color):
+    shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(y), Inches(w), Inches(h))
+    shape.name = name
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = _rgb(color)
+    shape.line.fill.background()
+    shape.shadow.inherit = False
+    return shape
+
+
+def _frame(shape, margin: float, anchor=MSO_ANCHOR.TOP):
+    tf = shape.text_frame
+    tf.word_wrap = True
+    tf.auto_size = MSO_AUTO_SIZE.NONE
+    tf.vertical_anchor = anchor
+    for side in ("margin_left", "margin_right", "margin_top", "margin_bottom"):
+        setattr(tf, side, Inches(margin))
+    return tf
+
+
+def _fill(tf, paras, font, size, color, bold=False, align=PP_ALIGN.LEFT, gap=0.0):
+    for i, text in enumerate(paras):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.alignment = align
+        if gap and i < len(paras) - 1:
+            p.space_after = Pt(gap)
+        run = p.add_run()
+        run.text = text
+        run.font.name = font
+        run.font.size = Pt(size)
+        run.font.bold = bold
+        run.font.color.rgb = _rgb(color)
+
+
+def code_tab(label: str | None, file: str | None) -> str | None:
+    """The text on a code box's tab, from build_howto_decks.excerpt_label
+    and excerpt_file: the file a heredoc writes, else the page's language
+    label uppercased as the site prints it, else None for no tab."""
+    return file or (label.upper() if label else None)
+
+
+def code_box(page, x: float, y: float, w: float, lines: list[str], label: str | None = None) -> float:
+    """The code box at (x, y), w wide: the lines, one paragraph each, in the
+    code face on a dark panel as tall as their wrapped rows, and label, when
+    given, on a tab on its top edge. page is any slide under construction
+    with a .slide to draw on and a .reserve(bottom) that refuses content
+    ending below its limit: the how-to page here, and the topic deck page in
+    topic_deck_render.py, so both deck families draw the same box. Returns
+    the box's bottom."""
+    h = _code_height(lines)
+    page.reserve(y + h)
+    shape = _add_rect(page.slide, CODE_SHAPE, x, y, w, h, STYLE["dark"])
+    tf = _frame(shape, STYLE["code_pad"])
+    _fill(tf, lines, STYLE["code_font"], STYLE["code_pt"], STYLE["code_text"])
+    if label:
+        _code_label(page.slide, x, y, label)
+    return y + h
+
+
+def _code_label(slide, x: float, y: float, label: str) -> None:
+    """The tab text, as given, on the box's top edge. It spans
+    the block gap above the box and the box's top padding, so it adds no
+    height and stays clear of the first code row."""
+    text = label
+    char_w = (0.6 * STYLE["label_pt"] + STYLE["label_spacing_pt"]) / 72
+    w = len(text) * char_w + 2 * STYLE["label_pad"]
+    top = y - STYLE["label_above"]
+    h = STYLE["label_above"] + STYLE["label_below"]
+    tab = _add_rect(slide, LABEL_SHAPE, x, top, w, h, STYLE["dark"])
+    tf = _frame(tab, 0.0, anchor=MSO_ANCHOR.MIDDLE)
+    tf.word_wrap = False
+    tf.margin_left = tf.margin_right = Inches(STYLE["label_pad"])
+    _fill(tf, [text], STYLE["code_font"], STYLE["label_pt"], STYLE["muted_light"], bold=True)
+    tab.text_frame.paragraphs[0].runs[0]._r.get_or_add_rPr().set("spc", str(round(STYLE["label_spacing_pt"] * 100)))
+
+
 class _Page:
     """One slide under construction. Tracks the lowest edge of every element
     so an overflow is reported before the file is written."""
@@ -145,35 +221,7 @@ class _Page:
             self._rect(BAR_SHAPE, 0, 0, STYLE["bar_w"], STYLE["slide_h"], STYLE["bar"])
 
     def _rect(self, name, x, y, w, h, color):
-        shape = self.slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(y), Inches(w), Inches(h))
-        shape.name = name
-        shape.fill.solid()
-        shape.fill.fore_color.rgb = _rgb(color)
-        shape.line.fill.background()
-        shape.shadow.inherit = False
-        return shape
-
-    def _frame(self, shape, margin: float, anchor=MSO_ANCHOR.TOP):
-        tf = shape.text_frame
-        tf.word_wrap = True
-        tf.auto_size = MSO_AUTO_SIZE.NONE
-        tf.vertical_anchor = anchor
-        for side in ("margin_left", "margin_right", "margin_top", "margin_bottom"):
-            setattr(tf, side, Inches(margin))
-        return tf
-
-    def _fill(self, tf, paras, font, size, color, bold=False, align=PP_ALIGN.LEFT, gap=0.0):
-        for i, text in enumerate(paras):
-            p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-            p.alignment = align
-            if gap and i < len(paras) - 1:
-                p.space_after = Pt(gap)
-            run = p.add_run()
-            run.text = text
-            run.font.name = font
-            run.font.size = Pt(size)
-            run.font.bold = bold
-            run.font.color.rgb = _rgb(color)
+        return _add_rect(self.slide, name, x, y, w, h, color)
 
     def text(
         self, name, x, y, w, h, paras, font, size, color, bold=False, align=PP_ALIGN.LEFT, gap=0.0,
@@ -184,35 +232,12 @@ class _Page:
             self.reserve(y + h)
         box = self.slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
         box.name = name
-        tf = self._frame(box, 0.0)
-        self._fill(tf, paras, font, size, color, bold, align, gap)
+        tf = _frame(box, 0.0)
+        _fill(tf, paras, font, size, color, bold, align, gap)
         return box
 
     def code(self, x, y, w, lines, label=None):
-        h = _code_height(lines)
-        self.reserve(y + h)
-        shape = self._rect(CODE_SHAPE, x, y, w, h, STYLE["dark"])
-        tf = self._frame(shape, STYLE["code_pad"])
-        self._fill(tf, lines, STYLE["code_font"], STYLE["code_pt"], STYLE["code_text"])
-        if label:
-            self._label(x, y, label)
-        return y + h
-
-    def _label(self, x, y, label):
-        """The tab text, as given, on the box's top edge. It spans
-        the block gap above the box and the box's top padding, so it adds no
-        height and stays clear of the first code row."""
-        text = label
-        char_w = (0.6 * STYLE["label_pt"] + STYLE["label_spacing_pt"]) / 72
-        w = len(text) * char_w + 2 * STYLE["label_pad"]
-        top = y - STYLE["label_above"]
-        h = STYLE["label_above"] + STYLE["label_below"]
-        tab = self._rect(LABEL_SHAPE, x, top, w, h, STYLE["dark"])
-        tf = self._frame(tab, 0.0, anchor=MSO_ANCHOR.MIDDLE)
-        tf.word_wrap = False
-        tf.margin_left = tf.margin_right = Inches(STYLE["label_pad"])
-        self._fill(tf, [text], STYLE["code_font"], STYLE["label_pt"], STYLE["muted_light"], bold=True)
-        tab.text_frame.paragraphs[0].runs[0]._r.get_or_add_rPr().set("spc", str(round(STYLE["label_spacing_pt"] * 100)))
+        return code_box(self, x, y, w, lines, label)
 
     def reserve(self, bottom: float) -> None:
         if bottom > STYLE["bottom_limit"] + 1e-9:
@@ -281,8 +306,7 @@ def _content(prs, deck, slide, n: int, total: int, headings) -> None:
         pg.text("body", x, y, w, h, items, STYLE["body_font"], STYLE["body_pt"], STYLE["text"], gap=STYLE["para_gap"] * 72)
         y += h + STYLE["block_gap"]
     if slide.code:
-        tab = slide.code_file or (slide.code_label.upper() if slide.code_label else None)
-        y = pg.code(x, y, w, slide.code, tab)
+        y = pg.code(x, y, w, slide.code, code_tab(slide.code_label, slide.code_file))
         if slide.credit:
             y += 0.05
             pg.text("credit", x, y, w, 0.3, [slide.credit], STYLE["body_font"], STYLE["small_pt"], STYLE["muted"])

@@ -3,13 +3,17 @@
 Render a topic deck (a BDeck parsed with build_topic_decks.TOPIC) to a 16:9
 .pptx, and reopen the saved file to verify it.
 
-Every layout but one is breach_deck_render.py's, drawn by its render_deck
+Every layout but two is breach_deck_render.py's, drawn by its render_deck
 with a topic page class and topic generated slides. This module adds:
 
 - the figure layout: one of the page's diagrams, rendered to PNG, scaled to
   fit with its aspect ratio kept and never past 1.5 image pixels per point
   of placed width, on a white panel, with the page's own <figcaption> under
   it and the SVG's <title> as its alt text;
+- the code layout: the slide's excerpt of one of the page's <pre> blocks in
+  howto_deck_render.code_box, the how-to decks' code box, with the tab the
+  how-to build would print for the same excerpt (the page's language
+  label, or the file a heredoc writes);
 - cover art: the page's hero illustration, or its tile from topics.html
   when it has none;
 - the words of the generated how-to and closing slides, set on its page
@@ -48,6 +52,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import breach_deck_render as r  # noqa: E402
 import build_breach_decks as bbd  # noqa: E402
 import build_topic_decks as btd  # noqa: E402
+import howto_deck_render as hdr  # noqa: E402
+from build_howto_decks import excerpt_file, excerpt_label  # noqa: E402
 from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE  # noqa: E402
 from pptx.enum.text import PP_ALIGN  # noqa: E402
 from pptx.util import Inches  # noqa: E402
@@ -265,6 +271,8 @@ class _Context:
     page: btd.TopicPage
     art: dict[str, Path]
     cover: tuple[Path, str]
+    # Each code slide's tab text (or None), by the slide's where.
+    tabs: dict[str, str | None]
 
 
 class _TopicPage(r._Page):
@@ -329,6 +337,22 @@ def _render_figure(page: _TopicPage, s) -> None:
                  [r._p(fig.caption, cpt, page.muted)], align=PP_ALIGN.CENTER)
 
 
+def page_code_tab(page_html: str, lines: list[str]) -> str | None:
+    """The tab on a code slide's box: what the how-to build prints for the
+    same excerpt of its page, the page's language label uppercased (none
+    for an unlabelled or text block), or the file a heredoc writes."""
+    return hdr.code_tab(excerpt_label(page_html, lines), excerpt_file(page_html, lines))
+
+
+def _render_code(page: _TopicPage, s) -> None:
+    """The heading, the slide's prose, then the how-to renderer's code box
+    with its tab, spaced as a how-to code slide is."""
+    y = r._heading(page, s.heading, r.Y) + STYLE["block_gap"]
+    if s.paragraphs or s.bullets:
+        y = r._body(page, s.paragraphs, s.bullets, y) + STYLE["block_gap"]
+    hdr.code_box(page, r.X, y, r.W, s.code, page.ctx.tabs.get(s.where))
+
+
 def _render_cover(page: _TopicPage) -> None:
     """The art in a box on the right, and the breach cover's lines in the
     narrower column beside it."""
@@ -341,7 +365,7 @@ def _render_cover(page: _TopicPage) -> None:
                  LOOK["cover_title_pt"], LOOK["cover_promise_pt"])
 
 
-RENDERERS = {**r.RENDERERS, "figure": _render_figure, "list": r._render_list}
+RENDERERS = {**r.RENDERERS, "figure": _render_figure, "code": _render_code, "list": r._render_list}
 
 
 def _cover_art(deck, html: str, art: dict[str, Path]) -> tuple[Path, str]:
@@ -376,7 +400,8 @@ def render_deck(deck, out: Path, page_html: str | None = None, art: dict[str, Pa
         wanted += [s.figure for s in deck.slides if s.layout == "figure" and s.figure in page.figures]
         art = render_figure_pngs(bbd.ROOT / deck.page, wanted, figure_cache()) if wanted else {}
     cover = _cover_art(deck, page_html, art)
-    ctx = _Context(page, art, cover)
+    tabs = {s.where: page_code_tab(page_html, s.code) for s in deck.slides if s.layout == "code" and s.code}
+    ctx = _Context(page, art, cover, tabs)
     return r.render_deck(deck, out, page_cls=functools.partial(_TopicPage, ctx=ctx), renderers=RENDERERS,
                          cover=_render_cover)
 
@@ -411,12 +436,36 @@ def _picture_problems(tag: str, pic, want_alt: str | None) -> list[str]:
     return out
 
 
+def _code_problems(tag: str, slide, s, page_html: str) -> list[str]:
+    """A code slide carries one code box holding its excerpt line for line,
+    and the tab page_code_tab gives (or none); no other slide carries
+    either. The run sizes are breach verify's, which holds a code slide's
+    box to the how-to code sizes."""
+    boxes = [sh for sh in slide.shapes if sh.name == hdr.CODE_SHAPE]
+    tabs = [sh.text_frame.text for sh in slide.shapes if sh.name == hdr.LABEL_SHAPE]
+    if s is None or s.layout != "code":
+        if boxes or tabs:
+            return [f"{tag}: a {s.layout if s else 'generated'} slide carries a code box or tab"]
+        return []
+    if len(boxes) != 1:
+        return [f"{tag}: {len(boxes)} code boxes, expected 1"]
+    out = []
+    if [p.text for p in boxes[0].text_frame.paragraphs] != s.code:
+        out.append(f"{tag}: the code box does not hold the slide's excerpt line for line")
+    want = page_code_tab(page_html, s.code)
+    if tabs != ([want] if want else []):
+        out.append(f"{tag}: code tab is {tabs!r}, expected {[want] if want else []!r}")
+    return out
+
+
 def verify_pptx(path: Path, deck, pictures: bool = True, page_html: str | None = None) -> list[str]:
     """Every breach verify finding (pictures allowed when pictures is True),
     plus the pictures: the cover carries the art, each figure slide its one
     figure with the page's caption, and no other slide a picture; every
     picture has the expected alt text, its image's aspect ratio, at least
-    MIN_PX_PER_PT pixels per point, no crop, and more than one colour."""
+    MIN_PX_PER_PT pixels per point, no crop, and more than one colour. And
+    the code: each code slide's box holds its excerpt with the page's tab,
+    and no other slide has a code box."""
     findings = r.verify_pptx(path, deck, pictures=pictures)
     if page_html is None:
         page_html = (bbd.ROOT / deck.page).read_text(encoding="utf-8")
@@ -441,6 +490,7 @@ def verify_pptx(path: Path, deck, pictures: bool = True, page_html: str | None =
             findings.append(f"{tag}: pictures {[p.name for p in pics]}, expected {[name for name, _ in want]}")
         for pic, (_name, alt) in zip(pics, want):
             findings += _picture_problems(tag, pic, alt)
+        findings += _code_problems(tag, slide, s, page_html)
     return findings
 
 
@@ -736,6 +786,106 @@ def _case_render_png_cached_and_checked(tmp: Path) -> None:
     _layout_error(lambda: render_figure_pngs(page, ["nope"], out), "nope")
 
 
+def _code_deck() -> bbd.BDeck:
+    """The figure deck plus two code slides on CODE_PAGE: the labelled HCL
+    block under a line of prose (file slide 5), then the unlabelled shell
+    block alone (file slide 6)."""
+    deck = _deck(FIG_A)
+    for n, (heading, code, prose) in enumerate((
+        ("Pin the CLI and the state store", btd.HCL_LINES, ["Pin the CLI, then plan."]),
+        ("Then plan", btd.SHELL_LINES, []),
+    )):
+        s = _slide(heading, "code", section=["build"], paragraphs=list(prose), code=list(code), code_lang="hcl")
+        s.where, s.code_where = f"t.deck:{70 + 10 * n}", f"t.deck:{73 + 10 * n}"
+        deck.slides.append(s)
+    return deck
+
+
+def _case_code_box_from_howto(tmp: Path) -> None:
+    """A code slide carries the how-to renderer's code box: the shapes
+    howto_deck_render.code_box draws for the same lines, the same size and
+    text, with the page's language label on its tab and no tab for an
+    unlabelled <pre>."""
+    from lxml import etree
+
+    deck = _code_deck()
+    out = _render(tmp, deck, _art(tmp), html=btd.CODE_PAGE)
+    assert verify_pptx(out, deck, page_html=btd.CODE_PAGE) == [], verify_pptx(out, deck, page_html=btd.CODE_PAGE)
+    slides = list(r.reopen(out).slides)
+    box, tab = _one(slides[4], "code"), _one(slides[4], "code-label")
+    assert [p.text for p in box.text_frame.paragraphs] == list(btd.HCL_LINES)
+    assert tab.text_frame.text == "HCL", tab.text_frame.text
+    assert tab.left == box.left and tab.top < box.top < tab.top + tab.height, (tab.top, box.top)
+    # Below the slide's heading and prose.
+    assert _one(slides[4], "body").top < tab.top
+    # The how-to renderer's own box for the same lines.
+    hprs = hdr.Presentation()
+    hp = hdr._Page(hprs, "h", dark=False)
+    hdr.code_box(hp, r.X, 1.0, r.W, list(btd.HCL_LINES), "HCL")
+    hprs.save(str(tmp / "h.pptx"))
+    hslide = list(r.reopen(tmp / "h.pptx").slides)[0]
+    for name in ("code", "code-label"):
+        mine, theirs = _one(slides[4], name), _one(hslide, name)
+        assert (mine.width, mine.height, mine.auto_shape_type) == (theirs.width, theirs.height, theirs.auto_shape_type), name
+        assert etree.tostring(mine._element.txBody) == etree.tostring(theirs._element.txBody), name
+        assert etree.tostring(mine._element.spPr.find(".//{*}solidFill")) == etree.tostring(
+            theirs._element.spPr.find(".//{*}solidFill")), name
+    assert [p.text for p in _one(slides[5], "code").text_frame.paragraphs] == list(btd.SHELL_LINES)
+    assert not [sh for sh in slides[5].shapes if sh.name == "code-label"]
+
+
+def _case_code_verified(tmp: Path) -> None:
+    """verify_pptx holds a code slide to its excerpt, its tab and the
+    how-to code sizes, and no other slide to a code box."""
+    from pptx.util import Pt
+
+    deck = _code_deck()
+    out = _render(tmp, deck, _art(tmp), html=btd.CODE_PAGE)
+
+    def planted(n: int, change) -> list[str]:
+        prs = r.reopen(out)
+        change(list(prs.slides)[n - 1])
+        prs.save(str(tmp / "bad.pptx"))
+        return verify_pptx(tmp / "bad.pptx", deck, page_html=btd.CODE_PAGE)
+
+    def reline(sl):
+        _one(sl, "code").text_frame.paragraphs[1].runs[0].text = '  required_version = ">= 1.5.0"'
+
+    def shrink(sl):
+        _one(sl, "code").text_frame.paragraphs[0].runs[0].font.size = Pt(12)
+
+    def untab(sl):
+        el = _one(sl, "code-label")._element
+        el.getparent().remove(el)
+
+    def rename(sl):
+        _one(sl, "heading").name = "code"
+
+    for n, change, needles in (
+        (5, reline, ("slide 5", "excerpt")),
+        (5, shrink, ("slide 5", "code run is 12.0 pt", "expected 16")),
+        (5, untab, ("slide 5", "tab")),
+        (3, rename, ("slide 3", "code box")),
+    ):
+        f = planted(n, change)
+        assert any(all(x in g for x in needles) for g in f), (needles, f)
+    # Control: the file as built is clean.
+    assert verify_pptx(out, deck, page_html=btd.CODE_PAGE) == []
+
+
+def _case_code_too_tall(tmp: Path) -> None:
+    deck = _code_deck()
+    s = deck.slides[-2]
+    s.paragraphs = [" ".join(["Pin"] * 100)]
+    s.code = [f"line {i}" for i in range(12)]
+    _layout_error(lambda: _render(tmp, deck, _art(tmp), html=btd.CODE_PAGE), "t.deck:70")
+    assert not (tmp / "t.pptx").exists(), "a refused render left a file"
+    # Control: the same twelve rows under one line of prose fit.
+    s.paragraphs = ["Pin the CLI, then plan."]
+    out = _render(tmp, deck, _art(tmp), html=btd.CODE_PAGE)
+    assert verify_pptx(out, deck, page_html=btd.CODE_PAGE) == []
+
+
 RENDER_CASES: list = [
     ("figure_fits_and_keeps_ratio", _case_figure_fits_and_keeps_ratio),
     ("figure_resolution", _case_figure_resolution),
@@ -746,6 +896,9 @@ RENDER_CASES: list = [
     ("cover_hero_or_tile", _case_cover_hero_or_tile),
     ("breach_still_refuses_pictures", _case_breach_still_refuses_pictures),
     ("render_png_cached_and_checked", _case_render_png_cached_and_checked),
+    ("code_box_from_howto", _case_code_box_from_howto),
+    ("code_verified", _case_code_verified),
+    ("code_too_tall", _case_code_too_tall),
 ]
 
 

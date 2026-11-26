@@ -92,6 +92,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_howto_decks import (  # noqa: E402
     EM_DASH,
     EN_DASH,
+    MAX_CODE_LINES,
     SPACED_HYPHEN_RE,
     PRES_ID_RE,
     SHA256_RE,
@@ -99,6 +100,7 @@ from build_howto_decks import (  # noqa: E402
     OutlineError,
     _is_iso_date,
     _run_cases,
+    code_visual_rows,
 )
 
 MAX_PROSE_WORDS = 40
@@ -192,6 +194,10 @@ LAYOUTS: dict[str, LayoutSpec] = {
     # One of the page's own diagrams, rendered to a picture; its figure:
     # line names the figure. Only a kind whose slides carry pictures takes it.
     "figure": LayoutSpec({}, "optional", ("figure",), MAX_FIGURE_PROSE_WORDS),
+    # An excerpt of one of the page's code blocks, in a fenced block as the
+    # how-to outlines write it, drawn in the how-to renderer's code box.
+    # Only the topic kind takes it.
+    "code": LayoutSpec({}, "optional", ("code",)),
 }
 
 @dataclass
@@ -216,6 +222,13 @@ class BSlide:
     # Only a kind whose control keys include them reads these lines.
     section: list[str] | None = None
     figure: str | None = None
+    # A code slide's excerpt, the language after its opening fence (which,
+    # as in a how-to outline, nothing reads: the box's tab comes from the
+    # page), and the fence's file:line, which code findings name. Only a
+    # kind with the code layout reads a fence.
+    code: list[str] | None = None
+    code_lang: str | None = None
+    code_where: str = ""
 
 
 @dataclass
@@ -294,8 +307,8 @@ BREACH = DeckKind(
     deck_attr="data-breach-deck",
     header_keys=HEADER_KEYS,
     page_re=PAGE_RE,
-    # Every layout but figure: breach slides carry no pictures.
-    layouts=frozenset(LAYOUTS) - {"figure", "list"},
+    # Breach slides carry no pictures and no code.
+    layouts=frozenset(LAYOUTS) - {"figure", "list", "code"},
     control_keys=frozenset(CONTROL_KEYS),
     min_slides=MIN_SLIDES,
     max_slides=MAX_SLIDES,
@@ -368,6 +381,10 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str, kind: DeckKind
     para: list[str] = []
     notes: list[str] = []
     in_notes = False
+    # Inside a code fence every line is code, kept as written, until a line
+    # that is exactly ``` (the how-to outline rule).
+    in_fence = False
+    fence_line = 0
     # Typed lines are checked against the layout when the slide ends, because
     # the layout line may come after them. Each entry keeps its line number.
     typed: list[tuple[int, str, list[str]]] = []
@@ -415,6 +432,11 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str, kind: DeckKind
                 name, seen["figure"],
                 f"a {cur.layout} slide does not take a figure: line; a figure slide does",
             )
+        if cur.code is not None and cur.layout != "code":
+            raise _err(
+                name, int(cur.code_where.rsplit(":", 1)[1]),
+                f"a {cur.layout} slide does not take a code block; a code slide does",
+            )
         if not cur.notes:
             raise _err(name, at, "slide has no notes: block")
         slides.append(cur)
@@ -425,6 +447,16 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str, kind: DeckKind
 
     for i, line in enumerate(lines):
         lineno = first_lineno + i
+        if in_fence:
+            assert cur is not None and cur.code is not None
+            if line == "```":
+                in_fence = False
+                if not any(c.strip() for c in cur.code):
+                    raise _err(name, fence_line, "empty code block")
+            else:
+                cur.code.append(line)
+            continue
+
         if line.startswith("== "):
             finish()
             heading = line[3:].strip()
@@ -442,7 +474,17 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str, kind: DeckKind
 
         stripped = line.strip()
         if stripped.startswith("```"):
-            raise _err(name, lineno, "breach outlines have no code fences")
+            if "code" not in kind.layouts:
+                raise _err(name, lineno, f"{kind.name} outlines have no code fences")
+            if in_notes:
+                raise _err(name, lineno, "a code block goes above the notes: line, not in the notes")
+            if cur.code is not None:
+                raise _err(name, lineno, "a slide may have only one code block")
+            flush_para()
+            cur.code, cur.code_lang = [], stripped[3:].strip() or None
+            cur.code_where = f"{name}:{lineno}"
+            in_fence, fence_line = True, lineno
+            continue
 
         if in_notes:
             if stripped:
@@ -514,6 +556,8 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str, kind: DeckKind
         else:
             raise _err(name, lineno, f"unknown line key {key!r}")
 
+    if in_fence:
+        raise _err(name, fence_line, "code fence is never closed")
     finish()
     return slides
 
@@ -604,7 +648,14 @@ def slide_findings(s: BSlide, kind: DeckKind = BREACH) -> list[str]:
 
     for ctl in spec.requires:
         if not getattr(s, ctl):
-            out.append(f"{s.where}: a {s.layout} slide needs a {ctl}: line")
+            what = "a code block" if ctl == "code" else f"a {ctl}: line"
+            out.append(f"{s.where}: a {s.layout} slide needs {what}")
+    if s.code is not None:
+        rows = code_visual_rows(s.code)
+        if rows > MAX_CODE_LINES:
+            out.append(
+                f"{s.code_where}: code takes {rows} rows once long lines wrap; the limit is {MAX_CODE_LINES}"
+            )
 
     prose = s.paragraphs + s.bullets
     if spec.prose == "none" and prose:

@@ -370,8 +370,9 @@ The topic tool is the breach tool's machinery run with a different
 `DeckKind`: the parser, style limits, mapping, stamping, staleness and build
 loop live once in `tools/build_breach_decks.py`, and every function that reads
 a kind-specific value takes a `kind`. `tools/topic_deck_render.py` draws every
-layout but `figure` through `tools/breach_deck_render.py`, and adds the
-`figure` layout, the cover art and the topic wording of the generated slides.
+layout but `figure` and `code` through `tools/breach_deck_render.py`, and adds
+the `figure` layout, the `code` layout (drawn with the how-to renderer's code
+box), the cover art and the topic wording of the generated slides.
 
 ```bash
 python3 tools/build_topic_decks.py --self-test    # run the built-in cases
@@ -397,7 +398,9 @@ outlines.
 `# <h1> {#top}`, then each h2 as `## <text> {#id}` and each h3 as `### <text>`,
 paragraphs as single lines, list items as `- ` lines, table rows as
 `| a | b |`, a link's URL in parentheses after its text except for glossary
-links, and each diagram where it sits as
+links, each `<pre>` where it sits between two lines of three backticks, line
+for line as a reader sees it (entities decoded, indentation kept, trailing
+spaces dropped), and each diagram where it sits as
 `[figure #id] <title>: <description> (caption: <caption>)`. The table of
 contents, the page finder, the `page-meta` line and the deck line are left
 out, and so are the labels inside an SVG. With `--sections a,b` it prints the
@@ -434,9 +437,9 @@ Speaker notes, on every slide.
 - Control lines are `layout`, `section`, `figure`, `source` and `credit`;
   there is no `stage`, `stages` or `phase`.
 - Layouts: `text`, `stats`, `checklist`, `list`, `links`, `layers`,
-  `timeline`, `compare`, `table`, `bars`, `matrix`, `question`, `answer` and
-  `figure`, with the breach layouts' typed lines. There is no `stage`,
-  `stage-group`, `flow` or `background`.
+  `timeline`, `compare`, `table`, `bars`, `matrix`, `question`, `answer`,
+  `figure` and `code`, with the breach layouts' typed lines. There is no
+  `stage`, `stage-group`, `flow` or `background`.
 - A `list` slide takes 2 to 7 `item:` lines and draws each with a dot where a
   `checklist` draws a tick box, so pitfalls and anti-patterns do not read as
   things to do. Like `check:` lines, items are typed fields, not prose.
@@ -447,21 +450,54 @@ Speaker notes, on every slide.
   caption: the builder places the page's `<figcaption>` under the picture.
   Each figure appears at most once per deck, and a deck whose page has a
   diagram has at least one `figure` slide.
+- A `code` slide shows an excerpt of one of the page's code blocks, written
+  as a how-to outline writes one: a fence line of three backticks (a
+  language after them is allowed and ignored), the excerpt, then a line that
+  is exactly three backticks. Write the prose above the fence and `notes:`
+  below it:
+
+  ````text
+  == Pin the CLI and the providers
+  layout: code
+  section: anatomy
+  The terraform block pins versions and says where state lives.
+  ```hcl
+  terraform {
+    required_version = ">= 1.6.0"
+  ```
+  notes:
+  Speaker notes.
+  ````
+
+  The excerpt is whole, consecutive lines of one `<pre>` in a section the
+  slide cites: copy them from between the backtick lines in the extract,
+  indentation included. `--check` reports an excerpt that joins two blocks,
+  skips or shortens a line, or holds a line the page does not, and names the
+  section when the lines are a block in a section the slide does not cite;
+  each such finding names the fence's line. Trailing spaces do not count.
+  No other layout takes a fence, a slide has at most one, and a fence that
+  is empty, never closed or inside the notes is a parse error. Breach
+  outlines still have no code fences.
 - Every number, technique ID and link in a slide's text and notes appears in
   the sections it cites. The title and promise, which the cover shows, are
   held to the whole page.
 - On a page that carries "(disclosure: the site's author works at Wiz)", the
   first slide that shows Wiz carries the disclosure on the slide, where the
   audience sees it. A `figure` slide shows its picture's text and the page's
-  caption too, so a diagram that names Wiz makes its slide one that shows
-  Wiz. The notes never count for this: they are not shown, and
-  the PDF leaves them out. A title or promise that names Wiz carries it in the
-  title or the promise. Separately, notes that name Wiz before any slide shows
-  it carry the disclosure too, for the presenter who reads them out.
+  caption too, and a `code` slide its code, so a diagram or an excerpt that
+  names Wiz makes its slide one that shows Wiz. The notes never count for
+  this: they are not shown, and the PDF leaves them out. A title or promise
+  that names Wiz carries it in the title or the promise. Separately, notes
+  that name Wiz before any slide shows it carry the disclosure too, for the
+  presenter who reads them out.
 - Limits: 15 to 30 slides counting the generated cover, how-to-use and
   closing slides; at most 40 words of prose per slide (25 on a `figure`
-  slide), 14 per typed field, 12 in a heading and 300 in the notes; no U+2013
-  or U+2014 and no spaced hyphen used as a dash.
+  slide), 14 per typed field, 12 in a heading and 300 in the notes; at most
+  12 code rows on a `code` slide, counted as the how-to decks count them (a
+  line longer than 84 columns wraps at spaces and counts the rows it takes);
+  no U+2013 or U+2014 and no spaced hyphen used as a dash. `--check`'s dash
+  rule does not read code, which is the page's as written; `--build` still
+  refuses an en or em dash on any slide.
 
 ## Topic gate, staleness and the deck line
 
@@ -519,6 +555,17 @@ everything afresh.
   pixels per point of its width, with the page's caption under it. When the
   room left is too small, a `LayoutError` names the slide; shorten the
   heading or the prose.
+- A `code` slide shows its heading, its prose, then the how-to decks' code
+  box (`code_box` in `tools/howto_deck_render.py`, so both families draw the
+  same box): the excerpt in Source Code Pro at 16 pt on the dark panel, with
+  a 12 pt tab on its top edge carrying what the how-to build prints for the
+  same excerpt: the block's `data-lang` uppercased, nothing for a block
+  labelled `text` or not labelled at all, or the file a heredoc writes. The
+  limits do not guarantee a fit: under a one-line heading, 12 code rows
+  leave room for about 35 words of prose, and a heading that wraps takes
+  more. So `--build` is the layout check here too: a `LayoutError` names the
+  slide whose code would end below the room it has; shorten the heading, the
+  prose or the excerpt.
 - The cover shows the page's hero illustration beside the title, or, on a
   page without one, the image on its `topics.html` card.
 - Every picture carries alt text: the SVG's `<title>` for a figure, the
@@ -526,7 +573,10 @@ everything afresh.
 - Verification also checks that the cover carries the art, each `figure`
   slide its one picture and the page's caption, and no other slide a
   picture, and that every picture has the expected alt text, its image's
-  aspect ratio, enough pixels, no crop and more than one colour.
+  aspect ratio, enough pixels, no crop and more than one colour. It checks
+  that each `code` slide carries one code box holding its excerpt line for
+  line, at exactly the how-to code sizes, with the expected tab or none, and
+  that no other slide carries a code box.
 
 Publishing follows the breach steps, to the "CSOH topic decks" Drive folder:
 build, upload privately, check every picture in Google's render, fact-review

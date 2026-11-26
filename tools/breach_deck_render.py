@@ -48,6 +48,8 @@ from pptx.util import Emu, Inches, Pt
 from howto_deck_render import (
     ATTRIBUTION,
     CLOSING_LICENSE,
+    CODE_SHAPE,
+    LABEL_SHAPE,
     LICENSE_LINE,
     SLIDE_H_EMU,
     SLIDE_W_EMU,
@@ -1544,15 +1546,22 @@ def _kind_problem(shape, pictures: bool = False) -> str | None:
     return f"a {kind}"
 
 
-def _run_findings(tag: str, shape, behind: str) -> list[str]:
+def _run_findings(tag: str, shape, behind: str, code: bool = False) -> list[str]:
+    """Each run's size and contrast. On a code slide (code True) the how-to
+    code box's runs are held to exactly its sizes, as the how-to verify
+    holds them; every other run to the 18 pt body or 14 pt label floor."""
     out = []
     floor = LOOK["small_floor_pt"] if shape.name in SMALL_SHAPES else LOOK["body_floor_pt"]
+    exact = {CODE_SHAPE: STYLE["code_pt"], LABEL_SHAPE: STYLE["label_pt"]}.get(shape.name) if code else None
     for p in shape.text_frame.paragraphs:
         for run in p.runs:
             if not run.text.strip():
                 continue
             size = run.font.size.pt if run.font.size is not None else None
-            if size is None or size < floor:
+            if exact is not None:
+                if size != exact:
+                    out.append(f"{tag}: {shape.name} run is {size} pt, expected {exact}")
+            elif size is None or size < floor:
                 out.append(f"{tag}: {shape.name} run is {size} pt, below {floor}")
             color = run.font.color
             if color.type != MSO_COLOR_TYPE.RGB:
@@ -1574,6 +1583,8 @@ def _slide_findings(tag: str, slide, n: int, total: int, page: str, outline,
     bg = _solid(slide.background) or STYLE["bg"]
     shapes = list(slide.shapes)
     named: dict[str, list] = {}
+    # Only a kind with the code layout has code slides; breach outlines never do.
+    code = outline is not None and outline.layout == "code"
     for i, sh in enumerate(shapes):
         named.setdefault(sh.name, []).append(sh)
         kind = _kind_problem(sh, pictures)
@@ -1593,7 +1604,7 @@ def _slide_findings(tag: str, slide, n: int, total: int, page: str, outline,
             findings.append(f"{tag}: {sh.name} uses autofit, which the converter drops")
         if any(d in tf.text for d in FORBIDDEN_DASHES):
             findings.append(f"{tag}: en or em dash in {sh.name}")
-        findings += _run_findings(tag, sh, _fill_behind(shapes, i, bg))
+        findings += _run_findings(tag, sh, _fill_behind(shapes, i, bg), code)
 
     for name, want in (("footer-left", f"csoh.org/{page}"), ("footer-right", f"{n} / {total}")):
         got = [sh.text_frame.text for sh in named.get(name, [])]
