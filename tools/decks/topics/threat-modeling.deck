@@ -6,7 +6,7 @@ promise: Threat modeling is reasoning out loud, in writing, about what can go wr
 == The 30-second version
 layout: text
 section: top
-Threat modeling is the practice of reasoning out loud, in writing, about what can go wrong with a system before an attacker does it for you. It is not a checklist, not a tool, and not a compliance artifact.
+Threat modeling is reasoning out loud, in writing, about what can go wrong with a system before an attacker does it for you. It is not a checklist, a tool or a compliance artifact, though all three exist around it.
 notes:
 Threat modeling is the practice of reasoning out loud, in writing, about what can go wrong with a system before an attacker does it for you. It is not a checklist, not a tool and not a compliance artifact, though all three exist around it. The classic framing is Adam Shostack's four questions: What are we building? What can go wrong? What are we going to do about it? Did we do a good job?
 
@@ -41,7 +41,7 @@ Almost every methodology since maps to one of the four. The fourth is the one mo
 row: Question | What the work is
 row: 1. What are we building? | Draw the data-flow diagram and mark the trust boundaries
 row: 2. What can go wrong? | Enumerate threats with a categorization: breadth first, then ranking
-row: 3. What are we going to do about it? | Mitigate, transfer, accept or avoid, with owners and target dates
+row: 3. What are we going to do about it? | Mitigate, transfer, accept or avoid; mitigations get owners and target dates
 row: 4. Did we do a good job? | Validate: shipped mitigations, peer review, pentests, red-team exercises
 notes:
 Adam Shostack, author of Threat Modeling: Designing for Security, which the page calls the field's defining textbook, reduced the practice to four questions.
@@ -139,7 +139,7 @@ Where STRIDE walks the defender's view of the system, asking what can go wrong a
 
 This is the page's worked sketch for the goal of exfiltrating customer PII from the database. The attacker can obtain valid credentials, for example by stealing the application tier's role credentials through SSRF; abuse the cloud API to read the database directly; or compromise the application tier and exfiltrate through legitimate data flows.
 
-Writing it down maps each leaf to a specific mitigation, or to the absence of one, and makes that asymmetry concrete in a way STRIDE alone doesn't.
+Writing it down maps each leaf to a specific mitigation, or to the absence of one. An attacker only needs one leaf to succeed, while the defender needs all the leaves' parent OR branches cut, and the tree makes that asymmetry concrete in a way STRIDE alone doesn't.
 
 == Kill chains and threat libraries
 layout: table
@@ -236,7 +236,7 @@ Every managed service is multi-tenant under the hood. State the guarantees you r
 
 AWS defaults to deny on IAM and permit on networking within a VPC, Azure has a more permissive RBAC inheritance model, and GCP defaults to organization-inherited deny. Threats obvious on one cloud are surprises on another.
 
-Cloud workloads are ephemeral and identities are created and destroyed in API calls, so a model that is correct at design time but stale at runtime is a hazard.
+Cloud workloads are ephemeral and identities are created and destroyed in API calls, so a model that is correct at design time but stale at runtime is a hazard. Pair the model with runtime sensing, CSPM or CNAPP, so the design intent and the operational state stay aligned.
 
 == Worked example: 3-tier app on AWS
 layout: table
@@ -261,7 +261,7 @@ The page says the exercise is fast: an experienced practitioner produces this li
 layout: compare
 section: worked-llm
 col: Retrieved content as input | Any retrieved document becomes part of the prompt | A poisoned upload is trusted because it came from your vector store
-col: The model itself | A supply-chain dependency | Provider compromise, behavior change on update, jailbreaks, training-data inversion
+col: The model itself | A supply-chain dependency | Provider compromise, model-update behavior change, jailbreak technique discovery, training-data inversion
 col: Tool use as authorization | Any tool the agent can call is a privilege it has | An agent that can call refund_customer can be coerced into it
 A support chatbot with RAG over product docs and customer-uploaded knowledge bases, and tools to look up tickets, escalate and write to the CRM.
 notes:
@@ -280,14 +280,13 @@ The same STRIDE walk surfaces these, but a practitioner who hasn't seen agentic 
 row: Threat | STRIDE | Mitigation
 row: Direct prompt injection | S/E | Input and output filtering
 row: Indirect injection via retrieved content | T/E | Treat all retrieved content as untrusted
-row: Vector DB poisoning | T | Per-tenant isolation, ingestion review
-row: Agentic tool abuse | E | Per-tool authorization; human in the loop
+row: Agentic tool abuse | E | Per-tool authorization; human in the loop on high-impact tools
 row: Cross-tenant data leakage | I | Tenant ID enforced in retrieval queries
 row: Output exfiltration via markdown | I | Strip image and link rendering
 notes:
-These are six of the page's ten LLM threats, with shortened mitigations. For direct injection the page also lists system-prompt isolation and untrusted-input markers; for indirect injection, provenance metadata on retrieved documents; for vector DB poisoning, signed ingestion sources. For agentic tool abuse, per-tool authorization is separate from the agent's identity, with a human in the loop on high-impact tools. For cross-tenant leakage it adds a per-tenant index where the threat model demands one. Markdown exfiltration works by having the model render an attacker-controlled image URL with PII in the path, so strip image and link rendering and put a content security policy on the chat UI.
+These are five of the page's ten LLM threats, with shortened mitigations. For direct injection the page also lists system-prompt isolation and untrusted-input markers; for indirect injection, provenance metadata on retrieved documents. For agentic tool abuse, per-tool authorization is separate from the agent's identity, with a human in the loop on high-impact tools. For cross-tenant leakage it adds a per-tenant index where the threat model demands one. Markdown exfiltration works by having the model render an attacker-controlled image URL with PII in the path, so strip image and link rendering from untrusted output and put a content security policy on the chat UI.
 
-The other four are embedding inversion, where embeddings are reverse-engineered to reveal source text, so access-control them as PII; model supply chain, met with vetted providers, pinned model versions and integrity checks; sensitive data in prompts leaking into the provider's logs or training pipeline, met with PII redaction and zero-retention agreements; and cost or DoS through token-maximizing prompts or tool recursion, met with rate limits and caps.
+The other five are vector DB poisoning, where an attacker uploads a document that biases retrieval for any future query, met with per-tenant isolation in the vector DB, ingestion review and signed ingestion sources; embedding inversion, where embeddings are reverse-engineered to reveal source text, so access-control them as PII; model supply chain, met with vetted providers, pinned model versions and integrity checks; sensitive data in prompts leaking into the provider's logs or training pipeline, met with PII redaction and zero-retention agreements; and cost or DoS through token-maximizing prompts or tool recursion, met with rate limits and caps.
 
 The page's lesson: the threat library matters. Extending ATT&CK, MITRE ATLAS and the OWASP LLM Top 10 into your team's working vocabulary takes minutes and produces better models for years.
 
@@ -295,7 +294,7 @@ The page's lesson: the threat library matters. Extending ATT&CK, MITRE ATLAS and
 layout: table
 section: worked-landing
 These threats are frequently invisible to single-account models, and this layer decides whether per-workload models can rely on the boundaries they assume.
-row: Threat area | One mitigation from the page
+row: Threat area | Example mitigation
 row: Management account compromise | Minimal occupants; org-level Access Analyzer
 row: Cross-account trust | Required external-id on cross-account roles
 row: Org-level privilege escalation | SCPs that deny dangerous actions at the OU level
@@ -316,7 +315,7 @@ layout: checklist
 section: libraries
 A threat library is a curated list of known patterns to start from instead of inventing every threat. The build-versus-buy decision tracks the program's maturity.
 check: Start with ATT&CK Cloud, CAPEC and the OWASP Top 10 lists
-check: Add domain libraries: ATT&CK for Containers, MITRE ATLAS, NIST SP 800-82
+check: Add domain libraries where relevant: ATT&CK for Containers, MITRE ATLAS, NIST SP 800-82
 check: Write a pattern down the fifth time a team rediscovers it
 check: Keep it small: 30 high-value patterns, crosswalked to ATT&CK
 notes:
@@ -326,7 +325,7 @@ Add domain libraries where relevant: ATT&CK for Containers if you run Kubernetes
 
 Build a custom library when patterns repeat. The fifth time a team rediscovers the same SSRF-to-IMDS threat, write it into your internal library, annotated with your default mitigations, your detection coverage and the team that owns the response. Custom libraries shorten the time to the first threat in every later session.
 
-Keep them small. A 200-entry custom library is one nobody can hold in their head. The page prefers 30 high-value patterns specific to your stack, plus the public libraries for breadth.
+Keep them small. A 200-entry custom library is one nobody can hold in their head. The page prefers 30 high-value patterns specific to your stack, plus the public libraries for breadth, with the custom entries crosswalked to ATT&CK so they stay readable by outsiders.
 
 == Scoring threats: pick one rubric
 layout: table
@@ -370,7 +369,7 @@ In the GitOps pattern the model lives at /threat-model/ in the repo, CI fails th
 layout: compare
 section: ai
 col: Where AI helps | STRIDE drafts from a diagram, roughly junior-analyst quality | Completeness checks for missing categories | Mitigation suggestions | Cross-walks to ATT&CK, CAPEC and OWASP
-col: Where humans own the work | Trust-boundary judgment | Risk acceptance | Novel threats | Auditor sign-off
+col: Where humans still own the work | Trust-boundary judgment | Risk acceptance | Novel threats | Auditor sign-off
 The pragmatic 2026 pattern uses AI as a first-draft generator and a completeness validator, with a human reviewer making the keep, discard and edit calls.
 notes:
 The page says LLM-assisted threat modeling moved from research to mainstream practice between 2023 and 2026.
@@ -384,7 +383,7 @@ Vendors including IriusRisk, ThreatModeler and Devici have shipped agent-style f
 == Common pitfalls
 layout: list
 section: pitfalls
-Three more: undocumented provider assumptions, tool fetishism, and skipping question three.
+Beyond the seven below, watch for undocumented provider assumptions, tool fetishism, and stopping at "what can go wrong?"
 item: Threat modeling once and never updating
 item: Modeling components instead of trust boundaries
 item: No asset valuation
@@ -397,7 +396,7 @@ A model that is never updated becomes archaeology: re-run it at every meaningful
 
 The page says a list of threats without owners is a list of complaints. A team that produced ten high-quality models last year but shipped two mitigations from them had a bad year. STRIDE-only programs miss privacy threats, and PASTA-only programs become a check-the-stages ritual, so combine STRIDE for breadth, attack trees for the highest-priority threats, and LINDDUN for privacy-sensitive systems. A model produced by security and dropped on engineering is a culture failure.
 
-The other three: "the provider handles that" is valid only when it is documented, so put the shared-responsibility line on the diagram. Buying a $50,000 platform produces a $50,000 expense, not threat models. And teams that stop at what can go wrong produce risk registers that grow forever; the page calls the third question non-optional.
+The other three: "the provider handles that" is valid only when it is documented, so put the shared-responsibility line on the diagram. Buying a $50,000 platform produces a $50,000 expense, not threat models. And teams that stop at "what can go wrong?" without rigorously answering "what are we doing about it?" produce risk registers that grow forever; the page calls the third question non-optional.
 
 == Maturity stages
 layout: timeline
@@ -406,8 +405,8 @@ event: Ad-hoc | Individual practitioners, no common methodology or template
 event: Documented | A documented methodology and template; mitigations tracked
 event: Repeatable | A defined SDLC step, trained facilitators, a custom library
 event: Integrated | Models next to code; CI surfaces stale models
-event: Continuous | Quantitative scoring feeds investment; AI in the workflow with review
-Jumping from Stage 1 to AI-assisted continuous threat modeling without the intermediate discipline produces lists nobody owns.
+event: Continuous | Quantitative scoring feeds investment; AI in the workflow with human review
+Jumping from Stage 1 (ad-hoc) to AI-assisted continuous threat modeling without the intermediate discipline produces lists nobody owns.
 notes:
 The page describes five stages. At Stage 1, threat modeling happens occasionally, driven by individual practitioners, and output lives in scattered pages that age out. At Stage 2, a methodology, typically STRIDE-per-element, and a template exist, high-priority projects run a model at design review, and mitigations are tracked.
 
@@ -440,10 +439,10 @@ Consider a single feature, a complete new system, and a regulated workload.
 notes:
 This is the second FAQ question. Again, ask it before showing the answer.
 
-== The written list matters more than the duration
+== Minutes to days, ending in a written threat list
 layout: answer
 section: faq
-A feature: 30-60 minutes for a STRIDE-per-element pass, plus an hour or two of write-up. A new system: a half-day workshop and a follow-up review. PASTA on a regulated workload: multiple days.
+A feature takes 30-60 minutes for a STRIDE-per-element pass, plus an hour or two of write-up. A new system takes a half-day workshop and a follow-up review. PASTA on a regulated workload can run multiple days.
 notes:
 For a typical microservice or feature, a STRIDE-per-element pass on a whiteboard takes 30-60 minutes, plus another hour or two to write up the findings and mitigations. A complete new system takes a half-day workshop, then a follow-up review of the documented model. PASTA-style modeling on a regulated workload can run multiple days across stages.
 
