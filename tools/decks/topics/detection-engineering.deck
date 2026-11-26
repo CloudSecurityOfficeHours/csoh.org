@@ -1,0 +1,414 @@
+title: Detection Engineering & Cloud Logging
+page: detection-engineering.html
+as-of: 2026-11-25
+promise: Detection engineering builds, tests, deploys and retires alert rules.
+
+== The 30-second version
+layout: text
+section: top
+Detection engineering builds, tests, deploys and retires the rules that decide what an alert is. In cloud the work hinges on three things:
+- Knowing what each platform emits
+- Writing rules portably in Sigma
+- Validating against emulated attacker techniques
+notes:
+Detection engineering is the discipline of building, testing, deploying and retiring the rules that decide what an alert is. It is the build side. The consume side belongs to the security operations center, the SOC, which the site covers on its Cloud SOC page.
+
+The job is mostly editing rule files in a Git repo, replaying historical logs against changes, and confirming the rule fires when the matching technique runs in a test environment.
+
+In cloud the work hinges on three things. First, knowing what each platform emits: CloudTrail, Activity Log, Cloud Audit Logs, and the data-plane stream that is often off by default. Second, writing rules portably, with Sigma as the canonical format, compiled to the SIEM's native query language. Third, validating against tools like Stratus Red Team that emulate real cloud attacker techniques mapped to MITRE ATT&CK Cloud.
+
+== Two roles that think differently
+layout: compare
+section: what-is
+col: SOC analyst | Works a queue of alerts | Decides whether each one is real | Measured by triage minutes and false-positive rate
+col: Detection engineer | Works a code repo and a sample-log corpus | Decides what a rule matches and ignores | Measured by rules deployed, time to production, ATT&CK coverage
+Modern detection looks much more like software engineering than like operations. Rules live in Git, with unit tests, code review and CI/CD deployment.
+notes:
+Detection engineering produces, tests and maintains the rules a SOC depends on, and it is not the same as SOC analysis. The analyst sits in front of a queue of alerts and decides whether each one represents real malicious activity. The detection engineer sits in front of a code repo and a sample-log corpus and decides what the rule should match in the first place, and what it should ignore.
+
+The analyst's currency is triage minutes per alert and the false-positive rate of the queue. The engineer's is rules deployed per quarter, mean time from a threat-research finding to a detection in production, and ATT&CK technique coverage. They cooperate constantly: the analyst's "I'm seeing this pattern again" feeds the engineer's backlog, and the engineer's new rule lands in the analyst's queue.
+
+The role exists separately because modern detection looks much more like software engineering than like operations. Rules live in Git, have unit tests, go through code review and deploy via CI/CD to one or more SIEM or data-lake backends. They have version history, owners, ATT&CK mappings, severity ratings and an explicit retirement criterion. The page warns that programs treating detection as a side-of-desk activity for the SOC accumulate stale, untested rules and never close the coverage gaps that matter.
+
+== The detection engineering lifecycle
+layout: table
+section: lifecycle
+row: Phase | What happens | Output
+row: Research | Study a threat end to end | A written hypothesis
+row: Develop | Write the rule and its metadata | A rule file with passing tests
+row: Tune | Backtest on 7-30 days of production logs | A backtest report
+row: Deploy | Stage 1-2 weeks; promote once the FP rate holds | An owned rule with SLA-tagged severity
+row: Validate | Run the technique; confirm it fires | A validation log entry
+row: Retire | Archive when its criterion is met | An archived rule and reason
+notes:
+A practical lifecycle runs research, develop, tune, deploy, validate and retire, and Palantir's widely cited Alerting and Detection Strategy framework supplies the documentation each rule carries through it. The page calls the lifecycle the only thing that keeps a rule library from becoming a graveyard.
+
+Research starts with a threat: an ATT&CK technique, a CTI report, a vendor advisory, a red-team finding or a real incident. Work out what API calls it generates, which log fields are diagnostic and what benign activity looks similar, then write the hypothesis: we should be able to detect X by looking for Y in Z.
+
+Develop means writing the rule, in Sigma where possible, with ATT&CK IDs, severity and owner, and running it against historical logs and test attack telemetry. Tune is the backtest against 7 to 30 days of historical production logs. The acceptance bar is the analyst's tolerance: a rule that fires 50 times a day is dead on arrival unless every fire is an emergency.
+
+Deploy is a merge to main, with CI/CD pushing the rule to the backends by API, staged in a test or low-severity mode for 1 to 2 weeks, and promoted to alerting only after the false-positive rate holds. Validate runs the matching technique with Stratus Red Team or Atomic Red Team, confirms the alert reaches the right queue, and repeats monthly or quarterly. Retire when the API is deprecated, the technique no longer applies, false positives creep past tolerable, or a better rule supersedes it. Without an explicit retirement step, dead rules accumulate and the analyst queue silently degrades.
+
+Two things mark mature programs: every step produces an artifact in version control, and the loop closes, so a missed detection in production triggers a research item, not just a postmortem action that quietly never ships.
+
+== Know what each cloud logs by default
+layout: compare
+section: logging
+col: AWS | CloudTrail management events: 90 days in the console | An organization trail ships them to S3 | Data events off, charged per event
+col: Azure | Activity Log, shipped by Diagnostic Settings | Entra ID Sign-in Logs, the most-queried log | Key Vault, Storage data-plane, SQL audit: off by default
+col: GCP | Admin Activity: free, always on, 400 days | Policy Denied: on by default, cannot be disabled | Data Access: off for most services
+You can't detect what you can't see. Every rule starts from a log source, and every source has costs, gotchas and a default-on or default-off state.
+notes:
+Every detection rule starts from a log source, and the page catalogs the practitioner's working set for each major cloud.
+
+On AWS, CloudTrail management events are the control-plane audit log: every API call, such as CreateUser, AssumeRole or PutBucketPolicy. They are on by default for the last 90 days in the console, and you must create an organization trail to ship them to S3 and aggregate across accounts. The page calls this the most important AWS log source. Data events, the data-plane log, are off by default, scoped per resource and charged per event. Beside them sit VPC Flow Logs, Route 53 query logs, CloudWatch Logs, GuardDuty findings and Security Hub.
+
+On Azure, the Activity Log is the control-plane audit log at the subscription and management-group level, and Diagnostic Settings ship it to Log Analytics, Event Hub or storage. Entra ID Sign-in Logs record every authentication and are the most-queried log in any Microsoft environment. The page ties this to the Storm-0558 breach: forged tokens against Exchange Online were only reconstructable for customers who had the right sign-in and access logging turned on. Many high-value logs, such as Key Vault audit, Storage data-plane and SQL audit, are off until a Diagnostic Setting is configured.
+
+On GCP, Admin Activity audit logs are free, always on, and kept 400 days by default at the project level; aggregate them to an org-level log sink. Policy Denied logs are on by default and can only be excluded, and the page calls them an excellent attack-surface signal. Data Access logs are off by default for most services.
+
+== Ingest the identity provider
+layout: text
+section: logging
+If you ingest only one extra source beyond cloud control planes, ingest the IdP. The majority of cloud incidents start at identity, and the IdP log sees the first event in the kill chain.
+notes:
+Identity providers are the often-skipped layer. Okta's System Log API records every authentication and admin action. Entra ID is covered with Azure, and the page notes that the cloud-provider audit logs don't show identity-provider activity that didn't reach the cloud. JumpCloud, OneLogin, Ping and Auth0 all expose an event stream, usually as a webhook or API, and the Workspace and M365 audit logs record what humans did in productivity tools.
+
+The page's advice: if you ingest only one extra source beyond the cloud control planes, ingest the IdP. The majority of cloud incidents start at identity, with an MFA-fatigue push, a stolen session token or a service-account key leaked to GitHub, and the IdP log sees the first event in the kill chain.
+
+== The data-access log gotcha
+layout: table
+section: data-access
+row: Cloud | Control-plane log | Data-plane log | Data-plane default
+row: AWS | CloudTrail management events, free for one trail | CloudTrail data events, paid, per resource | Off; enable per bucket, function or table
+row: Azure | Activity Log, free | Per-resource Diagnostic Settings, paid storage | Off; configure on each resource
+row: GCP | Admin Activity, free | Data Access, paid | Off for most services; opt in via IAM audit-config
+With only the control plane, you can see that an attacker assumed a role, but not that they then listed every object in a sensitive bucket.
+notes:
+Each cloud splits its audit log into what someone did to the resource and what someone read or wrote inside it. The split has cost and privacy reasons, and it has detection consequences that catch programs off guard.
+
+The page calls this the most common cloud-detection blind spot: having CloudTrail, Activity Log or Cloud Audit Logs enabled without realizing that the data-plane stream is a separate enablement. You can see that an attacker assumed a role, but not that they then listed every object in a sensitive bucket. You can see who changed a Key Vault access policy, but not whose secret was retrieved. You can see who granted BigQuery dataset permissions, but not who exported the data.
+
+The pragmatic posture is to enable data-plane logging on your crown-jewel data resources, scoped tightly. Logging every S3 GetObject across thousands of buckets has a real cost; logging the dozen buckets that hold customer data is trivial. Inventory first, scope deliberately, accept the bill.
+
+== Sigma: one rule, many backends
+layout: compare
+section: sigma
+col: Good at | Portability across backends | Shared catalogs such as SigmaHQ | Readability in a PR | Stable rule IDs and revision tracking
+col: Not good at | Multi-event correlation and joins | Performance tuning for your indexes | Cloud field schemas, still maturing
+Sigma is a YAML, vendor-neutral format for log-based detections. A converter such as pySigma compiles it to each SIEM's query language. The Sigma source is the canonical artifact; the output is a build artifact.
+notes:
+Sigma exists because every SIEM has its own query language, Splunk SPL, KQL, Elastic ES|QL and EQL among them, and writing the same rule in five places is the worst possible use of detection-engineer time. A Sigma rule names the log source, declares match conditions, and tags ATT&CK techniques, severity, references and an owner. A converter, the original Sigmac, the modern pySigma or a vendor's own, compiles it to the target query language. The Sigma source is the canonical artifact in your repo; the compiled output is a build artifact.
+
+It is good at portability: one rule, several backends, useful if you run a SIEM and a data lake or migrate between SIEMs. The SigmaHQ public library holds thousands of community-maintained rules across Windows, Linux, AWS, Azure, GCP, Okta and GitHub, a useful starter library and benchmark. It reads more easily than most native languages, and stable rule IDs and revision tracking are part of the spec.
+
+It is not good at complex logic: multi-event correlation, joins and stateful behavior either don't translate well or compile to inefficient native queries. The converter doesn't know your indexes, data model or time-window economics, so expect to hand-tune the output for high-volume rules. Its cloud-log taxonomies are still maturing next to its Windows and endpoint coverage, so expect to define custom log-source mappings.
+
+The practical workflow is a per-rule decision: Sigma where the logic fits cleanly, the backend's own language where it doesn't.
+
+== Vendor detection languages
+layout: table
+section: vendor-langs
+row: Language | Where it runs | Shape of a rule
+row: Splunk SPL | Splunk Enterprise and Cloud Platform | A pipeline; each command reshapes results
+row: KQL | Sentinel, Defender XDR, Azure Monitor | A table, then piped operators
+row: ES|QL and EQL | Elastic | ES|QL is piped; EQL matches events in order
+row: Panther | Detection-as-code platform | A Python function over one event
+row: YARA-L 2.0 | Google Security Operations | Matches events in the Unified Data Model
+row: SQL | Snowflake, BigQuery, Athena | Scheduled queries on a data lake
+Pick the language your stack runs, then read other languages' rule libraries.
+notes:
+Each backend has its own query language, and the page calls familiarity with several of them a strong differentiator for the role. Each has a hands-on guide in the site's how-to series, all built on the same CloudTrail lab and the same five detections, and none of them assumes you already know SQL or any other query language.
+
+Splunk SPL is a pipeline: the first part chooses events and each piped command reshapes the results. KQL is Microsoft's language for Microsoft Sentinel, advanced hunting in Defender XDR, Azure Monitor Logs and Azure Data Explorer; a query names a table, each operator hands a new table on, and a query only reads. Elastic's newer ES|QL filters, counts and reshapes events, while the older EQL matches events in order, for sequence detections. Panther rules are Python functions over one event, with a YAML file beside each that sets thresholds, deduplication and the rule's tests. YARA-L 2.0, in Google Security Operations, matches log events after Google's parsers rewrite them into its Unified Data Model. When the backend is a data lake, detections are SQL queries run on a schedule.
+
+The page also covers Sumo Logic, Datadog Cloud SIEM, CrowdStrike CQL, which unlike most languages binds OR tighter than AND, and Falco rules, which test one event at a time as it happens.
+
+Its advice is to pick the language your stack runs, then read other languages' rule libraries: Splunk's public detections, Microsoft's Sentinel content hub, Elastic's detection-rules, Panther's analysis pack and Google's YARA-L rules are all valuable cross-reference even when you can't run their rules directly.
+
+== MITRE ATT&CK Cloud: the shared taxonomy
+layout: table
+section: attack
+row: Sub-matrix | Example techniques
+row: IaaS | Cloud account discovery, instance metadata abuse, snapshot exfiltration
+row: SaaS | API exploitation, OAuth-app abuse, session-token theft
+row: Office Suite | Inbox rules, mailbox forwarding, eDiscovery abuse, Drive sharing exfiltration
+row: Identity Provider | Device-code phishing, Primary Refresh Token theft, golden SAML
+Every rule in a mature program tags one or more techniques. The tags produce the coverage report, the most-requested artifact when a CISO or customer asks about maturity.
+notes:
+MITRE ATT&CK is the threat-model taxonomy detection engineers and SOC analysts share. The Enterprise matrix has cloud-specific sub-matrices that matter directly to the role: IaaS, SaaS, Office Suite and Identity Provider. The Identity Provider matrix also covers conditional-access bypass, and the Office Suite matrix covers app password abuse and Workspace admin role abuse.
+
+Every detection rule in a mature program tags one or more ATT&CK techniques. Those mappings produce the coverage report, which in the page's example reads: we have detections for 142 of the 213 cloud techniques relevant to our environment, and here's the prioritized backlog of the rest. That report is the most-requested artifact when a CISO or a customer asks about the detection program's maturity.
+
+Cross-reference ATT&CK with the Center for Threat-Informed Defense's open-source security stack mappings, which connect ATT&CK techniques to specific AWS, Azure and GCP service controls. They are useful when you plan preventative coverage alongside detective.
+
+== How a rule ships
+layout: figure
+section: detection-as-code
+figure: dac-workflow
+caption: This is how a rule ships.
+Detection-as-code gives rules the rigor of any production code: branching, code review, automated testing, CI/CD deployment and observability of failures.
+notes:
+The figure covers the parts of detection-as-code: the repo, the pipeline, the tests, versioning, the build and the deployment. The lifecycle earlier ran from research through retire; this is how a single rule ships.
+
+One Git repository holds the detection content, with top-level folders by log source or by ATT&CK tactic, and per-rule files that hold the rule, sample events for tests, ATT&CK tags, owner, severity and validation references. On a pull request the pipeline lints the YAML or Python, validates against the rule schema and runs unit tests that replay sample events and assert fire or no fire. It can also compile Sigma to the backend language and backtest against a sample log corpus. On merge it deploys through the backend's API to staging, and promotion to production is a separate workflow.
+
+== What every rule ships with
+layout: checklist
+section: detection-as-code
+check: At least one positive and one negative test
+check: A stable ID, with every revision a commit
+check: The commit SHA on every deploy
+check: Sigma compiled at build time, not runtime
+check: Deployment through the SIEM's API
+check: No manual edits in the SIEM UI; the pipeline catches drift
+notes:
+Every rule ships with at least one positive test, an event that should fire, and at least one negative test, an event that looks similar but shouldn't. Modern tools such as Panther, Elastic detection-rules and Splunk Security Content bake the test harness in.
+
+Every rule has a stable ID, every revision is a commit, and every deploy carries the commit SHA. When the SOC analyst asks when this rule changed, the answer is in the Git log. Sigma-source rules compile to backend-specific output at build time, not runtime, and that output is a deployment artifact.
+
+The destination is the SIEM's API: Splunk REST, Sentinel ARM templates, the Elastic Kibana Detection Engine API, the Google SecOps API or Panther's deployment. Manual rule edits in the SIEM UI are forbidden by policy, and drift detection in the pipeline catches them.
+
+For the shape of a real repo, the page points to Elastic detection-rules, Microsoft Sentinel, Splunk Security Content and Panther Analysis. Each has its own conventions; the patterns rhyme.
+
+== Native threat detection is one signal source
+layout: compare
+section: native-detection
+col: AWS GuardDuty | Strong: instance compromise, S3 anomalies | Weak: low-and-slow insiders | Cost scales with API calls
+col: Defender for Cloud | CSPM and CWPP plans | Strong: Microsoft-platform context | Non-trivial bill at scale
+col: Security Command Center | Standard and Premium; Enterprise deprecated | Strong: GCP-native API anomalies | Weak: cross-cloud correlation
+Each catches the well-known stuff cheaply; everything else still needs custom rules. Treat native findings as a high-priority queue, not the whole program.
+notes:
+Each major cloud ships a managed threat-detection service. Detection engineers use them as signal sources, high-confidence findings that flow into the SIEM as one input among many, rather than as a complete detection program.
+
+GuardDuty analyzes CloudTrail, VPC Flow Logs, DNS queries, S3 data events, EKS audit logs and more, with findings categorized by attack stage and mapped to ATT&CK. It is strong on instance compromise, S3 anomalies, mining and credential exfiltration, and weak on low-and-slow insider activity and anything that needs environment-specific context. Its cost scales with API-call volume, so large environments need budgeting.
+
+Defender for Cloud bundles CSPM and CWPP plans and is tightly integrated with Sentinel and Defender XDR. It is strong on Microsoft-platform context and on integrating identity-side and infrastructure-side signal, and its bill is non-trivial at scale.
+
+Security Command Center comes in Standard, Premium and Enterprise tiers; Premium and Enterprise add Event, Container and VM Threat Detection, among others. Google has deprecated the Enterprise tier and plans to shut it down on May 21, 2027, moving its organizations to Premium. Findings stream to Pub/Sub for SIEM ingestion.
+
+Every native service is built around the patterns its vendor has seen across all customers. Only you can write detections for your access patterns, your service accounts, your geo footprint and your business-hours norms.
+
+== Where the logs go: the 2026 hybrid
+layout: layers
+section: siem-lake
+layer: EDR or XDR | Endpoint and, increasingly, identity and cloud
+layer: SIEM | Real-time, high-value correlations and alerting
+layer: Data lake | Long-tail, high-volume logs for hunting and forensics
+layer: Rule repo | Detection-as-code compiles rules to SIEM and lake
+Most mature programs run a hybrid. Cost comes down to where each log lands: the SIEM for the 20% of logs that drive 80% of real-time detections, the lake for the rest.
+notes:
+The page describes three competing patterns for where the logs go and where the detections run, and most large programs run more than one.
+
+A traditional SIEM, such as Splunk Enterprise Security, QRadar, ArcSight or Elastic Security, has a mature ecosystem and deep correlation engines, but its cost has historically scaled with ingest volume, which the page calls the structural reason data-lake patterns are eating the low end of the market. Cloud-native SIEMs such as Microsoft Sentinel, Google SecOps, Sumo Logic, Datadog Cloud SIEM and Panther are usually cheaper per GB. A security data lake, such as Snowflake, Databricks, BigQuery or S3 with Iceberg and Athena, is cheap, schema-on-read and long-retention, paired with a security-analytics layer for the SIEM-shaped work. XDR platforms are endpoint-centric, extended to identity, cloud and email, and are often complementary to a SIEM, not a replacement.
+
+In the 2026 reality the page describes, an EDR or XDR covers endpoint and increasingly identity and cloud telemetry. A SIEM hosts the real-time, high-value correlations and the SOC's primary alerting. A data lake holds flow logs, DNS and full audit cheaply for forensics, threat hunting and slower detections, queried by an analytics layer. The detection-as-code repo compiles rules to both, and the SOC has one front-end UI.
+
+The cost conversation is rarely about which tool is cheapest in isolation. It is about where each log lands, with the detection engineer choosing per source.
+
+== Retention: tier by what each query needs
+layout: table
+section: retention
+row: Tier | Typical retention | What it holds
+row: Hot | 7-30 days | Indexed, queryable in seconds; the SIEM rules run here
+row: Warm | 30-180 days | Indexed but slower and cheaper
+row: Cold or archive | 1-7 years | Object storage, rehydrated on demand for IR
+Regulatory floors, detection needs and incident response want different things. PCI DSS requires at least one year of audit logs, and IR needs enough history to bracket when an intrusion started.
+notes:
+Retention has three drivers, and they want different things. Regulatory floors: PCI DSS requires at least one year of audit-log retention, with 90 days immediately available, and HIPAA's Security Rule, via documentation retention, implies 6 years for audit-log evidence. SOX, FedRAMP Moderate, NYDFS Part 500 and similar each set their own, so map your applicable regulations to a floor. Detection needs: most real-time detections look back hours or days, some hunt queries look back months, and trend-based detections need 30 to 90 days of history. Incident-response needs: dwell times for cloud incidents range from days to months, and the page calls "we'd like a year" a reasonable IR ask.
+
+Tiering reconciles them. Hot is indexed and queryable in seconds, typically 7 to 30 days, and the SIEM rules run against it. Warm, such as Splunk SmartStore or Sentinel's Auxiliary Logs and Basic Logs tier, runs 30 to 180 days; Google SecOps packages instead keep 12 months hot. Cold is object storage such as S3 Glacier, Azure Archive or GCS Coldline, for 1 to 7 years, rehydrated on demand for incident response.
+
+Keep raw events in the lake and aggregate what you keep in the hot SIEM: hourly counters of CloudTrail events per principal, daily summaries of VPC Flow Logs per VPC, sessionized identity logins. Aggregated indices answer the trend questions; raw archives answer what exactly happened on day X.
+
+== Signal sources beyond audit logs
+layout: table
+section: beyond-audit
+row: Source | What it adds
+row: EDR or XDR | Process, file, network and registry telemetry
+row: CNAPP runtime | Runtime visibility inside containers and VMs
+row: eBPF runtime tools | Kernel-level observability; Falco rules in your repo
+row: Application logs | Often the most diagnostic signal for app-layer attacks
+row: SaaS audit APIs | Where the kill chain often starts
+row: DNS, WAF and edge logs | C2 and DGA detection; first touch of web attacks
+Audit logs cover the API plane. The workload and data planes have their own sources, and a mature program uses them all.
+notes:
+Audit logs cover the API plane; the workload plane and the data plane have their own signal sources.
+
+EDR and XDR products such as Crowdstrike Falcon, SentinelOne, Cortex XDR and Defender XDR bring process, file, network and registry telemetry from endpoints and, increasingly, VMs. Vendor-curated detections cover most known endpoint attacker behaviors, and the custom-content surface is for environment-specific patterns. CNAPP runtime products give visibility inside containers and VMs, such as syscalls, process trees, network flows and file modifications, correlated with the posture findings from the same platform. The open-source eBPF tools Falco, Tracee and Tetragon give kernel-level observability, and Falco rules are YAML that live in the detection-as-code repo alongside Sigma.
+
+Application logs, the telemetry your own services emit, are often the most diagnostic signal for application-layer attacks and the least instrumented in immature programs. SaaS audit APIs, from GitHub, GitLab, Slack, Okta, Salesforce and Snowflake, matter because the kill chain often starts in SaaS before reaching the cloud. Network IDS and TLS-decrypting proxies are less universal in cloud than on-prem, but invaluable where deployed. DNS query logs still support C2 and DGA detection, and WAF and edge logs give first-touch visibility into web-side attacks.
+
+== Shadow AI signals
+layout: table
+section: beyond-audit
+row: Signal | What to look for
+row: DNS, proxy, egress | Unsanctioned AI destinations, first seen per user
+row: OAuth consent | AI apps granted access to mail, files or calendar
+row: Non-interactive sign-ins | Consented apps refreshing tokens
+row: Software inventory | AI extensions, desktop apps, CLI agents, local runtimes
+row: SaaS admin audit | The setting that turns an AI feature on
+row: Secret scanning | AI provider API keys in repos and CI
+AI can also arrive as a feature inside approved software, with no new egress destination. If a shadow-AI panel reports zero, confirm the source is ingested.
+notes:
+At the 2026-08-07 session, an attendee asked how to find shadow AI use with Microsoft Sentinel. The room's answer was device inventory, browser behavior and network egress controls, with a check that the non-interactive and managed identity sign-in logs are being collected. A guest talk at the 2026-08-28 session added the harder case: AI arriving as a feature switched on inside software that is already approved, which shows no new destination in egress logs.
+
+For DNS, proxy and egress logs, alert on any AI destination that is not on your sanctioned list, first seen per user, rather than keeping a blocklist that is always behind. A user granting an AI app access to mail, files or calendar leaves an audit event, such as Consent to application in the Entra ID audit log, and a standing grant you can enumerate and diff on a schedule. Once consented, a client app refreshes tokens on the user's behalf, and Entra ID records that in the non-interactive sign-in log, a separate diagnostic-settings category that has to be selected before it reaches the SIEM.
+
+Browser management and endpoint tooling inventory AI extensions, desktop apps, CLI coding agents and local model runtimes. A runtime such as Ollama keeps inference on the machine, so once the model is downloaded, egress logs see nothing. SaaS admin audit logs record the setting or license assignment that turns an AI feature on, and Microsoft Purview logs Microsoft 365 Copilot use as CopilotInteraction records. An AI provider API key in a repository, CI variable or secrets manager is an integration somebody built, so add the providers' key formats to your secret scanner if it does not already cover them.
+
+== Walkthrough: a new access key as persistence
+layout: compare
+section: example
+col: Rule A | Any CreateAccessKey on a user with the service-account tag | Tune: suppress the platform team's break-glass role | Backtest: 2 fires a month, both genuine | Medium severity, 4-hour SLA
+col: Rule B | A key under 24 hours old used outside the operator's country list | Needs IP-geolocation enrichment, easier in KQL or SPL than Sigma | Tune: per-user approved-geo allowlist from HRIS travel data | High severity, 1-hour SLA
+An attacker with a compromised IAM principal creates an access key for an existing user (T1098.001), then uses it from outside normal geography. Two rules, not one.
+notes:
+The page walks one detection through the lifecycle. In research, the technique is T1098.001, Account Manipulation: Additional Cloud Credentials. The AWS API call is CreateAccessKey on IAM, and the diagnostic CloudTrail fields are eventName, userIdentity for who did it, requestParameters.userName for the target user, and responseElements.accessKey.accessKeyId for the new key. Benign cases include an admin onboarding a new service integration and a CI system rotating its own key.
+
+In development it becomes two rules. Rule A is high-signal and low-volume: any CreateAccessKey against a user with the service-account tag, because those keys should be rotated by the platform team's automation, not manually. Rule B is a correlation rule: a key created in the last 24 hours used from a country outside the operator's list. It joins CloudTrail with IP-geolocation enrichment, which is easier in KQL or SPL than in pure Sigma.
+
+Backtesting Rule A against 30 days of CloudTrail finds the platform team's emergency-rotation runbook also firing it, so a suppression on the break-glass role brings it to 2 fires a month, both genuine investigations. Rule B's backtest over the same window finds traveling executives, so it gets a per-user approved-geo allowlist sourced from HRIS travel data. Rule A ships at Medium severity with a 4-hour SLA, and Rule B at High with a 1-hour SLA.
+
+== Deploy, validate, and plan its retirement
+layout: timeline
+section: example
+event: Deploy | CI compiles Sigma to KQL for Sentinel and Python for Panther
+event: Validate A | Run the Stratus Red Team technique; Rule A fires within 5 minutes
+event: Validate B | A test runner uses the new key from a non-allowlisted IP
+event: Log | Both validations recorded against the rule IDs
+event: Retire | Archive once long-lived IAM access keys are gone
+One PR holds the hypothesis, two rule files, four test cases, a backtest report, a validation log and a retirement criterion. Multiply across 200 rules and you have a program.
+notes:
+Merging the PR has CI compile the Sigma source to KQL for Sentinel and to Panther Python for the data-lake side, and both deploy.
+
+Validation runs the Stratus Red Team technique aws.persistence.iam-create-user-access-key in the test AWS account and confirms that Rule A fires in Sentinel within 5 minutes. For Rule B, a test runner exercises the new key from a non-allowlisted IP, and the alert is confirmed. Both validations are logged against the rule IDs.
+
+The retirement criterion is written down now: if the organization migrates fully to short-lived federated credentials, with no more long-lived IAM access keys, the rule becomes meaningless and should be archived.
+
+That entire workflow lives in a PR with a written hypothesis, two rule files, four test cases, a backtest report, a validation log entry and a documented retirement criterion. Multiply that across 200 rules and you have a detection program.
+
+== Tuning and noise reduction
+layout: checklist
+section: tuning
+check: Set a precision target per severity
+check: Backtest 7-30 days before a rule reaches analysts
+check: Compare against per-principal, per-service and per-environment baselines
+check: Keep suppressions and allowlists in the rule file
+check: Review suppressions on a cadence
+check: Track per-rule fire rate and TP/FP, and per-analyst dismiss rate
+check: Stack weak signals with risk-based alerting
+Detection programs die of false positives. A noisy queue trains analysts to dismiss everything, and the real incident sits in the noise.
+notes:
+Critical and High alerts should be about 90% or more true-positive when they fire, because the analyst expects to act, not investigate. Medium can be lower, and Low severity is for high-volume signal that batches into a daily review.
+
+Backtest against 7 to 30 days of historical production logs before any rule reaches the analyst queue; most false-positive sources are obvious in the backtest. Anomalous means compared to a baseline: this user never assumed this role before, this Lambda has never made an outbound call to this country, production never sees PutBucketAcl.
+
+A suppression is a rule-level exception, such as don't fire when the platform-team break-glass role is the principal. An allowlist is a data-level exception, such as this IP is approved. Both belong in the rule file under version control, not in the SIEM UI. Suppressions accumulate, and one added for a long-gone integration is a silent gap, so review them on a cadence.
+
+Rules that get dismissed without investigation are either broken or noise, and both need fixing. A single weak signal becomes a strong one in combination: the create-access-key rule is medium-confidence alone and high-confidence when stacked with first use from a new geography and a principal that has not used the region in 90 days. Risk-based alerting, such as Splunk RBA, Sentinel anomaly behavior analytics or custom risk scores, is the modern pattern.
+
+== Three ways to validate
+layout: table
+section: validation
+row: Approach | Examples | What it gives you
+row: Automated emulation | Atomic Red Team, Stratus Red Team, MITRE CALDERA | Technique-by-technique checks; CALDERA chains full operations
+row: Purple teaming | A red team operates while the detection team watches | Dense: one day can surface a quarter's backlog
+row: Breach and attack simulation | AttackIQ, SafeBreach, Picus, XM Cyber, Cymulate | Reporting, technique breadth, SIEM and ticketing integration
+A rule library you've never tested is one you have to assume is broken. Run validation continuously: detections decay silently when an API schema changes, a field renames or tuning regresses.
+notes:
+Atomic Red Team is an open-source library of small attack-technique scripts organized by ATT&CK, general-purpose and strong on Windows and Linux endpoints. Stratus Red Team is the DataDog-built cloud-specific equivalent: dozens of AWS, Azure, GCP and Kubernetes techniques, each invokable with one command and each mapped to ATT&CK, built for validating cloud detections one technique at a time. MITRE CALDERA is heavier-weight and chains techniques into full operations, which suits end-to-end kill-chain testing rather than per-rule validation. Cloud-attack toolkits such as Pacu and MicroBurst help with adversary-shaped testing of specific techniques.
+
+In purple teaming, an offensive team runs realistic operations against the live environment while the detection team watches: for each technique, did the detection fire, at what severity, with what fidelity, in what time. The page says a one-day exercise can surface a quarter's worth of detection-engineering backlog.
+
+Commercial breach and attack simulation platforms automate the purple-team cadence. Their justification over Stratus and Atomic is the reporting layer, the technique breadth and the integration with the SIEM and ticketing.
+
+Whichever stack you pick, run validation continuously, not just at the end of a quarter. A weekly Stratus run hitting every cloud-detection rule, with the result piped to a dashboard, is a sustainable cadence for a 1-2 person detection team. Continuous validation is the only way to catch the decay before an attacker does.
+
+== AWS, Azure and GCP side by side
+layout: table
+section: comparison
+row: Capability | AWS | Azure | GCP
+row: Control-plane audit log | CloudTrail management events | Activity Log | Cloud Audit Logs: Admin Activity
+row: Identity sign-in log | IAM Identity Center sign-ins | Entra ID Sign-in and Audit Logs | Cloud Audit Logs for IAM
+row: Network flow logs | VPC Flow Logs | NSG or VNet Flow Logs | VPC Flow Logs, subnet-level
+row: Managed threat detection | GuardDuty | Defender for Cloud | SCC Premium or Enterprise
+row: Native SIEM | None; CloudTrail Lake for limited cases | Microsoft Sentinel | Google SecOps
+notes:
+This is an excerpt of the page's one-screen reference of the detection-relevant native primitives each cloud ships. The full table also covers data-plane audit logs, DNS query logs, finding aggregators, SaaS audit and default audit retention.
+
+GuardDuty has 10+ feature sets, Defender for Cloud works through per-resource plans, and Security Command Center Premium and Enterprise carry Event, Container and VM Threat Detection. On the identity row, AWS has IAM Identity Center sign-ins and CloudTrail for AssumeRole, while Azure has Entra ID Sign-in and Audit Logs and GCP has Cloud Audit Logs for IAM plus the Workspace Reports API.
+
+The structural difference is the SIEM. Microsoft and Google ship their own, Sentinel and Google SecOps; AWS does not, and most large AWS shops run Splunk, Sentinel, Google SecOps or Panther on top of CloudTrail. The page says CloudTrail Lake is closing the gap on the simplest cases but isn't a full SIEM replacement.
+
+== Four maturity stages
+layout: table
+section: maturity
+row: Stage | What marks it
+row: Stage 1: Wired | Control-plane logs in a SIEM, native detection on, mostly vendor-default rules
+row: Stage 2: Authored | Custom rules, Sigma, ATT&CK tags, coverage dashboard, IdP logs ingested
+row: Stage 3: Engineered | Detection-as-code with CI/CD, unit tests, scheduled Stratus runs, risk-based alerting
+row: Stage 4: Adversarial | Purple teams quarterly or better, intel-driven backlog, separate team, cost-aware routing
+Each stage builds on the credibility of the one before. Detection-as-code without an alert queue anyone trusts is automating against an unloved artifact.
+notes:
+The page offers a staging model for a cloud detection-engineering program.
+
+Stage 1, Wired: control-plane audit logs ship to a SIEM, native threat-detection services are on, alerts route to one queue, and rules are mostly vendor-default. There is no detection-as-code yet, and rule edits happen in the SIEM UI.
+
+Stage 2, Authored: custom rules for the environment's specific patterns, Sigma for portable rules and the vendor language for the rest, ATT&CK tags on every rule, a coverage dashboard, identity-provider logs ingested, and data-plane logging on crown-jewel resources.
+
+Stage 3, Engineered: a detection-as-code repo with CI/CD to one or more SIEMs, unit tests for every rule, Stratus Red Team running on a schedule against the cloud detection set, per-rule precision targets tracked, risk-based alerting stacking signals, and a coverage report visible to the CISO.
+
+Stage 4, Adversarial: a purple-team cadence quarterly or better, a threat-intel-driven research backlog, detections for newly published ATT&CK techniques within an SLA, a detection-engineering team separate from the SOC, a data-lake and SIEM hybrid with cost-aware log routing, and validation results feeding engineering OKRs.
+
+The skip-stage cost: trying detection-as-code without an alert queue anyone trusts is automating against an unloved artifact.
+
+== Common pitfalls
+layout: list
+section: pitfalls
+The page lists three more: rule sprawl without ATT&CK tags, log budgets set by Finance without security context, and no retirement criteria.
+item: Alerting on everything
+item: No version control on rules
+item: No validation
+item: Ignoring data-plane logs
+item: Skipping the IdP
+item: Treating native threat detection as a complete program
+item: Compliance-driven detection
+notes:
+Alerting on everything produces a queue no human can act on. Every alert should have a documented analyst action, and if none exists, the rule belongs in the data lake for hunting, not in the SIEM for alerting. Editing detections in the SIEM UI without a Git repo behind them is the equivalent of editing production config by SSH: drift is silent and history is lost. A rule library nobody has exercised is a list of confident assumptions, and the page calls Stratus, Atomic and a quarterly purple team table stakes.
+
+Control-plane-only logging tells you who changed permissions, not who read the data, and most cloud-breach incidents involve data access. The first event of a typical cloud kill chain is in Entra, Okta or Workspace rather than in CloudTrail. GuardDuty, Defender and SCC each catch the well-known attacker behaviors well, but they do not write your environment-specific detections. Compliance-driven rules pass an auditor but don't catch attackers: write detections from threat-research findings and map them to compliance controls after the fact.
+
+The other three: a library of 500 rules with no consistent technique mapping cannot produce a coverage report. Cutting log ingest to save money sometimes blinds the detection program, so the conversation is which logs, at which retention, at which tier, rather than cut 20%. And every rule needs a retirement criterion at deploy time, not as an afterthought.
+
+== Is Sigma worth learning if my SIEM has its own language?
+layout: question
+section: faq
+Your team already writes rules in the SIEM's native language. Think about what happens to that library when the SIEM changes, and where tuning happens.
+notes:
+This is a question from the page's FAQ. Ask it and let the room answer before moving on.
+
+== Yes, for portability
+layout: answer
+section: faq
+Sigma is the closest the industry has to a vendor-neutral detection format. Write the canonical rule in Sigma, compile it with pySigma, and do final performance tuning in the vendor language.
+notes:
+Yes, for portability. Sigma is the closest the industry has to a vendor-neutral detection format. Writing the canonical rule in Sigma and compiling it to your SIEM's native language with pySigma protects you from SIEM migrations and gives you a portable detection library.
+
+The vendor language is still where final performance tuning happens; the Sigma source is where the rule lives in your repo.
+
+== Which cloud logs do I need to enable?
+layout: question
+section: faq
+Some log streams cost real money and are off by default. Consider which sources are non-negotiable and which to enable selectively.
+notes:
+This is the second FAQ question. Again, ask it before showing the answer.
+
+== A non-negotiable set, plus scoped data-plane logs
+layout: answer
+section: faq
+Enable an org-level audit trail, IdP sign-in and audit logs, flow logs on production VPCs, and native threat-detection findings. Enable data-plane logs deliberately on resources holding real customer data.
+notes:
+The page's non-negotiable set: an organization-level audit trail, meaning a CloudTrail org trail, Activity Log Diagnostic Settings or Cloud Audit Logs at the org node; identity-provider sign-in and audit logs from Entra, Okta, IAM Identity Center or Workspace; VPC or network flow logs on production VPCs; and the platform-native threat-detection findings from GuardDuty, Defender for Cloud or Security Command Center Premium.
+
+The expensive one, data-plane or data-access logs, should be enabled deliberately on resources holding real customer data, scoped tightly. The page calls skipping data-plane the most common cloud detection blind spot.
