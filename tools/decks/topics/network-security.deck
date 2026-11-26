@@ -11,7 +11,7 @@ There is no perimeter. The network is software-defined, every workload has a pub
 notes:
 The page opens with a 30-second version. Cloud network security is what's left after you accept that there's no perimeter. The network is software-defined, every workload has a public-by-default API edge, and the most common modern attack path runs outbound, with a compromised workload calling an attacker-owned domain, rather than inbound.
 
-The figure shows the discipline as four things stacked. Good VPC or VNet design: tiered subnets, hub-and-spoke, and no default VPC in prod. Private connectivity to cloud APIs: PrivateLink, Private Link or PSC, with endpoint policies. Controlled egress: Network Firewall, FQDN allow-lists and DNS firewall. And an identity-aware overlay: ZTNA, service mesh mTLS and microsegmentation.
+The figure shows the discipline as four things stacked, and the page spells out each one. Good VPC or VNet design: tiered subnets, hub-and-spoke, and no default VPC in prod. Private connectivity to cloud APIs: PrivateLink, Private Link or PSC, with endpoint policies. Controlled egress: Network Firewall, FQDN allow-lists and DNS firewall. And an identity-aware overlay: ZTNA, service mesh mTLS and microsegmentation.
 
 This page covers the network mechanics. Zero trust, the architectural pattern that sits on top, has its own page. This one is the wires, rules and primitives that make zero trust enforceable in AWS, Azure and GCP.
 
@@ -19,8 +19,8 @@ This page covers the network mechanics. Zero trust, the architectural pattern th
 layout: compare
 section: why-different
 col: The perimeter is gone | Managed services have public endpoints by default | Thousands of edges, one per resource | Identity becomes the trust anchor
-col: Software-defined network | Every change is an API call | Fast, audited, expressible as code | Detect misconfigs at once; prevent them in CI
-col: Egress is the new ingress | Attacks often start with SSRF or a leaked credential | Then call out to an attacker domain | Outbound filtering stops them
+col: Software-defined network | Every change is a fast, audited API call | One bad rule can expose a database | Detect misconfigs at once; prevent them in CI
+col: Egress is the new ingress | Attacks often start with SSRF or a leaked credential | Then call out to an attacker domain | The network control is outbound filtering
 Most programs are inbound-heavy and egress-blind: exactly backwards from where the attacks happen.
 notes:
 On-prem networking is built around a perimeter and a small number of choke points: a firewall at the edge, a DMZ behind it, an internal LAN behind that. The perimeter is the policy plane. Cloud breaks that model in three ways.
@@ -29,12 +29,12 @@ The perimeter is gone. Every VPC has an internet-routable edge unless you active
 
 The network is software-defined. CIDR blocks, route tables, security groups, NSGs and transit gateway attachments are all API calls, so they change in seconds, leave a CloudTrail, Activity Log or Cloud Audit Log record, and can be expressed as code. A single misconfigured security group rule can expose a database to the internet in one API call, but you can detect that misconfig the moment it happens and write policy-as-code that prevents it in CI.
 
-Egress is the new ingress. The classic on-prem attack went in through a firewall and moved laterally. The modern cloud attack often starts with an SSRF or a leaked credential and works out: the compromised workload calls an attacker-controlled domain to exfiltrate data or pull down a second-stage payload. Outbound filtering stops it: FQDN allow-lists, DNS sinkholing and VPC endpoint policies.
+Egress is the new ingress. The classic on-prem attack went in through a firewall and moved laterally. The modern cloud attack often starts with an SSRF or a leaked credential and works out: the compromised workload calls an attacker-controlled domain to exfiltrate data or pull down a second-stage payload. The network control that stops it is outbound filtering: FQDN allow-lists, DNS sinkholing and VPC endpoint policies.
 
 == Plan the IP space before you build
 layout: checklist
 section: vpc-design
-check: Use RFC1918 space, 10.0.0.0/8 for a multi-region, multi-account program
+check: Use RFC1918; 10.0.0.0/8 is the standard multi-region, multi-account choice
 check: Never overlap CIDRs across accounts
 check: Allocate from one IPAM source of truth
 check: Size for growth: in Kubernetes, every pod takes an IP
@@ -90,7 +90,7 @@ col: Azure: NSGs at two layers | NSGs apply to NICs and subnets, and both are ev
 col: GCP: VPCs are global | One VPC spans all regions; subnets are regional | No peering needed between its regions | A misconfiguration has a wider blast radius
 GCP's Hierarchical Firewall Policies set org or folder rules, such as no workload exposing port 22 to the internet.
 notes:
-Most primitives map across the three clouds with vocabulary differences. Two differences matter for security.
+The page flags one thing on each of these clouds: an Azure-specific gotcha, and the one important way GCP's model differs from AWS and Azure.
 
 On Azure, an NSG is a stateful 5-tuple ACL applied at a NIC or a subnet, and rules at both layers are evaluated. A permissive subnet NSG can mask a restrictive NIC NSG, and the reverse, so document which layer holds policy. Two related Azure points: user-defined routes are required to force-tunnel egress through a firewall instead of the default internet route, and Service Endpoints are mostly superseded by Private Link.
 
@@ -118,7 +118,7 @@ section: private-endpoints
 row: Cloud | Primitive | How to use it
 row: AWS | Gateway endpoints for S3 and DynamoDB, free | Use unconditionally if a VPC calls either
 row: AWS | Interface endpoints (PrivateLink), ~$0.01/hr/AZ plus data | KMS, STS, Secrets Manager, ECR, SSM and more
-row: Azure | Private Endpoint: a private IP for the PaaS service | Needs private DNS zones; DNS is the common misconfiguration
+row: Azure | Private Endpoint: a private IP for the PaaS service | Needs private DNS zones; DNS is the most common misconfiguration
 row: GCP | Private Service Connect | Pair with VPC Service Controls
 The security value is the endpoint policy: a network-enforced rule, such as reaching only S3 buckets in our own org's accounts, that IAM alone can't enforce.
 notes:
@@ -228,7 +228,7 @@ layout: compare
 section: service-mesh
 col: What a mesh adds | Encryption, identity, authorization and observability between services | Without each app re-implementing them
 col: Where mTLS stops | Traffic leaving the mesh is unencrypted | Unless wired through a mesh egress gateway
-col: When you may not need one | Single cluster, single team, modest service count | A language with good native TLS and JWT libraries
+col: When you may not need one | Single cluster, single team, modest service count | And a language with good native TLS and JWT libraries
 AWS has no managed mesh: App Mesh was retired on 30 September 2026.
 notes:
 Inside a Kubernetes cluster, and increasingly across clusters, service-to-service traffic needs the same protections as user-to-service traffic. Meshes provide them as platform features. Istio uses Envoy sidecars or ambient mode, with mTLS by default. Linkerd is a CNCF graduated mesh with a Rust-based proxy, lower resource overhead and simpler config. Cilium Service Mesh is sidecarless and eBPF-based. Google Cloud Service Mesh is managed Istio, AKS has a supported Istio add-on, and Consul Connect spans Kubernetes and VMs. On AWS, App Mesh was retired on 30 September 2026, and AWS points former users at ECS Service Connect for ECS and VPC Lattice for EKS and cross-VPC traffic.
@@ -293,7 +293,7 @@ row: Direct Connect, ExpressRoute, Interconnect | Best performance, highest cost
 row: NaaS exchanges: Megaport, Equinix Fabric | Cloud on-ramps and virtual circuits
 row: SD-WAN | Right when branch offices are in the mix
 row: Overlay networks | App-level links, not site-to-site at scale
-Cross-cloud egress costs $0.05-$0.12/GB on most clouds outbound to the internet. Do the math at GB/month scale.
+Cross-cloud egress costs $0.05-$0.12/GB on most clouds outbound to the internet, sometimes more to specific destinations. Do the math at GB/month scale.
 notes:
 For multi-cloud and hybrid programs, how the clouds and on-prem reach each other is its own discipline.
 
@@ -358,7 +358,7 @@ The page says Stage 4 takes intentional investment, and Stage 5 is rare and usua
 == Common pitfalls
 layout: list
 section: pitfalls
-The page lists three more: public managed databases, one WAF in front of another, and pods without NetworkPolicy.
+Alongside these seven, the page lists public managed databases, one WAF in front of another, and pods without NetworkPolicy.
 item: NAT-only egress with no filter
 item: Default VPC in production
 item: Security groups open to 0.0.0.0/0 beyond a public load balancer
@@ -367,11 +367,11 @@ item: No flow logs
 item: A bastion on a public IP
 item: TLS inspection turned on for everything
 notes:
-NAT-only egress is the default: once a workload is compromised, the attacker has unrestricted outbound. The page calls Network Firewall with an FQDN allow-list the biggest improvement you can ship in a sprint. A default VPC in production has permissive defaults in every region and is often unattributed in IPAM; disable creation org-wide, because one in a prod account is almost certainly accidental.
+NAT-only egress is the default: once a workload is compromised, the attacker has unrestricted outbound. The page calls Network Firewall with an FQDN allow-list the biggest improvement you can ship in a sprint. A default VPC in production has permissive defaults in every region and is often unattributed in IPAM; disable creation org-wide. If one exists in a prod account, it is almost certainly accidental.
 
 Security groups open to 0.0.0.0/0 on anything but a public load balancer are the bread-and-butter finding of every CSPM. Peering everything to everything gives O(n²) connections with no transit policy and no inspection, so move to hub-and-spoke by the third VPC. Without flow logs you can't answer "did this host ever talk to this IP?" when an incident happens.
 
-A bastion with port 22 open leads to bastion-credential theft and a full VPC pivot; ZTNA is the modern answer. TLS inspection on everything breaks certificate-pinning apps, mobile SDKs and anything that does its own validation, so inspect by exception.
+A bastion on a public subnet with port 22 open is a path to bastion-credential theft and a full VPC pivot; ZTNA is the modern answer. TLS inspection on everything breaks certificate-pinning apps, mobile SDKs and anything that does its own validation, so inspect by exception.
 
 The other three: managed databases default to public on some configurations, so always put them in a private subnet, security-group-scoped to the app tier, with no public IP and with encryption in transit and at rest. Stacked WAFs mean three sets of false positives, so pick one policy plane. And cluster security groups are not enough: without NetworkPolicy, one compromised pod can talk to every other pod.
 
@@ -385,7 +385,7 @@ This is a question from the page's FAQ. Ask it and let the room answer before mo
 == TLS protects data in flight, not against exfiltration
 layout: answer
 section: faq
-A compromised workload can still exfiltrate to a third-party S3 bucket or an attacker-owned API. Endpoint policies scope which accounts, principals and resources are reachable. Without them, you rely on IAM alone, which has a worse track record.
+A compromised workload can still exfiltrate to a third-party S3 bucket or an attacker-owned API. Endpoint policies scope which accounts, principals and resources are reachable. Relying on IAM alone has a worse track record than defense in depth.
 notes:
 TLS protects data in flight. It does not stop a compromised workload from exfiltrating to a third-party S3 bucket, a public DNS-over-HTTPS resolver or an attacker-owned API.
 
@@ -398,7 +398,7 @@ layout: question
 section: faq
 Think about where SASE's users and applications sat when it was designed, and where yours sit.
 notes:
-This is the second FAQ question. Again, ask it before showing the answer.
+This is another question from the page's FAQ. Again, ask it before showing the answer.
 
 == Maybe: ZTNA plus an SWG often covers it
 layout: answer
