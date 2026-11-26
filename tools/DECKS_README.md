@@ -529,21 +529,28 @@ Speaker notes, on every slide.
   `page-meta` line at the top of `<main>`. Under it, also alone on its line,
   `--stamp` writes the preview: `<details class="deck-preview"
   data-topic-deck>` holding the deck's `/embed` viewer in a `.deck-frame`.
-  It starts closed, and a closed panel does not render its lazy iframe, so
-  nothing loads from Google until a reader opens it. `--check` wants exactly
-  those two lines, in that order, for the mapping's id, and any other Google
-  Slides link or embed on the page is a finding. `--stamp` and `--record`
-  write both and plan every page before writing any, as the breach tool
-  does. The glossary cross-linker skips both lines.
+  It starts closed, and its iframe has no `src`, only a `data-src` naming
+  the viewer, because with scripts off a browser loads every iframe at page
+  load, closed panel and `loading="lazy"` or not. `main.js` copies
+  `data-src` into `src` when the panel opens, so nothing loads from Google
+  until a reader opens it, with scripts on or off. With scripts off,
+  `noscript.css` hides the empty frame and the panel's `<noscript>` holds a
+  `.deck-preview-link` to the same viewer. `--check` wants exactly those two
+  lines, in that order, for the mapping's id, and any other Google Slides
+  link or embed on the page is a finding. `--stamp` and `--record` write
+  both and plan every page before writing any, as the breach tool does. The
+  glossary cross-linker skips both lines.
 - `topics.html` shows the same deck on the topic's card. A card with a deck
   is a `<div class="resource-card resource-card--topic-deck">` holding the
   card's link (its picture, h3 and p unchanged), then two lines carrying
   `data-topic-hub-deck`: a `.deck-actions` strip with the PDF and editable
-  copy links, and a closed `.deck-preview`. A card whose topic has no deck
-  stays a plain `<a class="card-link">` card. `--stamp` and `--record` write
-  every card from the mapping, in the same plan as the topic pages, and
-  `--check` fails a card that disagrees with it or any other Google Slides
-  link on the page. The cross-linker skips both lines here too.
+  copy links, and a closed `.deck-preview` written the same way as the
+  page's, so a closed card preview requests nothing either. A card whose
+  topic has no deck stays a plain `<a class="card-link">` card. `--stamp`
+  and `--record` write every card from the mapping, in the same plan as the
+  topic pages, and `--check` fails a card that disagrees with it or any
+  other Google Slides link on the page. The cross-linker skips both lines
+  here too.
 
 ## Topic build
 

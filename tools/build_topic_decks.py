@@ -661,16 +661,28 @@ def extract(slug: str, only: list[str] | None = None) -> str:
 # ---------------------------------------------------------------------------
 
 
-def preview_line_html(pres_id: str, indent: str) -> str:
-    """The line --stamp writes under the topic deck line: a closed panel
-    holding Google's slide viewer. While it is closed the lazy iframe is not
-    rendered, so nothing loads from Google until a reader opens it."""
+def preview_html(pres_id: str, attr: str, title: str) -> str:
+    """The closed slide preview --stamp writes on a topic page and on its
+    topics.html card, carrying attr. Its iframe names Google's viewer in
+    data-src and has no src: with scripts off a browser loads every iframe
+    at page load, closed panel and loading="lazy" or not. main.js copies
+    data-src into src when the panel opens, so nothing loads from Google
+    until a reader opens it. With scripts off, noscript.css hides the empty
+    frame and the open panel shows a link to the same viewer instead."""
     src = f"https://docs.google.com/presentation/d/{pres_id}/embed"
+    ext = 'target="_blank" rel="noopener noreferrer"'
     return (
-        f'{indent}<details class="deck-preview" {TOPIC_DECK_ATTR}><summary>Preview the slides</summary>'
-        f'<div class="deck-frame"><iframe src="{src}" title="Preview of this page\'s slides" '
-        'loading="lazy" allowfullscreen></iframe></div></details>'
+        f'<details class="deck-preview" {attr}><summary>Preview the slides</summary>'
+        f'<div class="deck-frame"><iframe data-src="{src}" title="{title}" allowfullscreen></iframe></div>'
+        f'<noscript><p class="deck-preview-link"><a href="{src}" {ext}>Open the slides in Google Slides</a> '
+        "(the preview here needs JavaScript).</p></noscript></details>"
     )
+
+
+def preview_line_html(pres_id: str, indent: str) -> str:
+    """The line --stamp writes under the topic deck line: the closed
+    preview panel."""
+    return indent + preview_html(pres_id, TOPIC_DECK_ATTR, "Preview of this page's slides")
 
 
 def insert_deck_line(html: str, pres_id: str) -> str:
@@ -778,9 +790,7 @@ def _hub_card_html(c: _HubCard, pres_id: str | None) -> str:
         f'{i}    {c.a}\n{c.inner}{i}    </a>\n'
         f'{i}    <p class="deck-actions" {HUB_DECK_ATTR}><strong>Slides:</strong> '
         f'<a href="{base}/export/pdf" {ext}>PDF</a> <a href="{base}/copy" {ext}>Editable copy</a></p>\n'
-        f'{i}    <details class="deck-preview" {HUB_DECK_ATTR}><summary>Preview the slides</summary>'
-        f'<div class="deck-frame"><iframe src="{base}/embed" title="Preview of the {title} slides" '
-        f'loading="lazy" allowfullscreen></iframe></div></details>\n'
+        f'{i}    {preview_html(pres_id, HUB_DECK_ATTR, f"Preview of the {title} slides")}\n'
         f'{i}</div>\n'
     )
 
@@ -1351,8 +1361,10 @@ def _decked_card(href: str, title: str, pres_id: str, text: str = "About it.") -
         f'{i}    <p class="deck-actions" data-topic-hub-deck><strong>Slides:</strong> '
         f'<a href="{base}/export/pdf" {ext}>PDF</a> <a href="{base}/copy" {ext}>Editable copy</a></p>\n'
         f'{i}    <details class="deck-preview" data-topic-hub-deck><summary>Preview the slides</summary>'
-        f'<div class="deck-frame"><iframe src="{base}/embed" title="Preview of the {title} slides" '
-        'loading="lazy" allowfullscreen></iframe></div></details>\n'
+        f'<div class="deck-frame"><iframe data-src="{base}/embed" title="Preview of the {title} slides" '
+        'allowfullscreen></iframe></div>'
+        f'<noscript><p class="deck-preview-link"><a href="{base}/embed" {ext}>Open the slides in Google Slides</a> '
+        '(the preview here needs JavaScript).</p></noscript></details>\n'
         f'{i}</div>\n'
     )
 
@@ -1888,7 +1900,12 @@ def _case_stamp_after_page_meta(tmp: Path) -> None:
     first, preview = line.split("\n")
     assert first.split(">", 1)[1] == bbd.deck_line_html(ID_A).split(">", 1)[1]
     assert preview.startswith('        <details class="deck-preview" data-topic-deck><summary>'), preview
-    assert f'src="https://docs.google.com/presentation/d/{ID_A}/embed"' in preview and 'loading="lazy"' in preview
+    # The iframe holds the viewer's URL for main.js to load when the panel
+    # opens, and the panel links the same viewer for readers without scripts.
+    embed = f"https://docs.google.com/presentation/d/{ID_A}/embed"
+    assert f'<iframe data-src="{embed}" title="Preview of this page\'s slides" allowfullscreen>' in preview, preview
+    assert f'<noscript><p class="deck-preview-link"><a href="{embed}" ' in preview, preview
+    assert preview.endswith("</p></noscript></details>"), preview
     assert " open" not in preview.split(">", 1)[0], "the preview must start closed"
     # A page-meta line at column 0 gets a deck line at column 0.
     flush = _plant(PAGE, META_LINE, META_LINE.lstrip())
@@ -1949,7 +1966,9 @@ def _case_hub_stamp_decks_mapped_cards(tmp: Path) -> None:
     plain = _hub(_plain_card("kube.html", "Kubernetes"), _plain_card("serverless.html", "Serverless &amp; more"))
     out = stamp_hub(plain, {"kube": {"id": ID_A}})
     assert out == _hub(_decked_card("kube.html", "Kubernetes", ID_A), _plain_card("serverless.html", "Serverless &amp; more"))
-    assert out.count(ID_A) == 3 and 'title="Preview of the Kubernetes slides"' in out, out
+    # The id appears in the PDF and copy links, the preview's data-src and
+    # its no-script link.
+    assert out.count(ID_A) == 4 and 'title="Preview of the Kubernetes slides"' in out, out
     assert "<details class=\"deck-preview\" data-topic-hub-deck><summary>" in out and " open" not in out
     # The h3 keeps its entities as written.
     both = stamp_hub(plain, {"kube": {"id": ID_A}, "serverless": {"id": ID_B}})
@@ -1964,7 +1983,7 @@ def _case_hub_stamp_reverses_and_is_idempotent(tmp: Path) -> None:
     assert stamp_hub(once, {"kube": {"id": ID_A}}) == once
     assert stamp_hub(once, {}) == plain
     swapped = stamp_hub(once, {"kube": {"id": ID_B}})
-    assert swapped.count(ID_B) == 3 and ID_A not in swapped, swapped
+    assert swapped.count(ID_B) == 4 and ID_A not in swapped, swapped
     # A card with extra attributes on its link and box survives the round trip.
     odd = plain.replace('class="card-link">', 'class="card-link" data-x="1">', 1).replace(
         '<div class="resource-card">', '<div class="resource-card" data-y="2">', 1)
@@ -1979,6 +1998,47 @@ def _case_hub_stamp_reverses_and_is_idempotent(tmp: Path) -> None:
             assert needle in str(e), e
         else:
             raise AssertionError(f"stamp_hub accepted a hub with {needle}")
+
+
+class _IframeAttrs(HTMLParser):
+    """Every iframe's attributes, as a browser's parser reads them."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.frames: list[dict[str, str | None]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "iframe":
+            self.frames.append(dict(attrs))
+
+
+def _iframes(html: str) -> list[dict[str, str | None]]:
+    p = _IframeAttrs()
+    p.feed(html)
+    p.close()
+    return p.frames
+
+
+def _case_preview_iframe_has_no_src(tmp: Path) -> None:
+    """No stamped preview iframe carries a src, on a topic page or on the
+    hub: with scripts off a browser loads an iframe that has one at page
+    load, closed panel or not. Each names its deck's viewer in data-src."""
+    page = bbd.stamp_page(PAGE, ID_A, TOPIC)
+    hub = stamp_hub(_hub(_plain_card("kube.html", "Kubernetes"), _plain_card("serverless.html", "Serverless")),
+                    {"kube": {"id": ID_A}, "serverless": {"id": ID_B}})
+    for name, html, ids in (("page", page, [ID_A]), ("hub", hub, [ID_A, ID_B])):
+        frames = _iframes(html)
+        # Control: the parser sees every stamped frame, so an empty list of
+        # offenders below is not a parser that saw nothing.
+        assert len(frames) == len(ids), (name, frames)
+        with_src = [f for f in frames if "src" in f]
+        assert not with_src, f"a stamped {name} preview iframe carries a src: {with_src}"
+        assert [f.get("data-src") for f in frames] == [
+            f"https://docs.google.com/presentation/d/{i}/embed" for i in ids], (name, frames)
+        assert all("loading" not in f for f in frames), (name, frames)
+    # Control: a src planted on a stamped iframe is seen.
+    planted = _plant(page, "<iframe data-src=", '<iframe src="https://docs.google.com/x" data-src=')
+    assert [f for f in _iframes(planted) if "src" in f], planted
 
 
 def _case_hub_findings(tmp: Path) -> None:
@@ -2400,6 +2460,7 @@ CASES: list = [
     ("crosslink_skips_topic_deck_line", _case_crosslink_skips_topic_deck_line),
     ("hub_stamp_decks_mapped_cards", _case_hub_stamp_decks_mapped_cards),
     ("hub_stamp_reverses_and_is_idempotent", _case_hub_stamp_reverses_and_is_idempotent),
+    ("preview_iframe_has_no_src", _case_preview_iframe_has_no_src),
     ("hub_findings", _case_hub_findings),
     ("crosslink_skips_hub_deck_lines", _case_crosslink_skips_hub_deck_lines),
     ("record_writes_sections", _case_record_writes_sections),
