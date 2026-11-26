@@ -3,8 +3,9 @@
 Each guide in `howto/` can have a slide deck, written as a plain-text outline
 in `tools/decks/`, built into a .pptx, published to Google Slides, and linked
 from the guide's info box. Outlines, the mapping file and build output live
-under `tools/`, which never ships. The only published change is the one line
-of links on the guide page.
+under `tools/`, which never ships. The published changes are the one line of
+links on each guide page and the deck strip on the guide's card on
+`cloud-security-how-to.html` (see [The guides hub](#the-guides-hub)).
 
 ```bash
 python3 tools/build_howto_decks.py --self-test    # run the built-in cases
@@ -94,7 +95,8 @@ A deck that fails either step has no .pptx left in `tools/decks/build/`.
   page with the mapping: a mapped page must hold exactly one deck line, the
   one `--stamp` writes, last in its first info box; an unmapped page must hold
   no deck markup; and no page may link a Google Slides deck anywhere else. It
-  exits 1 on any finding. CI runs it after `--self-test`.
+  compares the guides hub with the mapping the same way. It exits 1 on any
+  finding. CI runs it after `--self-test`.
 - `--stale` lists each published deck whose outline, with includes spliced
   in, no longer matches the hash recorded at publish (or is missing, or no
   longer parses), and each outline never published. `--published-only` leaves out the never-published ones. The last
@@ -106,9 +108,10 @@ A deck that fails either step has no .pptx left in `tools/decks/build/`.
   as a warning and in the job summary.
 - `--status` lists each guide with whether it has an outline and a published
   deck. A guide without a deck is never blocked.
-- `--stamp` rewrites every guide page from the mapping: it removes every deck
-  line, then writes one deck line last in the first info box of each mapped
-  page. It plans every page before writing any. When a page holds deck markup
+- `--stamp` rewrites every guide page and the guides hub from the mapping: it
+  removes every deck line, then writes one deck line last in the first info
+  box of each mapped page, and the deck strip on each mapped guide's hub
+  card. It plans every file before writing any. When a page holds deck markup
   that is not a whole line (a `<p data-howto-deck>` missing its `</p>`, or
   written inline after other markup), the info box is not in the shape it can
   edit, or the mapping has a finding, it lists every problem and writes
@@ -125,6 +128,21 @@ fragment flags every deck that uses it.
 Editing the outline of a published deck, or a fragment it includes, makes
 that deck stale: the public slides and their PDF keep the old text until the
 owner re-publishes it, so tell the owner the deck needs re-publishing.
+
+## The guides hub
+
+Each guide card on `cloud-security-how-to.html` whose guide has a published
+deck ends with two lines carrying `data-howto-hub-deck`: a `.deck-actions`
+strip with the PDF and editable copy links, and a closed `.deck-preview`
+written the same way as a topic page's, so a closed preview requests
+nothing from Google. Nothing else in the card changes: it keeps its plain
+`<div class="resource-card">`, so every tool that reads resource cards
+still sees it, and CSS finds a decked card by the strip's attribute. A
+guide card is one whose h3 links a page in `howto/`, and it ends at the
+first `</div>` line at its own indent. `--check` fails a card that
+disagrees with the mapping, a published guide with no card on the hub, the
+attribute anywhere but a card's strip, and any other Google Slides link on
+the page. The cross-linker skips both lines.
 
 ## Publishing a deck
 

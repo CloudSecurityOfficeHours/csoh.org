@@ -432,7 +432,7 @@ never hand-edit the output.
 | Recap recording links + `VideoObject` | `tools/sync_recap_videos.py` | `--check` in `validate-html.yml` |
 | "Latest recap" link on sessions.html (`data-latest-recap`) | `tools/sync_latest_recap.py`, run by `add_meeting.py` | `--check` in `validate-html.yml` |
 | Glossary "Used on N pages" lists (`<dd class="term-usage">`) | `tools/sync_glossary_usage.py`, after `crosslink_pages.py` | `--check` in `validate-html.yml` |
-| How-to deck links (`data-howto-deck`) on howto/ pages | `tools/build_howto_decks.py --stamp` | `--check` in `validate-html.yml`; `--stale --published-only` there warns |
+| How-to deck links (`data-howto-deck`) on howto/ pages, and the deck strip and slide preview on their cloud-security-how-to.html cards (`data-howto-hub-deck`) | `tools/build_howto_decks.py --stamp` | `--check` in `validate-html.yml`; `--stale --published-only` there warns |
 | Breach deck links (`data-breach-deck`) on breaches/ pages | `tools/build_breach_decks.py --stamp` | `--check` in `validate-html.yml`; `--stale --published-only` there warns |
 | Topic deck links and slide preview (`data-topic-deck`) on topic pages, and the same strip on their topics.html cards (`data-topic-hub-deck`) | `tools/build_topic_decks.py --stamp` | `--check` in `validate-html.yml`; `--stale --published-only` there warns |
 | Search field and kill chain index on breach-timeline.html (between `breach-index` markers) | `tools/sync_breach_timeline_index.py`, after adding or renaming a timeline card | `--check` in `validate-html.yml` |
