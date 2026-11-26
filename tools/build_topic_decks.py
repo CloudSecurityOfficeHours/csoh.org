@@ -37,8 +37,9 @@ Outline format (what differs from a breach outline):
 - Every number, technique ID and link in a slide's text and notes appears in
   the sections it cites; the title and promise are held to the whole page.
 - On a page that carries the Wiz disclosure, the first slide that shows Wiz
-  carries it on the slide, where the audience sees it; notes that name Wiz
-  before any slide shows it carry it too.
+  (in its text, or in a figure slide's picture or caption) carries it on the
+  slide, where the audience sees it; notes that name Wiz before any slide
+  shows it carry it too.
 - A slide cites one or two sections; three or more is a parse error.
 
 published.json maps each slug to its id, outline_sha256, page_sha256, the
@@ -901,13 +902,23 @@ def _discloses(texts: list[str]) -> bool:
     return any(DISCLOSURE_RE.search(t) for t in texts)
 
 
+def _figure_shown_text(page: TopicPage, key: str | None) -> list[str]:
+    """What a figure slide's picture and caption put in front of the
+    audience: the SVG's text with its markup stripped, and the page's
+    <figcaption>, which the builder prints under the picture."""
+    if not key or key not in page.figures:
+        return []
+    svg = " ".join(htmllib.unescape(re.sub(r"<[^>]+>", " ", page.svgs[key])).split())
+    return [svg, page.figures[key].caption]
+
+
 def _wiz_findings(deck: bbd.BDeck, page: TopicPage) -> list[str]:
     """On a page that carries the Wiz disclosure, two checks that do not
     depend on each other. The first place the audience sees Wiz named (the
-    cover's title or promise, else the first slide whose own text names it)
-    carries the disclosure there; notes are not shown, so they never satisfy
-    it. And notes that name Wiz before any slide shows it carry it too, for
-    the presenter who reads them out."""
+    cover's title or promise, else the first slide whose own text, picture
+    or caption names it) carries the disclosure there; notes are not shown,
+    so they never satisfy it. And notes that name Wiz before any slide shows
+    it carry it too, for the presenter who reads them out."""
     if not DISCLOSURE_RE.search(page.text):
         return []
     out: list[str] = []
@@ -920,6 +931,8 @@ def _wiz_findings(deck: bbd.BDeck, page: TopicPage) -> list[str]:
         if shown_yet and notes_done:
             break
         shown = bbd._slide_text_fields(s, notes=False) + ([s.source[0]] if s.source else [])
+        if s.layout == "figure":
+            shown += _figure_shown_text(page, s.figure)
         if not shown_yet and _names_wiz(shown):
             shown_yet = notes_done = True
             if not _discloses(shown):
@@ -1308,6 +1321,36 @@ def _case_link_outside_section(tmp: Path) -> None:
     _only(_tgate("section: what-is", "layout: links", "link: The IAM page | iam.html"), "iam.html", "what-is")
     assert _tgate("section: what-is", "layout: links",
                   "link: Concepts | https://kubernetes.io/docs/concepts") == []
+
+
+def _case_wiz_in_figure(tmp: Path) -> None:
+    """A figure slide shows its picture and the page's caption, so a figure
+    that names Wiz makes that slide one that shows Wiz."""
+    def wiz(deck, html) -> list[str]:
+        return [f for f in topic_page_findings(deck, html, pages=PAGES) if "Wiz" in f]
+
+    in_svg = _plant(PAGE, ">Sign images<", ">Sign images, Wiz or Orca<")
+    in_caption = _plant(PAGE, "<figcaption>The cluster runs more than your code.",
+                        "<figcaption>The cluster runs more than your code, says Wiz.")
+    fig = ("layout: figure", "section: supply-chain", "figure: cluster-supply-chain")
+    bare = _tslide(*fig, "Five checks for what runs in the cluster.")
+    deck = _tparse(bare)
+    for html in (in_svg, in_caption):
+        f = wiz(deck, html)
+        _only(f, "first slide to show Wiz")
+        assert f[0].startswith(deck.slides[0].where + ":"), f
+    # Control: the disclosure in the slide's prose satisfies it.
+    disclosed = _tparse(_tslide(*fig, f"Five checks; the picture names Wiz {DISCLOSURE}."))
+    assert wiz(disclosed, in_svg) == [] and wiz(disclosed, in_caption) == []
+    # Control: a page without the disclosure asks for nothing.
+    assert wiz(deck, _plant(in_svg, f" {DISCLOSURE}", "")) == []
+    # Control: a figure that does not name Wiz leaves the slide clean.
+    assert wiz(deck, PAGE) == []
+    # A slide that shows Wiz in its picture is the first to show it, so a
+    # later disclosed slide does not excuse it.
+    later = _tslide("section: why-cloud", f"Wiz again {DISCLOSURE}.")
+    deck = _tparse(bare + later)
+    _only(wiz(deck, in_svg), "first slide to show Wiz")
 
 
 def _case_wiz_disclosure(tmp: Path) -> None:
@@ -1965,6 +2008,7 @@ CASES: list = [
     ("number_outside_section", _case_number_outside_section),
     ("link_outside_section", _case_link_outside_section),
     ("wiz_disclosure", _case_wiz_disclosure),
+    ("wiz_in_figure", _case_wiz_in_figure),
     ("section_cap", _case_section_cap),
     ("layout_not_allowed", _case_layout_not_allowed),
     ("page_not_a_topic", _case_page_not_a_topic),

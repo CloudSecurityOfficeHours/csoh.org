@@ -452,7 +452,9 @@ Speaker notes, on every slide.
   held to the whole page.
 - On a page that carries "(disclosure: the site's author works at Wiz)", the
   first slide that shows Wiz carries the disclosure on the slide, where the
-  audience sees it. The notes never count for this: they are not shown, and
+  audience sees it. A `figure` slide shows its picture's text and the page's
+  caption too, so a diagram that names Wiz makes its slide one that shows
+  Wiz. The notes never count for this: they are not shown, and
   the PDF leaves them out. A title or promise that names Wiz carries it in the
   title or the promise. Separately, notes that name Wiz before any slide shows
   it carry the disclosure too, for the presenter who reads them out.
