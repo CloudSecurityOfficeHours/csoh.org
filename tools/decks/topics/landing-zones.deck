@@ -23,7 +23,7 @@ row: Identity baseline | Federated SSO, group access, no long-lived root credent
 row: Shared network | Central VPC or VNet, no public egress by default
 row: Logging spine | Audit, flow and resource logs to a central security project
 row: Policy spine | Org-level guardrails pre-blocking risky configurations
-row: Delivery pipeline | IaC repo, review and pipeline: the only way to change it
+row: Delivery pipeline | IaC repo, review and pipeline: the only way to change the foundation
 Six things, deployed once and reused by every workload that follows.
 notes:
 Strip the marketing off and the page says a landing zone is six concrete things, deployed once and reused by every workload that follows.
@@ -37,7 +37,7 @@ Everything else, workloads bring themselves. The foundation gives them a defined
 == Two organizations, 200 workloads each
 layout: compare
 section: why
-col: Org A | Built the first workload by hand | Each team chose its own logs, VPC, IAM naming and MFA | Audit's answer: it depends on the team | Blast radius is the whole org
+col: Org A | Built the first workload by hand | Each team chose its own log destination, VPC, IAM naming and MFA | Audit's answer: it depends on the team | Blast radius is the whole org
 col: Org B | Stood up a landing zone first | All 200 share a security project, SSO groups and Shared VPC | Org policies pre-block public buckets in prod | Audit's answer: one project, here's the dashboard
 The landing zone is slower on day one and pays off on day 200, when fixing 199 different patterns costs much more than building one good pattern up front.
 notes:
@@ -99,14 +99,14 @@ The figure shows two ways to express region strategy. In the first, a guardrail 
 
 As the caption says, a region list on one hierarchy is enough for most organizations, and a jurisdiction boundary is a second landing zone.
 
-The page treats region strategy as a constraint that runs through several of the eight building blocks rather than as a ninth block. It decides the shape of your hierarchy before you create the first account, which is why it is a day-one decision.
+The page treats region strategy as a constraint that runs through several of the eight building blocks rather than as a ninth block. It decides the shape of your hierarchy before you create the first account.
 
 == Guardrail or hierarchy boundary
 layout: compare
 section: residency
 col: Residency as a guardrail | One hierarchy; an org policy denies regions outside a list | Simplest, and right for most organizations | A policy assignment
 col: Residency as a hierarchy boundary | A separate OU, management group or folder per jurisdiction | Its own policy set, logging sink and account vending | Changes blocks 1, 4 and 7
-Reach for the boundary only when a requirement forces you to: retrofitting it means moving accounts between OUs after they hold production data.
+The boundary is expensive, so wait until a requirement forces it. Decide early, though: retrofitting it means moving accounts between OUs after they hold production data.
 notes:
 Residency as a guardrail means one hierarchy, with an org-level policy denying resource creation outside an approved region list. The page calls it the simplest option, and right for most organizations. On AWS it is an SCP denying actions where the aws:RequestedRegion condition key is outside your list, plus Control Tower's governed-Regions setting. On Azure it is the built-in Allowed locations and Allowed locations for resource groups policies, assigned at the management-group scope. On GCP it is the constraints/gcp.resourceLocations organization policy.
 
@@ -138,7 +138,7 @@ Service availability differs by region. Have a documented exception path before 
 layout: compare
 section: residency
 col: A separate cloud | AWS European Sovereign Cloud, run by EU-resident operators | Google's partner-operated dedicated clouds | Usually a separate hierarchy
-col: In-region options | Microsoft's Sovereign Public Cloud, in its existing European regions | Google's Data Boundary controls inside its public cloud | Closer to guardrails on the estate you have
+col: In-region options | Microsoft's Sovereign Public Cloud: engineer access from outside Europe approved and monitored | Google's Data Boundary controls inside its public cloud | Closer to guardrails on the estate you have
 If sovereign cloud is plausibly in your future, decide now whether your foundation is one estate or two. The answer changes your identity design more than your network design.
 notes:
 Beyond region pinning, all three hyperscalers now sell sovereign options, and they differ in kind. AWS European Sovereign Cloud is a separate cloud run by EU-resident operators. Microsoft's Sovereign Public Cloud runs in its existing European regions, with remote access by engineers outside Europe approved and monitored rather than ruled out. Google offers Data Boundary controls inside its public cloud as well as partner-operated dedicated clouds. There is also a growing set of non-hyperscaler European providers.
@@ -202,7 +202,7 @@ section: aws
 check: Vend accounts with AFT for GitOps, or the built-in factory for console
 check: Set SCPs at the OU level, your strongest preventive control
 check: Delegate GuardDuty and Security Hub to the audit account
-check: Put Transit Gateway in the network account, with egress through inspection
+check: Put Transit Gateway in the network account, with egress through an inspection VPC
 SCP examples: deny disabling CloudTrail, deny all actions outside approved regions, deny iam:DeleteRolePolicy on detective-only roles.
 notes:
 Account vending: Account Factory for Terraform, or AFT, is the GitOps-flavor pattern, and Control Tower's built-in factory is the console-flavor.
@@ -271,8 +271,8 @@ section: maturity
 stat: 1 | Stage 1: Bootstrap | SSO, MFA on root, billing alerts, audit logs to a bucket
 stat: 3-5 | Stage 2: Separation | Prod, non-prod and sandbox split; the first real landing zone
 stat: 20-50 | Stage 3: Scale | IaC vending, hub-and-spoke network, central SIEM
-stat: 100+ | Stage 4: Enterprise | Perimeters, automated remediation, a platform team
-The reference designs assume Stage 3. Skipping stages is expensive: build incrementally, because the reference designs are the destination, not the starting point.
+stat: 100+ | Stage 4: Enterprise | Service perimeters, automated remediation, a platform team
+The reference designs assume Stage 3. Skipping stages is expensive, so build incrementally.
 notes:
 You don't deploy the full reference design on day one. Foundations grow with the org.
 
@@ -284,7 +284,7 @@ Stage 3, Scale, is 20 to 50 accounts: account vending via IaC, a hub-and-spoke s
 
 Stage 4, Enterprise, is 100+ accounts: multi-region failover for the foundation itself, service perimeters and private-only data planes, automated remediation, compliance frameworks such as FedRAMP, PCI and HITRUST layered as policy initiatives, and a dedicated platform team owning the foundation as a product.
 
-A common failure mode is going from Stage 1 to Stage 4 because someone read the reference design and tried to deploy all of it at once. You end up with a complex foundation no one understands.
+A common failure mode is going from Stage 1 to Stage 4 because someone read the reference design and tried to deploy all of it at once. You end up with a complex foundation no one understands. Build incrementally: the reference designs are the destination, not the starting point.
 
 == When you do not need a landing zone
 layout: list
