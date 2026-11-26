@@ -1,0 +1,333 @@
+title: Non-Human Identity (NHI) Security
+page: non-human-identity.html
+as-of: 2026-11-25
+promise: Most NHIs have no owner, never rotate and can do far more than they need to; getting control starts with an inventory and owners.
+
+== The short version
+layout: text
+section: top
+For every human who logs into your cloud there are dozens, often hundreds, of identities that are not people. Most have no owner, never rotate, and can do far more than they need to.
+notes:
+Service accounts, API keys, OAuth tokens, database logins, certificates, cloud roles, workload identities, and now AI agents all authenticate on their own. For every human who logs into your cloud, there are dozens, and often hundreds, of these identities. Most of them have no owner, never rotate, and can do far more than they need to.
+
+This deck follows the page's map of non-human identity security: what an NHI is, why their number exploded, and a concrete path to getting them under control. It is for cloud security engineers, IAM architects, detection engineers and platform teams, and it builds on the identity fundamentals in the site's IAM and cloud identity guide.
+
+== What counts as a non-human identity
+layout: table
+section: what-is-nhi
+row: Kind | Examples
+row: Cloud IAM principals | Roles, service accounts, managed identities, their access keys
+row: Secrets and keys | API keys, database credentials, HMAC signing keys
+row: OAuth tokens and grants | Refresh tokens, personal access tokens, SaaS-to-SaaS grants
+row: Certificates | TLS server and client certs, signing keys
+row: Workload identities | What a pod, function or CI job assumes at runtime
+row: AI agents | An emerging class that calls tools and takes actions
+Anything that authenticates without a person behind it at the moment of use.
+notes:
+The page defines a non-human identity as any principal or credential that authenticates without a person behind it at the moment of use. That is a wide tent, and deliberately so.
+
+In a typical cloud and SaaS estate it covers cloud IAM principals such as IAM roles, service accounts and managed identities, along with the long-lived access keys attached to them. It covers secrets and keys: API keys, database credentials, HMAC signing keys and provider access keys. It covers OAuth refresh tokens, personal access tokens, and the SaaS-to-SaaS grants that let one app act inside another. It covers TLS server and client certificates and code or artifact signing keys, the workload identity a pod, function or CI job assumes at runtime, and AI agents, an emerging class that calls tools and takes actions on a schedule or on demand.
+
+== Where the human guardrails go missing
+layout: list
+section: what-is-nhi
+A machine, script, pipeline or model uses the credential, so these either do not apply or are quietly skipped.
+item: A login prompt
+item: MFA
+item: A manager who offboards you
+item: An annual access review
+notes:
+The common thread across all of these identities is that a machine, script, pipeline or model is using the credential. So the usual human guardrails, a login prompt, MFA, a manager who offboards you and an annual access review, either do not apply or are quietly skipped.
+
+The page says that gap is its entire subject.
+
+== Four forces stacked on top of each other
+layout: table
+section: why-it-exploded
+row: Force | What it adds
+row: Cloud | Every autoscaling group, Lambda, container and managed service assumes an identity
+row: SaaS | Every "Connect your Google account" or "Add to Slack" button mints an NHI
+row: CI/CD | Pipelines deploy to production, so they hold credentials to production
+row: AI agents | Credentials to act, proliferating faster than governance was designed to handle
+In most environments NHIs outnumber human identities many times over, and they are created constantly and deprovisioned almost never.
+notes:
+The page points out that NHIs are not new, and that the change is in the sheer count and the rate of creation. It names four forces that stacked on top of each other.
+
+Cloud: infrastructure that used to be one server with one login is now hundreds of ephemeral workloads, each with a role. SaaS: modern business runs on dozens of SaaS apps wired together with OAuth grants and API keys, and each connection button mints an NHI, often with broad scopes and often approved by an end user with no security review. CI/CD: a single GitHub Actions workflow or CI/CD runner can carry keys to multiple clouds, registries and secret stores. AI agents are the newest force: they need credentials to act, and they are proliferating faster than any governance process was designed to handle.
+
+The practical result is that in most environments NHIs outnumber human identities many times over, and unlike employees they are created constantly and deprovisioned almost never.
+
+== Five problems that reinforce each other
+layout: table
+section: core-problems
+row: Problem | What it looks like
+row: Sprawl | Spread across clouds and hundreds of apps, with no central registry
+row: No ownership | The creator has left, so no one rotates, questions or deletes it
+row: Over-permissioning | Wildcard policies and admin-equivalent service accounts are common
+row: Long-lived secrets | Static keys that never expire, valid for years
+row: No lifecycle | Only "created": no rotation, re-certification or offboarding
+You cannot secure what you cannot count, and almost no one can count their NHIs.
+notes:
+The page treats NHI risk as five problems that reinforce each other.
+
+Sprawl: NHIs are created by developers, automation and self-service SaaS connections, and spread across clouds and hundreds of apps with no central registry. No ownership: a service account created for a migration three years ago is still there, still privileged, and the person who made it has left. When no human owns an identity, no one rotates its secret, questions its permissions or deletes it. The page calls ownership the most under-appreciated NHI control.
+
+Over-permissioning: NHIs are routinely granted far more than they use, because scoping is hard and broad grants just work. It is the same least-privilege problem as in IAM, amplified because there is no human to notice the excess.
+
+Long-lived secrets and the missing lifecycle get the next two slides.
+
+== Static keys are the defining NHI risk
+layout: text
+section: core-problems
+A key committed to a repo, baked into an image, or pasted into a config file can sit valid for years. When it leaks, there is no MFA and no session timeout to save you.
+notes:
+In the page's words, static keys that never expire are the defining NHI risk. A key committed to a repo, baked into an image or pasted into a config file can sit valid for years, and when it leaks there is no MFA and no session timeout to save you.
+
+The site's data security guide covers secret handling further.
+
+== Humans have a lifecycle; NHIs usually just get created
+layout: compare
+section: core-problems
+col: Human identity | Joiner | Mover | Leaver
+col: NHI (usually) | Created | No rotation cadence | No re-certification | No offboarding
+The fix for every one of these problems starts with giving NHIs a real lifecycle.
+notes:
+Human identities have a lifecycle: joiner, mover, leaver. NHIs usually have only created. There is no rotation cadence, no re-certification and no offboarding.
+
+The page says the fix for every problem on the previous slides starts with giving NHIs a real lifecycle.
+
+== What NHI failure looks like in real breaches
+layout: table
+section: incidents
+row: Breach | The NHI failure
+row: Snowflake / UNC5537 | Valid credentials for accounts that lacked MFA
+row: Uber | Hardcoded admin credentials for a privileged access tool
+row: Microsoft SAS token leak | Over-broad token with a very long expiry exposed 38TB
+The pattern repeats: a credential that outlived its purpose, was scoped too broadly, or was never protected by a second factor.
+notes:
+Several of the most instructive cloud breaches are, at their core, NHI failures.
+
+In the Snowflake / UNC5537 campaign, attackers used valid credentials for accounts that lacked MFA to log straight into customer data warehouses. Machine and service logins that never got an MFA or federation layer were exactly the exposure.
+
+In the Uber breach, an attacker who got initial access found hardcoded admin credentials for a privileged access tool, then pivoted. Secrets sitting in scripts and shares are NHI credentials waiting to be reused.
+
+In the Microsoft SAS token leak, an Azure Shared Access Signature token that was scoped far too broadly and set to a very long expiry exposed 38TB of internal data, including secrets and private keys. The page calls it a textbook NHI story: a long-lived, over-permissioned, unmonitored token.
+
+Browse the site's breach timeline and, the page says, you will see identity, human and non-human, at the root of most of it.
+
+== Discovery: build the inventory source by source
+layout: table
+section: discovery
+row: Source | What to pull
+row: Each cloud | Users, roles, service accounts, policies and last-used timestamps
+row: SaaS | OAuth grants and connected third-party apps
+row: Source control and pipelines | Committed keys and tokens, deploy keys, pipeline secrets
+row: Secret stores | The inventory of what is intended to exist
+Every NHI program starts with an inventory, and you can build a useful first pass from native APIs before buying anything.
+notes:
+Every NHI program starts with an inventory, and the good news, the page says, is that you can build a useful first pass from native APIs before buying anything. Work source by source.
+
+In each cloud, enumerate IAM users, roles and service accounts, their attached policies and, crucially, their last-used timestamps. In AWS use IAM credential reports and Access Analyzer; in GCP enumerate service accounts and keys; in Azure inventory app registrations, service principals and managed identities.
+
+In SaaS, pull the OAuth grants and connected third-party apps from your major platforms: identity provider, email and docs suite, code host and chat. These SaaS-to-SaaS NHIs are usually the least governed.
+
+In source control and pipelines, scan repos and CI config for committed keys and tokens, and enumerate deploy keys and pipeline secrets. Finally, read the inventory out of your secrets manager so you know what is intended to exist.
+
+== Then correlate: last used and owner
+layout: compare
+section: discovery
+col: Last used | Dormant credentials are cleanup candidates | They are also a stealthy risk
+col: Owner | Map each NHI to a human or team | No attributable owner puts it on a remediation list
+Dedicated NHI tools exist largely because this correlation is tedious by hand and must stay current. Do not let tooling gate the first inventory.
+notes:
+Then correlate. The page names two derived attributes as the highest value. Last used: dormant credentials are cleanup candidates and a stealthy risk. Owner: map each NHI to a human or team, and anything you cannot attribute an owner to goes on a remediation list.
+
+Dedicated NHI tools exist largely because this correlation across clouds and SaaS is tedious to do by hand and needs to stay current. The page's advice is not to let tooling gate the first inventory.
+
+== Where CIEM, secrets management and ITDR fit
+layout: table
+section: ciem-secrets-itdr
+row: Category | The question it answers
+row: CIEM | Is this over-permissioned?
+row: Secrets management | Where does the secret live and how does it rotate?
+row: ITDR | Is this identity being abused right now?
+row: NHI security adds | Who owns it, is its secret rotated, should it exist at all?
+None of these replaces the others. A mature program uses all three, on top of a current NHI inventory.
+notes:
+NHI security overlaps three adjacent categories, and the page asks for precision about the boundaries.
+
+Cloud Infrastructure Entitlement Management analyzes effective permissions and right-sizes them toward least privilege. It is the entitlement lens on your NHIs and is usually delivered as part of a CNAPP. NHI security uses CIEM findings but adds the questions CIEM does not: who owns this identity, is its secret rotated, and should it exist at all.
+
+A secrets manager stores credentials securely, brokers access to them and can rotate them. It is essential plumbing, but a secrets manager full of long-lived keys is still a pile of long-lived keys.
+
+Identity Threat Detection and Response watches identity behavior for signs of compromise: impossible travel, anomalous API usage, a dormant service account suddenly active. For NHIs this is where detection lives.
+
+A mature program uses CIEM to right-size, a secrets manager or federation to handle credentials, and ITDR to catch abuse, all on top of a current NHI inventory.
+
+== A standing key versus a token that expires
+layout: figure
+section: secretless
+figure: secretless-exchange
+If long-lived static secrets are the root NHI risk, the strongest fix is to stop having them.
+notes:
+The figure contrasts a standing key with a token that expires. A long-lived key can be copied and replayed until someone rotates it. A workload identity token is checked, exchanged for minutes-long credentials, and then it expires. As the caption puts it, the cloud trusts a subject claim, not a key that has been sitting in a repository.
+
+That is the idea behind secretless access: a workload proves its identity with a short-lived, verifiable token and exchanges it for access, so there is no standing key to leak.
+
+== OIDC workload identity federation
+layout: compare
+section: secretless
+col: CI pipelines | GitHub Actions assumes an AWS role via OIDC | No AWS_ACCESS_KEY_ID stored in the repo
+col: Kubernetes pods | GKE Workload Identity, EKS Pod Identity, Azure Workload Identity | Pods assume cloud identities without mounting static keys
+This is the most widely deployed pattern: a workload gets a short-lived OIDC identity token from a trusted issuer, and the cloud trusts that issuer for specific subjects.
+notes:
+The most widely deployed secretless pattern uses OpenID Connect. A workload gets a short-lived OIDC identity token from a trusted issuer, and the cloud is configured to trust that issuer for specific subjects.
+
+The page's conceptual GitHub-to-AWS example works like this: the workflow requests an OIDC token, then AWS STS exchanges it for temporary role credentials through assume-role-with-web-identity, given a role ARN and a session name. No static AWS key is ever stored in the repo.
+
+The same idea runs in Kubernetes: GKE Workload Identity, EKS Pod Identity and Azure Workload Identity let pods assume cloud identities without mounting static keys.
+
+== SPIFFE, SPIRE and brokered access
+layout: compare
+section: secretless
+col: SPIFFE and SPIRE | A standard SPIFFE ID and short-lived SVID credentials | SPIRE attests workloads and issues those identities | Applied uniformly across a fleet, not tied to one cloud
+col: Brokered access | The workload authenticates to a broker with its attested identity | The broker mints just-in-time, short-lived credentials | Reaches targets that do not natively speak OIDC
+The direction matters more than any single technology: move NHIs from long-lived shared secrets toward short-lived, attested, verifiable identities.
+notes:
+For workload-to-workload trust that is not tied to a single cloud, SPIFFE, the Secure Production Identity Framework For Everyone, defines a standard identity format, the SPIFFE ID, and short-lived SVID credentials. SPIRE is its reference implementation: it attests workloads and issues those identities. The concept is the same as OIDC federation, a strongly attested, short-lived identity instead of a shared secret, applied uniformly across a fleet. It pairs naturally with service mesh mTLS and with zero trust, where every workload connection is authenticated rather than assumed safe by network location.
+
+A third pattern puts a broker in the middle. The workload authenticates to the broker with its attested identity, and the broker mints just-in-time, short-lived credentials to the target. This is the model some NHI vendors lead with, and it extends secretless access to targets that do not natively speak OIDC.
+
+The page's point is the direction rather than any single technology: from long-lived shared secrets toward short-lived, attested, verifiable identities.
+
+== The AI-agent wrinkle
+layout: list
+section: ai-agents
+AI agents are the fastest-growing new class of NHI, and they break several assumptions at once.
+item: It acts at machine speed, so a mistake or compromise scales fast
+item: Prompt injection and tool-poisoning can steer its non-deterministic behavior
+item: It is handed wide permissions and a shared key to be "helpful"
+notes:
+AI agents are the fastest-growing new class of NHI. An agent that reads tickets, queries a database and files a change needs credentials to do all three, so it is an NHI, but an unusual one.
+
+It acts at machine speed: an agent can make thousands of API calls in the time a human makes one, so a mistake or a compromise scales fast. Its behavior is non-deterministic: prompt injection and tool-poisoning can steer it into actions its author never intended, and if it holds broad credentials, that manipulation inherits broad access.
+
+And it is granted broad access to be helpful. The path of least resistance is to hand an agent wide permissions and a shared key, which is exactly the over-permissioning and long-lived-secret pattern you are trying to eliminate.
+
+== Govern every agent as a first-class NHI
+layout: checklist
+section: ai-agents
+check: Its own scoped, short-lived credential, via federation or a broker
+check: A named human or team owner
+check: Least-privilege scopes per tool
+check: Monitoring on its actions
+check: No inherited human session, no shared over-privileged service account
+Ideally, every tool connection an agent uses gets the same treatment.
+notes:
+The governance answer on the page is to treat every agent, and ideally every tool connection an agent uses, as a first-class NHI. That means its own scoped, short-lived credential through federation or a broker, never a shared static key; a named human or team owner; least-privilege scopes per tool; and monitoring on its actions.
+
+Do not let an agent silently inherit a human's session or reuse one over-privileged service account. The site's AI and ML security guide goes deeper on prompt injection and agent-specific threats, and the Promptware case shows how agent manipulation plays out.
+
+== Detecting NHI abuse
+layout: table
+section: detection
+row: Signal | Example
+row: Dormant NHI suddenly active | A key unused for weeks starts making calls
+row: New location or ASN | A CI key seen from a residential or hosting-provider IP
+row: New or anomalous actions | A read-only reporting identity suddenly calls iam:*
+row: Impossible velocity or volume | For AI agents especially, a spike far beyond baseline
+row: OAuth grant anomalies | A new high-scope grant, or an existing grant used in a new way
+NHIs are easier to baseline than humans: their behavior is narrow and repetitive.
+notes:
+Prevention reduces the surface, and detection catches what slips through. The page says NHIs are easier to baseline than humans because their behavior is narrow and repetitive: a pipeline calls the same handful of APIs from the same places every day, so deviations stand out.
+
+These are the high-value signals it lists for a cloud SOC and detection engineering team. A service account or key unused for weeks that starts making calls is a classic sign of stolen-credential reuse. A CI key that only ever authenticates from your runners' egress IPs, seen from a residential or hosting-provider IP, is a strong indicator. A read-only reporting identity that suddenly calls iam:* or exfiltration-shaped APIs is acting anomalously. Impossible velocity or volume matters especially for AI agents, as a spike far beyond the learned baseline. And watch for a new high-scope third-party OAuth grant, or an existing grant used in a new way.
+
+== Two things make detection actionable
+layout: compare
+section: detection
+col: Telemetry | Rich last-used and source telemetry | So you can baseline
+col: Ownership | The ownership mapping from your inventory | So an alert has someone to route to
+Without an owner, even a perfect detection produces an alert no one can action.
+notes:
+The page calls this the NHI-flavored view of ITDR, and it feeds directly into incident response.
+
+Two things make NHI detection actionable: rich last-used and source telemetry, so you can baseline, and the ownership mapping from your inventory, so an alert has someone to route to. Without an owner, even a perfect detection produces an alert no one can action.
+
+== A practical maturity path
+layout: checklist
+section: maturity
+check: Inventory NHIs across clouds and SaaS, with last-used for each
+check: Assign an owner to every NHI
+check: Kill the obvious risk: dormant identities, embedded secrets, unused grants
+check: Right-size permissions with CIEM and last-used data
+check: Put remaining static secrets behind automated rotation
+check: Go secretless for the highest-value keys and new workloads
+check: Run continuous detection and give NHIs a real lifecycle
+You do not fix NHI in one quarter. This is a workable progression, top to bottom.
+notes:
+The page offers a workable progression, and says you do not fix NHI in one quarter.
+
+Build the cross-cloud and SaaS NHI inventory from native APIs and capture last-used for every credential; that alone surfaces the worst dormant and unowned identities. Map every NHI to a human or team; anything unattributable becomes a remediation candidate, and ownership is what makes every later step possible. Kill the obvious risk: delete dormant identities, remove committed and embedded secrets, and revoke unused OAuth grants, the fastest blast-radius reduction available.
+
+Use CIEM and last-used data to trim over-privileged NHIs toward least privilege. Put the remaining static secrets behind a secrets manager with automated rotation, so nothing is long-lived by default. Replace the highest-value keys with OIDC federation or a broker, and make secretless the default for new workloads and pipelines. Finally, stand up ITDR-style monitoring and give NHIs a real lifecycle: creation standards, periodic re-certification and deprovisioning.
+
+== If you do nothing else this quarter
+layout: text
+section: maturity
+Most organizations are stuck between the first two steps. Get the inventory and assign owners: every other control gets easier once you can name who is responsible for each identity.
+notes:
+The page says most organizations are stuck between steps one and two, inventory and ownership.
+
+If you do nothing else this quarter, get the inventory and assign owners. Every other control gets easier once you can name who is responsible for each identity.
+
+== The NHI tooling market
+layout: table
+section: tooling
+row: Approach | Focus
+row: SaaS and OAuth discovery and governance | SaaS-to-SaaS grants, API keys and third-party integrations
+row: Broad enterprise lifecycle | Cloud, SaaS and on-prem coverage, plus certification workflows
+row: Secretless brokering | Replacing static credentials with short-lived, policy-based access
+row: Newer entrants | Pushing these ideas toward AI-agent identity
+Treat this as a map of approaches, not a ranking. The category consolidated quickly in 2026, so validate a vendor's independence and roadmap, and match the tool to where your NHI risk concentrates.
+notes:
+A dedicated NHI-security category has emerged, and in 2026 it consolidated quickly: several of its best-known startups were bought by larger security, identity and data platforms. The page treats this as a map of approaches, not a ranking.
+
+Astrix and Entro built the discovery and governance approach for SaaS and OAuth. Cisco completed its acquisition of Astrix, and SailPoint its acquisition of Entro, on the same day, 29 June 2026. Oasis and Token Security emphasize wide coverage across cloud, SaaS and on-prem plus NHI lifecycle and certification workflows; Oasis has since been acquired by Cyera, which announced the deal on 28 July 2026. Aembit and Clutch, along with offerings from broader IAM vendors, focus on secretless brokering. Natoma pushed these ideas toward AI-agent identity with an MCP platform for agents, and Snowflake completed its acquisition of it in June 2026.
+
+Consolidation changes what you are buying, and the change can be abrupt: Astrix stopped selling new standalone licenses on 30 June 2026, the day after the Cisco deal closed. CNAPP platforms increasingly fold NHI features in alongside CIEM (disclosure: the site's author works at Wiz), while the specialists go deeper on SaaS and OAuth. Your inventory will tell you where your NHI risk concentrates.
+
+== How is NHI security different from CIEM?
+layout: question
+section: faq
+Think about what happens to an identity besides its permissions, and where NHIs live outside the cloud control plane.
+notes:
+This question is from the page's quick answers. Ask it and let the room answer before moving on.
+
+== CIEM right-sizes; NHI security covers the whole lifecycle
+layout: answer
+section: faq
+CIEM focuses on entitlements and right-sizing them toward least privilege. NHI security also covers discovery, ownership, secret rotation and deprovisioning, and reaches into SaaS OAuth grants, third-party integrations and API keys.
+notes:
+CIEM, Cloud Infrastructure Entitlement Management, focuses on entitlements: who and what can do which actions on which cloud resources, and how to right-size those permissions toward least privilege. NHI security is broader in scope. It covers the full lifecycle of the identity itself, including discovery, ownership, secret rotation and deprovisioning, and it reaches beyond the cloud control plane into SaaS-to-SaaS OAuth grants, third-party integrations and API keys.
+
+In practice CIEM answers whether an identity is over-permissioned, while NHI security also asks whether it should still exist, who owns it, and whether its secret is safe.
+
+== Which long-lived secrets should go first?
+layout: question
+section: faq
+Consider where a leaked or forgotten credential would do the most damage.
+notes:
+This is the last quick answer from the page. Again, ask it before showing the answer.
+
+== Prioritize by blast radius and exposure
+layout: answer
+section: faq
+- Cloud provider access keys, especially long-lived IAM user keys
+- Tokens and keys committed to source control or embedded in images
+- OAuth grants to third-party SaaS apps you no longer use
+- Any credential never rotated or with no known owner
+notes:
+The page says to prioritize by blast radius and exposure: cloud provider access keys, especially long-lived IAM user keys; tokens and keys committed to source control or embedded in container images; OAuth grants to third-party SaaS apps you no longer use; and any credential that has never rotated or has no known owner.
+
+Replace the highest-value ones with federation or a broker for secretless access, and put the rest behind a secrets manager with automated rotation.
