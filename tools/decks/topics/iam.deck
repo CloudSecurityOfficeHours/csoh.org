@@ -16,12 +16,12 @@ The page's 30-second version: in cloud, identity is the perimeter. Every action 
 
 The work of cloud IAM comes in four parts. Federate humans through one identity provider, so credentials are short-lived and revocable. Eliminate long-lived workload secrets by adopting platform workload identity: IRSA, GKE Workload Identity, Azure Workload Identity, and OIDC trust for CI/CD. Continuously narrow permissions using the cloud's own analyzers, plus a third-party tool when the volume demands it. And detect identity abuse with high-signal alerts that fire on the post-compromise behaviors attackers exhibit.
 
-The trap is treating IAM as a one-time configuration. Drift, role proliferation, exception accumulation and shadow identities bend the curve away from least privilege every week: service accounts created in side projects, OAuth apps consented to, federated trusts added to integrate a new SaaS. The mature program treats identity like a code base: reviewed, versioned, tested and monitored.
+The trap is treating IAM as a one-time configuration. It's a discipline: drift, role proliferation, exception accumulation and shadow identities, such as service accounts created in side projects, OAuth apps consented to and federated trusts added to integrate a new SaaS, all bend the curve away from least privilege every week. The mature program treats identity like a code base: reviewed, versioned, tested and monitored.
 
 == Two questions on every API call
 layout: compare
 section: what-is
-col: On-prem | Kerberos ticket from a domain controller | Network position is most of the access decision | Implicit trust behind the firewall
+col: On-prem | Kerberos ticket from a domain controller | Network position is most of the access decision | Implicit trust to most resources behind the firewall
 col: Cloud | Every API call is a fresh authorization decision | Evaluated against an explicit policy | No "behind the firewall"
 Who is this (authentication), and are they allowed to do this (authorization)? In cloud, both happen at the control plane on every action, not once at the front door.
 notes:
@@ -35,9 +35,9 @@ The practical implications: every workload needs an identity, with no shared ser
 layout: compare
 section: identity-types
 col: Human | Workforce, in the corporate IdP | Customers, through CIAM | B2B admins using SSO into your product
-col: Workload | Pods, functions, CI/CD jobs, agents, SaaS connectors | Typically 10-100× the human population
+col: Workload | Pods, functions, CI/CD jobs, on-prem agents, SaaS connectors | Typically 10-100× the human population
 col: Service / principal | AWS roles, Azure service principals, GCP service accounts | What policies attach to and logs reference
-The most common audit gap is a broken chain: a CI job runs as a generic shared role, so "who deployed this" can't be answered.
+The most common audit gap is a broken chain of accountability: a CI job runs as a generic shared role, so "who deployed this" can't be answered.
 notes:
 Cloud IAM serves three distinct populations, with different lifecycles, threat models and tooling.
 
@@ -53,7 +53,7 @@ The populations chain together: an engineer signs in via SSO, pushes code throug
 layout: table
 section: federation
 row: Protocol | What it does | Where it fits
-row: SAML 2.0 | Browser-redirect flow with signed XML assertions | Still dominant in B2B SaaS; legacy partners without OIDC
+row: SAML 2.0 | Browser-redirect flow with signed XML assertions | Still dominant for B2B SaaS-to-SaaS; legacy partners without OIDC
 row: OIDC | JSON and JWT federation built on OAuth 2.0 | New integrations, and what clouds trust for workloads
 row: SCIM | Keeps user lifecycles in sync with downstream apps | Beside SAML or OIDC; skipping it leaves the off-boarding gap
 Pick one workforce IdP, federate every cloud and SaaS through it, and treat its joiner, mover and leaver events as the authoritative stream for access.
@@ -73,7 +73,7 @@ row: Model | Grants access by | Best for | Watch out for
 row: RBAC | Named roles assigned to subjects | Cloud control-plane access | Role explosion at scale
 row: ABAC | Attributes: tags, claims, time, IP, MFA state | Tag-scoped multi-team cloud accounts | One wrong tag flips the decision
 row: ReBAC | Graph relationships between users and resources | SaaS sharing models, fine-grained app permissions | Tooling less embedded in cloud-native IAM
-Cloud-native IAM is RBAC at the surface with ABAC inside: most mature programs keep a small set of roles per persona, with conditions scoping each to the right resources.
+In practice, cloud-native IAM is RBAC at the surface with ABAC inside: most mature programs keep a small set of roles per persona, with conditions scoping each to the right resources.
 notes:
 These are the three authorization models. RBAC attaches permissions to named roles and assigns subjects to roles. It suits cloud control-plane access and anything an auditor needs to read at a glance, but explodes at scale: one role per team, per environment, per privilege level gives thousands of roles.
 
@@ -100,7 +100,7 @@ AWS IAM Access Analyzer bundles several analyzers: external access, unused acces
 
 Azure Entra PIM makes admin roles eligible but not active by default; activation requires justification, approval and MFA, and the access window is bounded. GCP Policy Analyzer answers what permissions principal X has on resource Y, and IAM Recommender says which permissions a service account hasn't used recently and suggests a smaller role.
 
-Third-party tools sit above these when the volume demands it. The page lists CNAPPs with CIEM modules, identity-graph and identity threat detection tools, access governance and JIT request platforms, and open-source starting points such as RepoKID, CloudMapper, PMapper and iamlive, which are less hands-off than the commercial tools.
+Third-party tools add to these when the volume demands it. The page lists CNAPPs with CIEM modules, identity-graph and identity threat detection tools, access governance and JIT request platforms, and open-source starting points such as RepoKID, CloudMapper, PMapper and iamlive, which are less hands-off than the commercial tools.
 
 == The right-sizing loop
 layout: checklist
@@ -123,7 +123,7 @@ row: Cloud | How JIT works
 row: AWS | Identity Center permission sets with 1-4 hour sessions and approval gates
 row: Azure | Entra PIM: eligible assignments, activation with justification and MFA, time bounds
 row: GCP | Temporary IAM grants with an expiry condition, or Privileged Access Manager
-Standing admin access is the highest-impact risk in any cloud environment. JIT makes elevated access requestable, approvable and time-bounded. Around it, vault the few remaining long-lived secrets and test break-glass every six months.
+Standing admin access is the highest-impact risk in any cloud environment. JIT makes elevated access requestable, approvable and time-bounded. Cloud PAM adds: vault the few remaining long-lived secrets, broker sensitive access, test break-glass every six months.
 notes:
 The page calls standing admin access the highest-impact risk in any cloud environment: the fewer humans who hold standing admin rights, the smaller the blast radius when one gets phished. JIT collapses standing privilege to near-zero by making elevated access requestable, approvable and time-bounded.
 
@@ -135,7 +135,7 @@ PAM in cloud differs from on-prem credential vaulting. There are fewer secrets t
 layout: table
 section: workload-identity
 row: Cloud | VMs and functions | Kubernetes
-row: AWS | IAM roles on the compute, via IMDSv2 | IRSA, or its successor EKS Pod Identity
+row: AWS | IAM roles on the compute, via IMDSv2 or task metadata | IRSA, or its successor EKS Pod Identity
 row: Azure | Managed Identities | Azure Workload Identity on AKS
 row: GCP | Service accounts attached to compute | GKE Workload Identity
 Long-lived access keys are the most common source of cloud breaches. The fix is to eliminate them, not to rotate them harder.
@@ -151,9 +151,10 @@ Two numbers should both trend to zero: the count of IAM users with access keys, 
 == OIDC trust for CI/CD and on-prem
 layout: checklist
 section: workload-identity
-check: Grant id-token: write in the workflow permissions
-check: Configure the cloud to trust token.actions.githubusercontent.com
+check: GitHub Actions: grant id-token: write in the workflow permissions
+check: In the cloud, trust token.actions.githubusercontent.com as the issuer
 check: Scope the trust to specific repos, branches or environments
+check: GitLab CI (id_tokens) and CircleCI (OIDC contexts) follow the same pattern
 check: Federate on-prem agents through an external OIDC issuer
 Every major CI/CD platform now publishes OIDC tokens the clouds can trust. There is no secret to leak: the trust is a JWT the CI provider signs for that specific job.
 notes:
@@ -174,13 +175,13 @@ Workload identity is one slice of a much bigger category: non-human identities, 
 
 The page says NHIs outnumber humans 109 to 1 on average, AI agents included, in one 2026 survey of security leaders, and that the ratio is trending up. A 1,000-person company often has 50,000+ NHIs, and growing weekly.
 
-NHI became a discrete security category between 2023 and 2026 because the volume crossed the threshold where humans could no longer track it manually. The site has a dedicated Non-Human Identity Security guide for the full treatment.
+NHI as a discrete security category exploded between 2023 and 2026 because the volume crossed the threshold where humans could no longer track it manually. The site has a dedicated Non-Human Identity Security guide for the full treatment.
 
 == Why NHI is now the dominant identity problem
 layout: list
 section: nhi
 item: No joiner, mover or leaver flow for NHIs
-item: No owner, so no rotation, review or incident response
+item: Typically no owner, so no rotation, review or incident response
 item: Secrets copied into vaults, code, CI, chat and .env files
 item: One OAuth token can reach a whole mailbox or codebase
 item: Most AI agents launched with whatever token was handy
@@ -190,7 +191,7 @@ Beyond the ratio, the page gives five reasons. Lifecycle: humans have HRIS-drive
 
 Secret sprawl: NHI credentials live in vaults, code, CI environment variables, Slack DMs, Notion pages, personal .env files and Postman collections, and every additional copy is a leak path. Cross-system blast radius: a single OAuth token can grant a SaaS app access to an entire mailbox, drive, calendar or codebase, behind a consent screen that typically buried the scope in grey text.
 
-AI agents are the new class: identities that take dynamic, model-generated actions on behalf of humans. Their non-deterministic actions break anomaly baselines, because calling an API it has never called before is a normal Tuesday for an agent. The patterns the page sees emerging: scope each agent's credentials to the smallest possible toolset with per-agent service accounts, log every tool invocation with the user context that initiated it, route high-impact actions through a human approval step, and treat agent prompts as untrusted input that can exfiltrate or escalate via tool calls.
+AI agents are the new class: identities that take dynamic, model-generated actions on behalf of humans. They need scoped credentials, auditable action trails and JIT like any service account, but most are launched with whatever token was handy. Their non-deterministic actions break anomaly baselines, because calling an API it has never called before is a normal Tuesday for an agent. The patterns the page sees emerging: scope each agent's credentials to the smallest possible toolset with per-agent service accounts, log every tool invocation with the user context that initiated it, route high-impact actions through a human approval step, and treat agent prompts as untrusted input that can exfiltrate or escalate via tool calls.
 
 == The NHI breach pattern
 layout: table
@@ -201,7 +202,7 @@ row: Microsoft, Midnight Blizzard | Legacy OAuth app with elevated mailbox scope
 row: Internet Archive, 2024 | Exposed GitLab token
 row: Dropbox Sign | Compromised production service account
 row: New York Times source code | GitHub PAT
-The common thread: an NHI created years ago was never reviewed, its secret leaked through one of many copies, and nobody had scoped the original grant.
+The common thread: an NHI created years ago was never reviewed, its secret leaked through one of many copies, and the blast radius was wide because nobody had scoped the original grant.
 notes:
 The page describes the 2023-2026 incident catalogue as heavy on NHI-origin breaches. Cloudflare's October 2023 incident traced to leaked Okta service tokens. Microsoft's Midnight Blizzard compromise came via a legacy OAuth app with elevated mailbox scopes. The Internet Archive's 2024 breach came via an exposed GitLab token, Dropbox Sign via a compromised production service account, and the New York Times source-code exposure via a GitHub PAT. Add a steady drumbeat of TruffleHog and detect-secrets scans finding credentials in public repos.
 
@@ -213,7 +214,7 @@ section: nhi
 check: Inventory every cloud, SaaS, repo, vault and CI system
 check: Give every NHI a named owner and a documented purpose
 check: Classify by what it can do, against what data
-check: Replace static secrets with short-lived tokens; vault the rest
+check: Replace static secrets with short-lived tokens where supported; vault the rest
 check: Rotate on a schedule and on any leak signal
 check: Detect anomalous NHI behavior
 check: Off-board NHIs on every project or employee exit
@@ -255,7 +256,7 @@ This is the defender's view of how attackers move from a low-privilege foothold 
 
 The page calls iam:PassRole the most-abused permission. If a compromised principal can pass a powerful role to a service it controls, such as Lambda, EC2, Glue, CloudFormation or SageMaker, it effectively assumes that role. Scope iam:PassRole with iam:PassedToService and explicit role-ARN allowlists, and audit with Access Analyzer's unused-permission view.
 
-AssumeRole chains: role A trusts role B, which trusts role C, and a compromised B can chain to A or C if the trust policies are permissive. The confused deputy is the cross-account form: a service that assumes a role in your account can be tricked by a malicious tenant if the trust policy doesn't pin the source account or external ID. Scope trust to specific principals rather than a whole account, with sts:ExternalId, aws:SourceAccount and aws:SourceArn on every cross-account trust policy.
+AssumeRole chains: role A trusts role B, which trusts role C, and a compromised B can chain to A or C if the trust policies are permissive. The confused deputy is a related cross-account risk: a service that assumes a role in your account can be tricked by a malicious tenant if the trust policy doesn't pin the source account or external ID. Scope trust to specific principals rather than a whole account, with sts:ExternalId, aws:SourceAccount and aws:SourceArn on every cross-account trust policy.
 
 The "let me make myself more powerful" permissions, iam:CreateAccessKey, iam:CreateLoginProfile, iam:AttachUserPolicy and iam:PutUserPolicy, are escalation on any principal that can target a more privileged user. Deny them with a service control policy unless explicitly scoped to a narrow admin role.
 
@@ -274,7 +275,7 @@ row: SCIM | Leaked provisioning token | Rotate; alert on unexpected user creatio
 notes:
 On GCP, a principal that holds iam.serviceAccounts.getAccessToken or iam.serviceAccounts.actAs on a more privileged service account can impersonate it, or attach it to a resource it controls, and inherits its permissions. Narrow who holds Service Account Token Creator and Service Account User on which service accounts, and alert on impersonation of high-value ones. iam.serviceAccountKeys.create mints a long-lived key; block it with the org policy and a documented exception path. A Kubernetes service account bound through Workload Identity to a powerful GCP service account effectively is that account, so keep one narrowly scoped GSA per workload. And a misplaced Owner at org level is everywhere, so grant at the lowest level that works.
 
-On Azure, a VM whose user-assigned managed identity holds Contributor on the subscription hands over the subscription to whoever compromises the VM. Adding a password or certificate to a service principal inherits its app roles. A misconfigured federated credential lets a PR from a fork mint cloud creds. A compromised Global Admin can grant itself Owner through the "Access management for Azure resources" toggle, so PIM-protect both and separate the populations.
+On Azure, a VM whose user-assigned managed identity holds Contributor on the subscription hands over the subscription to whoever compromises the VM. Adding a new password or certificate to an existing service principal gives an identity that inherits its app roles, so alert on credential additions to privileged ones. A misconfigured federated credential lets a PR from a fork mint cloud creds. A compromised Global Admin can grant itself Owner through the "Access management for Azure resources" toggle, so PIM-protect both and separate the populations.
 
 Across clouds, the page calls the wildcard OIDC trust the most common 2026 pattern: repo:* instead of repo:org/repo:ref:refs/heads/main lets any PR, including from a fork, mint cloud creds. Prefer environment-scoped trust over branch. SAML response tampering is mostly patched but occasionally rediscovered in roll-your-own libraries, so use the IdP-provided SDK. A leaked SCIM token is account takeover for the entire tenant.
 
@@ -295,7 +296,7 @@ The page says "MFA enabled" is no longer a meaningful security control by itself
 
 SMS and voice codes are phishable, SIM-swappable and interceptable via SS7; use them only as a fallback for accounts with no other risk exposure, and never for cloud admins. TOTP is better than SMS but still phishable through real-time relay, where the attacker proxies the code through a kit such as Evilginx, so it is acceptable for low-risk users and insufficient for admins. Push notifications are vulnerable to MFA fatigue, spamming the user until they tap; number matching mitigates most of that. The 2022 Uber breach began here: an attacker holding a contractor's VPN credentials, which Uber said were likely purchased on the dark web, push-bombed until one prompt was approved.
 
-FIDO2, WebAuthn and passkeys are phishing-resistant because the credential is bound to the IdP's origin, so a phishing site can't relay it. YubiKeys, Titan Keys, Touch ID, Windows Hello and platform passkeys all qualify, and the page sets this as the 2026 minimum for any account with prod cloud access. For high-value access, hardware-backed device certificates seal the credential to a TPM or Secure Enclave, so stolen tokens don't replay.
+FIDO2, WebAuthn and passkeys are phishing-resistant because the credential is bound to the IdP's origin, so a phishing site can't relay it. YubiKeys, Titan Keys, Touch ID, Windows Hello and platform passkeys all qualify, and the page sets this as the 2026 minimum for any account with prod cloud access. For high-value access, hardware-backed device certificates seal the credential to a TPM or Secure Enclave, gated by user presence; the session is bound to the device, so stolen tokens don't replay.
 
 Conditional access adds context: device posture, location, network, time and sign-in risk decide whether to allow, step up or block. A mature policy allows only managed compliant devices from expected geographies, steps up for admin scopes, and blocks anonymizing networks.
 
@@ -321,7 +322,7 @@ Four groups of high-signal detections every cloud SOC should have running, none 
 notes:
 The figure groups the page's high-signal identity detections by what the attacker is doing: reconnaissance, persistence, privilege change, and behavior that does not match the baseline. The page says none of these are exotic, and the usual failure is never writing the rule.
 
-The detections in this section include impossible travel; a console login from a new ASN, country or device for a privileged identity; GetCallerIdentity from an unusual context, the "who am I" call that is one of the most reliable post-compromise indicators; a new AssumeRole or impersonation event for a high-value role; growth in AssumeRole chain length; MFA disabled, a password reset, a new access key or a new federated credential on a privileged principal; new OAuth app consents and new federated trusts, the modern persistence mechanism; use of privilege-escalation primitives outside known admin workflows; service-account-key creation in GCP, federated credential addition in Azure and IAM user creation in AWS; and a role unused for 90 days that is suddenly used.
+The detections in this section include impossible travel; a console login from a new ASN, country or device for a privileged identity; GetCallerIdentity from an unusual context on AWS, the "who am I" call that is one of the most reliable post-compromise indicators; a new AssumeRole or impersonation event for a high-value role; growth in AssumeRole chain length; MFA disabled, a password reset, a new access key or a new federated credential on a privileged principal; new OAuth app consents and new federated trusts, the modern persistence mechanism; use of privilege-escalation primitives outside known admin workflows; service-account-key creation in GCP, federated credential addition in Azure and IAM user creation in AWS; and a role unused for 90 days that is suddenly used.
 
 Feed CloudTrail, the Azure Activity Log and Sign-in Logs, GCP Cloud Audit Logs and the IdP audit log into a SIEM, a detection-engineering platform or the cloud-native detection stack. The detections translate to all of them, and the rule libraries are widely shared.
 
@@ -339,7 +340,7 @@ This is an excerpt of the page's one-screen reference to the native IAM construc
 
 In the rows shown: AWS JIT is IAM Identity Center session limits plus third-party platforms such as C1, Opal, Sym and Teleport. The AWS guardrails are Service Control Policies, Resource Control Policies and declarative policies; Azure applies Azure Policy and initiatives at management-group scope; GCP uses Organization Policy constraints. GCP's unused-access tooling is IAM Recommender, Policy Analyzer and Policy Troubleshooter.
 
-On Azure, Entra Permissions Management, formerly CloudKnox, was retired on 1 November 2025, so unused-access analysis there sits with CIEM in Microsoft Defender for Cloud under the Defender CSPM plan, alongside Access Reviews.
+For Azure, the table lists CIEM in Microsoft Defender for Cloud under the Defender CSPM plan, alongside Access Reviews, and notes that Entra Permissions Management, formerly CloudKnox, was retired on 1 November 2025.
 
 The page says the native tools are necessary but rarely sufficient at scale. Most orgs running multi-cloud reach for a CIEM to get a cross-cloud effective-permissions view, because the native tools are strongest inside their own cloud and weakest at showing everything one principal can do across the entire estate.
 
@@ -360,7 +361,7 @@ Walk, least privilege at rest: permissions analyzers running monthly with unused
 
 Run, JIT and engineered: standing admin reduced to near-zero via JIT, SCPs, Organization Policies and Azure Policy guardrails blocking known-bad patterns at the API, OIDC trust for all CI/CD, the identity-threat detections all running, and a quarterly attack-path review.
 
-Fly, identity is a product: self-service role requests, automated right-sizing, drift detection blocking PRs in IaC, customer-facing identity as a competitive feature, and continuous-access evaluation and device-bound sessions shrinking blast radius to single API operations.
+Fly, identity is a product: self-service role requests, automated right-sizing, drift detection blocking PRs in IaC, customer-facing identity as a competitive feature, and continuous-access evaluation, device-bound sessions and just-enough-access shrinking blast radius to single API operations.
 
 The page says the skip-stage cost is real: JIT without federated SSO produces a Frankenstein of half-controls.
 
