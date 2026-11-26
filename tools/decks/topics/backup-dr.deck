@@ -40,7 +40,7 @@ row: 2 | Different storage media, or in cloud, different storage classes or serv
 row: 1 | Copy offsite: cross-region, cross-account, cross-cloud or on-prem
 row: 1 | Copy immutable or air-gapped
 row: 0 | Errors: every restore is verified
-The immutable 1 and the verified 0 are the security additions, and the page calls both non-negotiable.
+The immutable 1 and the verified 0 are the security additions, and the page calls both non-negotiable in a ransomware-aware architecture.
 notes:
 The classic 3-2-1 rule was coined by photographer Peter Krogh in 2005 for protecting digital negatives, and it held up for two decades of tape and disk. Cloud and ransomware exposed two gaps. Nothing in the rule stopped an attacker from deleting all three copies with the right credentials, and nothing required that the copies be readable.
 
@@ -99,7 +99,7 @@ In the strongest modes the provider's control plane enforces retention, outside 
 notes:
 Immutability means that once written, an object cannot be modified or deleted until its retention period expires, even by the account root or a global admin. The page calls it the most important technical control against cloud-native ransomware, and the details differ by cloud.
 
-On AWS, S3 Object Lock needs versioning on the bucket. Governance mode can be shortened or removed by principals with the s3:BypassGovernanceRetention permission, so it helps against accidental deletion but not against sufficiently privileged attackers; do not rely on it for ransomware defense. Compliance mode is the only setting that gives the "even root can't delete" property. A legal hold, independent of retention, pins an object until it is removed. A locked version keeps its lock when a lifecycle rule moves it to the S3 Glacier storage classes.
+On AWS, S3 Object Lock needs versioning on the bucket. In Governance mode, retention can be shortened or removed by principals with the s3:BypassGovernanceRetention permission, so it helps against accidental deletion but not against sufficiently privileged attackers; do not rely on it for ransomware defense. Compliance mode is the only setting that gives the "even root can't delete" property. A legal hold, independent of retention, pins an object until it is removed. A locked version keeps its lock when a lifecycle rule moves it to S3 Glacier Flexible Retrieval or S3 Glacier Deep Archive.
 
 On Azure, locked time-based retention cannot be shortened even by the subscription owner, while unlocked can be shortened up to five times; lock the policy in production. Recovery Services Vaults add soft delete, default 14 days and extendable to 180, and multi-user authorization, which needs approval from a separate Resource Guard owner, ideally in a second tenant.
 
@@ -113,7 +113,7 @@ section: air-gap
 figure: air-gap-ladder
 Cloud has no physical air gap, but IAM, network and KMS boundaries can make the path from production to backup effectively one-way.
 notes:
-Classical air-gapping is a physical separation: backup tape in a vault no network can reach. The figure shows the virtual air gap one step further each time, each step further from the production identity: cross-account, cross-tenant, cross-cloud and offline. As the caption says, the common thread is that production cannot delete the destination.
+Classical air-gapping is a physical separation: backup tape in a vault no network can reach. The figure shows the virtual air gap in four steps, each further from the production identity: cross-account, cross-tenant, cross-cloud and offline. As the caption says, the common thread is that production cannot delete the destination.
 
 Cross-account means backups land in a separate AWS account, Azure subscription or GCP project. The backup account has no trust that lets production identities write or delete; the backup service pulls from production through a read-only role. Even full compromise of the production account does not grant write or delete on the destination.
 
@@ -131,7 +131,7 @@ check: Backup keys live in the backup account
 check: Key administration and key usage are separate roles
 check: HSM-backed keys for the most sensitive workloads
 check: Multi-region key replication for DR
-check: Maximum deletion window, and alerts on any scheduled deletion
+check: Purge protection or the maximum deletion window; alert on scheduled deletion
 check: A normally disabled break-glass role for emergencies
 notes:
 Every cloud backup is encrypted, which the page calls necessary but not sufficient. The threat that matters is an attacker with credentials in your environment looking for ways to make your backups unrecoverable, and key compromise is one such way.
@@ -154,12 +154,12 @@ The figure shows seven steps from initial access through the ransom note, and th
 
 Initial access is most often compromised credentials, but also exposed access keys in a public git repo, a vulnerable web app with a path to an instance profile, a phished console session, or an over-scoped SaaS connector. Discovery and enumeration maps IAM, accounts, buckets, KMS keys, snapshots and databases, with tools like Pacu, ScoutSuite and ROADtools, and crucially finds your backups. Persistence and privilege escalation adds backdoor users, access keys or service principals, changes trust policies and adds federation, so the attacker outlives detection of the first compromise.
 
-Exfiltration comes next, because modern ransomware is double extortion: encrypt for ransom and leak for pressure. Then the attacker breaks the backups, then encrypts production. The ransom note often arrives through the compromised cloud console, sometimes by email or Slack, and modern operators research the target's revenue and insurance posture and price the demand accordingly.
+Exfiltration follows. Modern ransomware is double extortion: encrypt for ransom and leak for additional pressure. Then the attacker breaks the backups, then encrypts production. The ransom note often arrives through the compromised cloud console, sometimes by email or Slack, and modern operators research the target's revenue and insurance posture and price the demand accordingly.
 
 == Step 5: the backups go first
 layout: list
 section: kill-chain
-If the attacker can reach your backups with the credentials gathered during dwell time, nothing done for step 6 helps. The defensive strategy is to make step 5 fail.
+If the attacker can reach your backups with the credentials gathered during dwell time, no amount of preparation for step 6, encrypting production, helps. The whole defensive strategy is to make step 5 fail.
 item: Snapshots deleted
 item: KMS keys scheduled for deletion
 item: S3 versions deleted, or versioning disabled and objects overwritten
@@ -180,18 +180,18 @@ row: Technique | Counter
 row: KMS key deletion | Alert on kms:ScheduleKeyDeletion; enforce the 30-day maximum
 row: Versioning rollback | Compliance Object Lock, MFA delete, cross-account replication
 row: Snapshot deletion | Cross-account copies, AWS Backup vaults with Vault Lock
-row: Account lockout | Out-of-band root credentials, root MFA, root activity alerts
+row: Account lockout | Out-of-band root credential storage, root MFA, root activity alerts
 row: Tier downgrade | Monitor lifecycle changes; alert on bulk tier transitions
 row: Replication redirect | SCP-restricted destinations, alerts on replication changes
 The page lists two more: backup configuration drift and identity-provider compromise.
 notes:
 These techniques come from reported incidents and red-team engagements in cloud environments. The page says to map your detection coverage against them explicitly.
 
-After a key's deletion window, every object it encrypted is permanently unrecoverable, destroyed by the cloud platform itself. Where versioning is on but Object Lock is not, an attacker can delete every non-current version and leave only the encrypted overwrite, so the versioning defense fails silently. Snapshots can typically be deleted by anyone with the matching delete permission, and most production roles are far broader than needed, so review snapshot share permissions too.
+After a key's deletion window, every object it encrypted is permanently unrecoverable, destroyed by the cloud platform itself. Where versioning is on but Object Lock is not, an attacker with the right S3 permissions can delete every non-current version and leave only the encrypted overwrite, so the versioning defense fails silently. Snapshots can typically be deleted by anyone with the matching delete permission, and most production roles are far broader than needed, so that delete is often available. Reviewing snapshot share permissions is part of the counter.
 
 In an account lockout, the attacker rotates root credentials, replaces MFA devices, denies the legitimate admins and changes the SAML trust, and the access itself is the ransom. The counters include MFA on root with multiple devices kept in a physical safe, organization-level controls, and GuardDuty, Defender for Cloud or SCC alerts on root activity.
 
-A storage tier downgrade moves large datasets to a cold tier, where retrieval costs are significant, sometimes more than the ransom. It is a quieter variant, so also block ad-hoc tier changes with SCPs or Azure Policy. Replication redirect points the replication configuration at an attacker-controlled bucket, then encrypts the source.
+A storage tier downgrade moves large datasets to a cold tier, where retrieval costs are significant, sometimes more than the ransom. It is a quieter, harder-to-detect variant: the data is still there, but expensive to bring back on a timeline. The counter also uses SCPs or Azure Policy to block ad-hoc tier changes outside policy. Replication redirect points the replication configuration at an attacker-controlled bucket, then encrypts the source.
 
 Backup configuration drift disables jobs, shortens retention or changes schedules during dwell time; counter it with CSPM or CNAPP baselines, drift alerts and separation of duties. Identity-provider compromise lets the attacker grant themselves any role in every cloud the IdP federates to; counter it with hardware-key MFA on IdP admins, conditional access, non-federated break-glass accounts and IdP-specific detection.
 
@@ -254,7 +254,7 @@ Once an AWS Backup vault is locked in Compliance mode, its retention cannot be s
 
 AWS Elastic Disaster Recovery replicates servers continuously at the block level and fails over within minutes; the page says it complements backup and does not replace it. Logically air-gapped vaults store backup data in AWS-managed accounts the customer never touches, reachable only through the AWS Backup API, at higher cost and with stronger isolation.
 
-For new long-term immutable archives, the page points to the S3 Glacier storage classes under Compliance-mode Object Lock rather than Glacier Vault Lock.
+Glacier Vault Lock sets write-once policies on vaults in the original Amazon Glacier service, which no longer accepts new customers. For new long-term immutable archives of tier-1+ data, the page points to the S3 Glacier storage classes under Compliance-mode Object Lock.
 
 == Azure and GCP reference architectures
 layout: compare
@@ -332,7 +332,7 @@ col: Working keys | Used by the daily backup service | Encrypt newly written bac
 col: Custody keys | HSM-backed and dormant | Their principals enabled only by a documented approval flow | Required to decrypt for restore; usage heavily monitored
 The pattern is reserved for the highest-impact data. For tier-0 systems the friction is the point: even a fully compromised cloud account cannot decrypt the backups without independent approval.
 notes:
-The page describes this as an advanced control increasingly seen in regulated and high-target organizations. The keys for backups are HSM-backed and reachable only through a break-glass process, not by the identity that runs daily backups.
+The page describes this as an advanced control increasingly seen in regulated and high-target organizations. Its principle is that the keys for backups should be HSM-backed and reachable only through a break-glass process, not by the identity that runs daily backups.
 
 There are two key sets. The working key set encrypts newly written backups. The custody key set is needed to decrypt and read them for restore. The page calls this asymmetric capability separation: only a restoration-authorized identity using the custody key can read the backups.
 
@@ -351,7 +351,7 @@ check: Backups isolated in a separate account, subscription or tenant
 check: MFA on privileged identities, including backup, restore and root
 check: EDR on all administrative endpoints
 check: Documented and tested restoration
-check: An isolated recovery environment to restore into
+check: An isolated recovery environment, becoming standard for tier-1 insureds
 check: An IR runbook, an IR firm retainer and a communication plan
 notes:
 The cyber insurance market reset between 2021 and 2022: premiums tripled or worse, and ransomware got its own sublimits. Rates have eased since mid-2023, but the page says minimum hygiene is now a precondition for coverage.
@@ -390,10 +390,10 @@ layout: table
 section: comparison | third-party
 row: Capability | AWS | Azure | GCP
 row: Vault-level immutability | AWS Backup Vault Lock, Compliance mode | Immutable vault and MUA Resource Guard | Backup and DR retention enforcement
-row: Two-person rule on delete | No single feature: SCP, KMS grants, MFA | MUA via Resource Guard | No MUA primitive: org policy, IAM separation
+row: Two-person rule on delete | No single feature: SCP, KMS grants, MFA | MUA via Resource Guard | No single primitive: org policy, IAM separation
 row: Cross-account isolation | Organizations and SCPs | Multi-subscription, optionally multi-tenant | Multi-project and VPC Service Controls
 row: Replication-based DR | Elastic Disaster Recovery | Azure Site Recovery | Backup and DR Service, custom replication
-The native services do not cross clouds, so multi-cloud organizations still typically add a third-party overlay.
+These services do not natively cross clouds, so multi-cloud organizations still typically add a third-party overlay.
 notes:
 This is an excerpt of the page's side-by-side table. The centralized services are AWS Backup, Azure Backup and the Backup and DR Service, and the full table also covers archive-tier immutability, database point-in-time recovery, cross-region copy, air-gapped vaults, HSM-backed keys, ransomware detection and SaaS backup.
 
