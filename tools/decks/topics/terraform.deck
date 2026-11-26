@@ -69,7 +69,7 @@ Remote, locked, versioned state is not optional.
 item: State is the whole ballgame
 item: State can contain secrets in plaintext
 item: The plan is a promise, not a guarantee
-item: Provider upgrades can rename or deprecate arguments
+item: Major-version provider bumps can rename or deprecate arguments
 item: Destroy deletes live infrastructure
 notes:
 Terraform tracks what it owns in a state file. Lose it, corrupt it, or let two people apply at once, and you get a bad day. The page says remote, locked, versioned state is not optional. State can also contain secrets: generated passwords, keys and connection strings land in state in plaintext, so it must be treated as sensitive and access-controlled.
@@ -124,7 +124,7 @@ Yes, the AWS stack keeps its state in GCS. The page says that is deliberate: one
 == Providers talk to each cloud
 layout: code
 section: anatomy
-Notice what's missing: credentials. They come from the environment, a local AWS profile or a short-lived OIDC token in CI. allowed_account_ids aborts the apply if they point at the wrong account.
+Notice what's missing: credentials. They come from the environment: a local AWS profile, or a short-lived OIDC token in CI. allowed_account_ids aborts the apply if they point at the wrong account.
 ```hcl
 provider "aws" {
   region              = var.aws_region
@@ -189,7 +189,7 @@ Read the condition out loud: only a workflow in this repo, running in the produc
 
 The role's permissions are equally tight: write to one bucket and invalidate one CloudFront distribution, nothing else. So even if a token leaked, it could touch exactly one site's files and nothing else in the account. GCP does the same with Workload Identity Federation in gcp/wif.tf, and Azure with a federated credential in azure/identity.tf.
 
-== Pin the deploy job, not the whole repository
+== Pin the deploy job, not just the repository
 layout: code
 section: tour
 Trusting the repository alone would let any workflow in it mint deploy credentials, including scheduled jobs that read untrusted web pages. So GCP's attribute condition requires two claims.
@@ -206,12 +206,12 @@ The attribute condition is the hard gate that rejects a bad token outright, so t
 == Two lessons Terraform will not warn you about
 layout: compare
 section: tour
-col: Mapping is not checking | attribute.ref is mapped from the token's ref claim | No condition mentions assertion.ref | So nothing restricts the branch
+col: Mapping is not checking | attribute.ref is mapped from the token's ref claim | The attribute condition never mentions assertion.ref | So that condition restricts nothing about the branch
 col: An unused variable reads like a control | var.github_branch is referenced nowhere in the trust | No plan or diff points at it | The config looks like branch enforcement exists
 notes:
 The page draws two lessons that generalize well past this one file, and Terraform will warn you about neither.
 
-Mapping an attribute does nothing on its own. The attribute_mapping block maps attribute.ref from the token's ref claim, right next to repository and workflow. Mapping makes a claim available to match on later; it is not a check. A condition that never mentions assertion.ref restricts nothing about the branch, however prominently the mapping sits above it.
+Mapping an attribute does nothing on its own. The attribute_mapping block maps attribute.ref from the token's ref claim, right next to repository and workflow. Mapping makes a claim available to match on later; it is not a check. A condition that never mentions assertion.ref restricts nothing about the branch, however prominently the mapping sits above it. The branch is still enforced by a different control, which the first question at the end of the deck comes back to.
 
 A declared-but-unused variable reads like a control. var.github_branch lives in gcp/variables.tf and is referenced nowhere in the trust. Terraform does not flag an unused variable, so no plan and no diff points at it, and this repo does not run TFLint, whose terraform_unused_declarations rule would flag it. It simply makes the config look like branch enforcement exists. The variable stays, because it does document the intended branch, but its comment now states plainly that the WIF trust does not read it.
 
@@ -257,7 +257,7 @@ row: Cloudflare edge | cloudflare/rules.tf, added to every response
 row: AWS origin | A response headers policy in aws/cloudfront.tf
 row: GCP origin | Its nginx image, from nginx-security-headers.conf
 row: Azure origin | Only the edge: Blob static websites cannot emit them
-A CloudFront distribution has its own public hostname, so an origin can be reached directly. The cost is the same values in three files that have to move together.
+A CloudFront distribution has its own public hostname, so the AWS origin can be reached directly. The cost is the same values in three files that have to move together.
 notes:
 The site's security headers, such as CSP, HSTS and X-Frame-Options, are declared once at Cloudflare in cloudflare/rules.tf and added to every response on the way out. That covers normal traffic. It leaves open what an origin serves when it is reached directly, and the page says that is a real path, because a CloudFront distribution has its own public cloudfront.net hostname.
 
@@ -301,7 +301,7 @@ section: concepts
 check: Keep state remote and locked; never commit it to git
 check: Commit .terraform.lock.hcl
 check: Change infrastructure in code, not the console
-check: Prefer for_each with stable keys over count
+check: Prefer for_each with stable keys when items can be added or removed
 check: Know which stack directory you are planning
 check: Import existing resources instead of recreating them
 notes:
@@ -342,7 +342,7 @@ This is the page's baseline, from day one. No local state for anything real: loc
 
 Prefer keyless OIDC for CI. CSOH's deploys carry zero static cloud keys, and the page says that if you take one idea from it, take this one. Pin the full subject, not just the repository, and remember that only the condition you write is enforced.
 
-Anything you exclude from management needs a check that reads the live system and fails a build on drift. The page says a clean plan is evidence about your config, not about production. The deploy role can write one bucket and invalidate one CDN, not PowerUserAccess.
+Anything you exclude from management needs a check that reads the live system and fails a build on drift. The page says a clean plan is evidence about your config, not about production. For least privilege, the deploy role can write one bucket and invalidate one CDN, not PowerUserAccess.
 
 Static analyzers such as Trivy, which now includes tfsec, and Checkov catch a public bucket or a 0.0.0.0/0 security group before apply. The baseline also repeats two earlier points: pin provider versions and commit the lock file, and use allowed_account_ids or equivalent checks against the wrong account. Treat a surprising destroy-and-recreate or destroy line in a plan the way you would treat a surprising rm -rf in a pull request.
 
