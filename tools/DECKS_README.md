@@ -144,6 +144,12 @@ disagrees with the mapping, a published guide with no card on the hub, the
 attribute anywhere but a card's strip, and any other Google Slides link on
 the page. The cross-linker skips both lines.
 
+The hub is a `CardHub` in `build_howto_decks.py`: a page, the strip
+attribute, the card's element and class, and patterns for the slug and
+title each card names. `build_breach_decks.py` declares the breach timeline
+as another (see the breach `--stamp` notes), so both hubs share one tested
+reader and writer.
+
 ## Publishing a deck
 
 1. Build the .pptx locally.
@@ -344,12 +350,21 @@ Speaker notes run to the next "== " line. Every slide has them.
   slide down, so the `LayoutError` for a full slide can come from the
   heading; shorten it.
 - `--stamp` removes every deck line and writes one after the last `pm-link`
-  line of each mapped page, planning every page before writing any.
+  line of each mapped page, and decks each published chain's card on
+  `breach-timeline.html`, planning every file before writing any. A decked
+  card keeps its `<li class="breach-card">` and its link unchanged; after
+  the link come two lines carrying `data-breach-hub-deck`, the PDF and
+  editable copy links and a closed slide preview titled with the incident's
+  name (the card title before `" - "`). `--check` fails a card that disagrees
+  with the mapping, a published chain with no card, and any other Google
+  Slides link on the timeline. The card finder searches only the card's
+  meta, title, summary and industries, so the strip never matches a search.
   `--record` refuses an outline with any finding `--check` reports, and
   otherwise writes the id, both hashes and today's date, then stamps. A
   refused record writes neither the mapping nor any page.
 - The glossary cross-linker (`tools/crosslink_pages.py`) never links inside a
-  deck line: a `<p>` carrying `data-breach-deck` or `data-howto-deck` is one
+  deck line: a `<p>` or `<details>` carrying `data-breach-deck`,
+  `data-howto-deck`, `data-topic-deck` or one of their `-hub-` forms is one
   of its skip zones, because each tool's `--check` requires a deck line to be
   exactly the text its `--stamp` writes.
 

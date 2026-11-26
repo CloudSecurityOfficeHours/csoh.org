@@ -398,11 +398,11 @@ def mask_skip_zones(content: str) -> tuple[str, list[str]]:
     #     on one line, so the match stops at the line's end: a line missing
     #     its </p> is left for --check to report rather than masking prose
     #     below it. A topic deck's preview panel is a <details> deck line,
-    #     and the deck strips on the topics.html and
-    #     cloud-security-how-to.html cards are deck lines marked
-    #     data-topic-hub-deck and data-howto-hub-deck.
+    #     and the deck strips on the topics.html, cloud-security-how-to.html
+    #     and breach-timeline.html cards are deck lines marked
+    #     data-topic-hub-deck, data-howto-hub-deck and data-breach-hub-deck.
     content = re.sub(
-        r"<(p|details)\b[^>\n]*\bdata-(?:breach|(?:howto|topic)(?:-hub)?)-deck\b[^>\n]*>[^\n]*?</\1>",
+        r"<(p|details)\b[^>\n]*\bdata-(?:breach|howto|topic)(?:-hub)?-deck\b[^>\n]*>[^\n]*?</\1>",
         stash,
         content,
         flags=re.IGNORECASE,

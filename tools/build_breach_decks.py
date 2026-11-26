@@ -97,6 +97,7 @@ from build_howto_decks import (  # noqa: E402
     PRES_ID_RE,
     SHA256_RE,
     SLUG_RE,
+    CardHub,
     OutlineError,
     _is_iso_date,
     _run_cases,
@@ -305,6 +306,21 @@ class DeckKind:
 
 # The callables name functions defined further down; a lambda reads the name
 # when it is called, so BREACH can be the default of every function below.
+# The breach timeline: each kill chain card whose chain has a published deck
+# ends, after its link, with the deck's links and a closed slide preview. The
+# preview is titled with the incident's name, the card title's part before
+# " - ".
+BREACH_HUB = CardHub(
+    page="breach-timeline.html",
+    attr="data-breach-hub-deck",
+    tag="li",
+    card_class="breach-card",
+    slug_re=re.compile(r'\bhref="breaches/(?P<slug>[a-z0-9][a-z0-9-]*)\.html"'),
+    name_re=re.compile(r'<h2\b[^>]*\bclass="breach-card-title"[^>]*>(?P<name>.*?)</h2\s*>', re.S),
+    noun="kill chain",
+    short_name=lambda name: name.split(" - ", 1)[0],
+)
+
 BREACH = DeckKind(
     name="breach",
     outline_dir=Path("tools") / "decks" / "breaches",
@@ -329,6 +345,8 @@ BREACH = DeckKind(
     entry_keys=("id", "outline_sha256", "page_sha256", "published"),
     page_state=lambda deck, html: {"page_sha256": page_sha256(html)},
     page_changes=lambda deck, entry, html: _page_hash_changes(entry, html),
+    extra_plan=lambda mapping: BREACH_HUB.plan(ROOT, mapping),
+    extra_findings=lambda mapping: BREACH_HUB.check(ROOT, mapping),
 )
 
 
@@ -2780,9 +2798,28 @@ def _tree_outline(slug: str, extra: str = "") -> str:
     )
 
 
+def _timeline_card(slug: str, title: str) -> str:
+    """One kill chain card as breach-timeline.html writes it, without a deck."""
+    return (
+        f'        <li class="breach-card" id="{slug}-card">\n'
+        f'            <a class="breach-card-link" href="breaches/{slug}.html">\n'
+        '                <div class="breach-card-meta"><span class="inc-year">2024</span></div>\n'
+        f'                <h2 class="breach-card-title">{title}</h2>\n'
+        '                <p class="breach-card-summary">What happened, in short.</p>\n'
+        '                <span class="breach-card-cta">Read kill chain \N{RIGHTWARDS ARROW}</span>\n'
+        "            </a>\n"
+        "        </li>\n"
+    )
+
+
+def _timeline(*cards: str) -> str:
+    return '<html><body><main>\n    <ul class="breach-list">\n' + "".join(cards) + "    </ul>\n</main></body></html>\n"
+
+
 def _tree(root: Path, outlines: dict[str, str], pages: dict[str, str], mapping: dict | None) -> Path:
     """A scratch repository: outlines in tools/decks/breaches/, pages in
-    breaches/, and published.json when mapping is given."""
+    breaches/, a breach timeline with one plain card per page, and
+    published.json when mapping is given."""
     decks = root / "tools" / "decks" / "breaches"
     decks.mkdir(parents=True)
     (root / "breaches").mkdir()
@@ -2790,6 +2827,8 @@ def _tree(root: Path, outlines: dict[str, str], pages: dict[str, str], mapping: 
         (decks / f"{slug}.deck").write_text(text, encoding="utf-8")
     for slug, html in pages.items():
         (root / "breaches" / f"{slug}.html").write_text(html, encoding="utf-8")
+    cards = "".join(_timeline_card(slug, f"Breach {slug} - How it went") for slug in pages)
+    (root / "breach-timeline.html").write_text(_timeline(cards), encoding="utf-8")
     if mapping is not None:
         (decks / "published.json").write_text(
             json.dumps(mapping, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -2944,10 +2983,115 @@ def _case_stamp_all_or_nothing(tmp: Path) -> None:
         (tmp / "breaches" / f"{s}.html").write_text(PM_PAGE, encoding="utf-8")
     with _rooted(tmp):
         rc, out = _capture(stamp_all)
-        assert rc == 0 and out.count("stamped") == 3, out
+        assert rc == 0 and out.count("stamped") == 4 and "stamped breach-timeline.html" in out, out
         once = _snapshot(tmp)
         rc, out = _capture(stamp_all)
         assert rc == 0 and out == "" and _snapshot(tmp) == once, out
+
+
+def _case_timeline_stamp_decks_cards(tmp: Path) -> None:
+    """A kill chain card on the timeline whose chain is published gains the
+    deck's links and a closed preview after its link, never inside it; the
+    preview is titled with the incident's short name."""
+    title = "Snowflake / UNC5537 - Infostealer Creds \N{RIGHTWARDS ARROW} No MFA"
+    plain = _timeline(_timeline_card("snowflake-unc5537", title), _timeline_card("capital-one", "Capital One - SSRF"))
+    out = BREACH_HUB.stamp(plain, {"snowflake-unc5537": {"id": ID_A}})
+    strip = [ln for ln in out.splitlines() if "data-breach-hub-deck" in ln]
+    assert len(strip) == 2 and out.count(ID_A) == 4, out
+    assert 'title="Preview of the Snowflake / UNC5537 slides"' in out, out
+    lines = out.splitlines()
+    i = lines.index(strip[0])
+    assert lines[i - 1] == "            </a>" and lines[i + 2] == "        </li>", lines[i - 2: i + 3]
+    assert strip[0].startswith('            <p class="deck-actions" data-breach-hub-deck><strong>Slides:</strong> ')
+    assert strip[1].startswith('            <details class="deck-preview" data-breach-hub-deck><summary>')
+    assert "\n".join(ln for ln in lines if ln not in strip) + "\n" == plain
+    assert BREACH_HUB.stamp(out, {"snowflake-unc5537": {"id": ID_A}}) == out
+    assert BREACH_HUB.stamp(out, {}) == plain
+    swapped = BREACH_HUB.stamp(out, {"snowflake-unc5537": {"id": ID_B}})
+    assert swapped.count(ID_B) == 4 and ID_A not in swapped, swapped
+
+
+def _case_timeline_findings(tmp: Path) -> None:
+    plain = _timeline(_timeline_card("aa", "Aa - x"), _timeline_card("bb", "Bb - y"))
+    mapping = {"aa": {"id": ID_A}}
+    good = BREACH_HUB.stamp(plain, mapping)
+    assert BREACH_HUB.findings(good, mapping) == [] and BREACH_HUB.findings(plain, {}) == []
+    for html, m, needles in (
+        (plain, mapping, ("breach-timeline.html", "aa", "no deck")),
+        (good.replace(ID_A, ID_B, 1), mapping, ("aa", "wrong")),
+        (good, {}, ("aa", "not published")),
+        (good, {**mapping, "cc": {"id": ID_B}}, ("cc", "no card")),
+        (good.replace("</details>\n", "\n", 1), mapping, ("aa", "malformed")),
+    ):
+        found = BREACH_HUB.findings(html, m)
+        assert len(found) == 1 and all(n in found[0] for n in needles), (needles, found)
+
+
+def _case_timeline_wired_into_stamp_and_check(tmp: Path) -> None:
+    """--record and --stamp rewrite the timeline with the breach pages,
+    --check reads it, and a timeline --stamp cannot read stops the run
+    before anything is written."""
+    pages = {"aa": PM_PAGE, "bb": PM_PAGE}
+    _tree(tmp, {s: _build_outline(s) for s in pages}, pages, {})
+    tl, mpath = tmp / "breach-timeline.html", tmp / "tools/decks/breaches/published.json"
+    plain = tl.read_text(encoding="utf-8")
+    with _rooted(tmp):
+        rc, out = _capture(record, "aa", ID_A)
+        assert rc == 0 and "stamped breach-timeline.html" in out, out
+        decked = tl.read_text(encoding="utf-8")
+        assert decked == BREACH_HUB.stamp(plain, {"aa": {"id": ID_A}}) and decked != plain, decked
+        rc, out = _capture(check_all)
+        assert "breach-timeline.html" not in out, out
+        tl.write_text(_plant(decked, f"d/{ID_A}/embed", f"d/{ID_B}/embed"), encoding="utf-8")
+        rc, out = _capture(check_all)
+        assert rc == 1 and "breach-timeline.html" in out and "aa" in out, out
+        m = json.loads(mpath.read_text(encoding="utf-8"))
+        m["aa"]["id"] = ID_B
+        mpath.write_text(json.dumps(m, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        broken = _plant(decked, "</summary>", "</summary>\n")
+        tl.write_text(broken, encoding="utf-8")
+        before = _snapshot(tmp)
+        rc, out = _capture(stamp_all)
+        assert rc == 1 and "breach-timeline.html" in out and _snapshot(tmp) == before, out
+        tl.unlink()
+        rc, out = _capture(stamp_all)
+        assert rc == 1 and "breach-timeline.html" in out, out
+        rc, out = _capture(check_all)
+        assert rc == 1 and "breach-timeline.html" in out, out
+        # Control: with the timeline mended, the same --stamp moves page and card to the new id.
+        tl.write_text(decked, encoding="utf-8")
+        rc, out = _capture(stamp_all)
+        assert rc == 0, out
+        page = (tmp / "breaches/aa.html").read_text(encoding="utf-8")
+        assert ID_B in page and ID_A not in page, page
+        assert tl.read_text(encoding="utf-8") == BREACH_HUB.stamp(plain, {"aa": {"id": ID_B}})
+
+
+def _case_crosslink_skips_timeline_strip(tmp: Path) -> None:
+    """The glossary cross-linker never links inside a timeline card's deck
+    strip, while the same term elsewhere on the page still takes its link."""
+    import crosslink_pages as cp
+
+    key = "Slides"
+    patterns, slugs = cp.build_term_regexes([key]), {key.lower(): "term-slides"}
+    link = '<a class="glossary-link" href="glossary.html#term-slides">Slides</a>'
+    html = BREACH_HUB.stamp(_timeline(_timeline_card("aa", "Aa - x")), {"aa": {"id": ID_A}})
+    html = html.replace("</main>", "<p>Read the Slides first.</p>\n</main>")
+    page = tmp / "x.html"
+    old = cp.REPO_ROOT
+    cp.REPO_ROOT = tmp
+    try:
+        page.write_text(html, encoding="utf-8")
+        cp.crosslink_page(page, patterns, slugs)
+        lines = page.read_text(encoding="utf-8").splitlines()
+        assert not any(link in ln for ln in lines if "data-breach-hub-deck" in ln), lines
+        assert sum(ln.count(link) for ln in lines) == 1 and link in next(ln for ln in lines if "Read the" in ln)
+        # Control: without its attribute the strip takes the link.
+        page.write_text(html.replace(" data-breach-hub-deck>", ">", 1), encoding="utf-8")
+        cp.crosslink_page(page, patterns, slugs)
+        assert link in next(ln for ln in page.read_text(encoding="utf-8").splitlines() if "deck-actions" in ln)
+    finally:
+        cp.REPO_ROOT = old
 
 
 def _case_record_writes_both_hashes(tmp: Path) -> None:
@@ -3071,6 +3215,10 @@ CASES: list = [
     ("check_empty_tree", _case_check_empty_tree),
     ("check_reports_findings", _case_check_reports_findings),
     ("stamp_all_or_nothing", _case_stamp_all_or_nothing),
+    ("timeline_stamp_decks_cards", _case_timeline_stamp_decks_cards),
+    ("timeline_findings", _case_timeline_findings),
+    ("timeline_wired_into_stamp_and_check", _case_timeline_wired_into_stamp_and_check),
+    ("crosslink_skips_timeline_strip", _case_crosslink_skips_timeline_strip),
     ("record_writes_both_hashes", _case_record_writes_both_hashes),
     ("record_refuses_findings", _case_record_refuses_findings),
 ]

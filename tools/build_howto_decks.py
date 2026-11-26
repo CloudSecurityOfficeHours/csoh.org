@@ -56,6 +56,7 @@ import re
 import sys
 import tempfile
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -517,31 +518,26 @@ def link_findings(slug: str, html: str, mapping: dict) -> list[str]:
     return findings
 
 
+
 # ---------------------------------------------------------------------------
-# The guides hub: each guide card on cloud-security-how-to.html whose guide
-# has a published deck ends with the deck's links and a closed slide preview.
+# Card hubs: a page of cards, one per page that can have a deck, where each
+# card whose page has a published deck ends with the deck's links and a
+# closed slide preview. The guides hub (cloud-security-how-to.html) is one;
+# build_breach_decks.py declares the breach timeline as another.
 # ---------------------------------------------------------------------------
 
-HUB = "cloud-security-how-to.html"
-HUB_DECK_ATTR = "data-howto-hub-deck"
 SLIDES_LINK = "docs.google.com/presentation"
-# A card opens on a line of its own and ends at the first line closing a div
-# at the same indent, so nothing read from one card can run into the next.
-_HUB_CARD_START_RE = re.compile(r'^(?P<ind>[ \t]*)<div class="resource-card"[^>\n]*>[ \t]*\n', re.M)
-_HUB_GUIDE_RE = re.compile(
-    r'<h3\b[^>]*>\s*<a\b[^>]*\bhref="howto/(?P<slug>[a-z0-9][a-z0-9-]*)\.html"[^>]*>(?P<name>.*?)</a\s*>', re.S
-)
 
 
 def preview_html(pres_id: str, attr: str, title: str) -> str:
     """A closed slide preview carrying attr, as --stamp writes it on a topic
-    page, on a topics.html card and on a guide card on the guides hub. Its
-    iframe names Google's viewer in data-src and has no src: with scripts
-    off a browser loads every iframe at page load, closed panel and
-    loading="lazy" or not. main.js copies data-src into src when the panel
-    opens, so nothing loads from Google until a reader opens it. With
-    scripts off, noscript.css hides the empty frame and the open panel shows
-    a link to the same viewer instead."""
+    page, on a topics.html card and on a card hub's card. Its iframe names
+    Google's viewer in data-src and has no src: with scripts off a browser
+    loads every iframe at page load, closed panel and loading="lazy" or not.
+    main.js copies data-src into src when the panel opens, so nothing loads
+    from Google until a reader opens it. With scripts off, noscript.css
+    hides the empty frame and the open panel shows a link to the same viewer
+    instead."""
     src = f"https://docs.google.com/presentation/d/{pres_id}/embed"
     ext = 'target="_blank" rel="noopener noreferrer"'
     return (
@@ -564,133 +560,186 @@ class _HubCard:
     decked: bool | None  # None: neither a plain card nor a decked one
 
 
-def _hub_strip(pres_id: str, ind: str, name: str) -> str:
-    base = f"https://docs.google.com/presentation/d/{pres_id}"
-    ext = 'target="_blank" rel="noopener noreferrer"'
-    title = name.replace('"', "&quot;")
-    return (
-        f'{ind}    <p class="deck-actions" {HUB_DECK_ATTR}><strong>Slides:</strong> '
-        f'<a href="{base}/export/pdf" {ext}>PDF</a> <a href="{base}/copy" {ext}>Editable copy</a></p>\n'
-        f'{ind}    {preview_html(pres_id, HUB_DECK_ATTR, f"Preview of the {title} slides")}\n'
-    )
+def _first_part(name: str) -> str:
+    return name
 
 
-def _hub_cards(html: str) -> list[_HubCard]:
-    """Every guide card on the hub, in order. A card is a guide card when
-    its h3 links a page in howto/; other cards are not read."""
-    cards: list[_HubCard] = []
-    pos = 0
-    for m in _HUB_CARD_START_RE.finditer(html):
-        if m.start() < pos:
-            continue
-        ind = m.group("ind")
-        close = re.compile(r"^" + re.escape(ind) + r"</div>[ \t]*(?:\n|\Z)", re.M).search(html, m.end())
-        body = html[m.end(): close.start() if close else len(html)]
-        guide = _HUB_GUIDE_RE.search(body)
-        if guide is None:
-            continue
-        pos = close.end() if close else len(html)
-        name = re.sub(r"<[^>]+>", "", guide.group("name")).strip()
-        lines = body.splitlines(keepends=True)
-        marked = [i for i, ln in enumerate(lines) if HUB_DECK_ATTR in ln]
-        decked: bool | None = None
-        if close is None:
-            pass
-        elif not marked:
-            decked = False
-        elif marked == [len(lines) - 2, len(lines) - 1] and re.fullmatch(
-            re.escape(ind) + r"    <p class=\"deck-actions\" " + HUB_DECK_ATTR + r">(?:(?!</p>)[^\n])*</p>\n"
-            + re.escape(ind) + r"    <details class=\"deck-preview\" " + HUB_DECK_ATTR
-            + r">(?:(?!</details>)[^\n])*</details>\n",
-            lines[-2] + lines[-1],
-        ):
-            decked = True
-        keep = lines[:-2] if decked else lines
-        cards.append(_HubCard(m.start(), pos, guide.group("slug"), name, ind,
-                              m.group(0) + "".join(keep), close.group(0) if close else "", decked))
-    return cards
+@dataclass(frozen=True)
+class CardHub:
+    """A hub page whose cards --stamp decks. A card opens with a line holding
+    only its <tag class="card_class" ...> and ends at the first line closing
+    tag at the same indent, so nothing read from one card can run into the
+    next. A card is read when slug_re finds the page it is for; others are
+    left alone. A decked card's last two inner lines are the strip: a
+    .deck-actions line and a closed .deck-preview, both carrying attr."""
+
+    page: str  # the hub, relative to the repository root
+    attr: str
+    tag: str
+    card_class: str
+    slug_re: re.Pattern[str]  # group "slug", searched in the card's body
+    name_re: re.Pattern[str]  # group "name", the card's title
+    noun: str  # what a card is for, in messages: "guide", "kill chain"
+    short_name: Callable[[str], str] = _first_part  # the name the preview's title uses
+
+    def _start_re(self) -> re.Pattern[str]:
+        return re.compile(
+            r"^(?P<ind>[ \t]*)<" + self.tag + r'\b[^>\n]*\bclass="' + re.escape(self.card_class)
+            + r'"[^>\n]*>[ \t]*\n', re.M)
+
+    def _strip(self, pres_id: str, ind: str, name: str) -> str:
+        base = f"https://docs.google.com/presentation/d/{pres_id}"
+        ext = 'target="_blank" rel="noopener noreferrer"'
+        title = self.short_name(name).replace('"', "&quot;")
+        return (
+            f'{ind}    <p class="deck-actions" {self.attr}><strong>Slides:</strong> '
+            f'<a href="{base}/export/pdf" {ext}>PDF</a> <a href="{base}/copy" {ext}>Editable copy</a></p>\n'
+            f'{ind}    {preview_html(pres_id, self.attr, f"Preview of the {title} slides")}\n'
+        )
+
+    def _cards(self, html: str) -> list[_HubCard]:
+        cards: list[_HubCard] = []
+        pos = 0
+        strip_re = re.compile(
+            r"[ \t]*<p class=\"deck-actions\" " + self.attr + r">(?:(?!</p>)[^\n])*</p>\n"
+            r"[ \t]*<details class=\"deck-preview\" " + self.attr + r">(?:(?!</details>)[^\n])*</details>\n")
+        for m in self._start_re().finditer(html):
+            if m.start() < pos:
+                continue
+            ind = m.group("ind")
+            close = re.compile(r"^" + re.escape(ind) + "</" + self.tag + r">[ \t]*(?:\n|\Z)", re.M).search(html, m.end())
+            body = html[m.end(): close.start() if close else len(html)]
+            slug = self.slug_re.search(body)
+            if slug is None:
+                continue
+            pos = close.end() if close else len(html)
+            named = self.name_re.search(body)
+            # Tags stripped and whitespace collapsed; entities stay as written,
+            # because the name goes back into an attribute.
+            name = " ".join(re.sub(r"<[^>]+>", "", named.group("name")).split()) if named else ""
+            lines = body.splitlines(keepends=True)
+            marked = [i for i, ln in enumerate(lines) if self.attr in ln]
+            decked: bool | None = None
+            if close is None:
+                pass
+            elif not marked:
+                decked = False
+            elif (marked == [len(lines) - 2, len(lines) - 1]
+                  and lines[-2].startswith(ind + "    <") and lines[-1].startswith(ind + "    <")
+                  and strip_re.fullmatch(lines[-2] + lines[-1])):
+                decked = True
+            keep = lines[:-2] if decked else lines
+            cards.append(_HubCard(m.start(), pos, slug.group("slug"), name, ind,
+                                  m.group(0) + "".join(keep), close.group(0) if close else "", decked))
+        return cards
+
+    def _card_html(self, c: _HubCard, pres_id: str | None) -> str:
+        """The card as it is written for pres_id: decked, or plain when None."""
+        return c.head + (self._strip(pres_id, c.ind, c.name) if pres_id else "") + c.tail
+
+    def _stray(self, html: str, cards: list[_HubCard]) -> bool:
+        """The deck attribute anywhere but inside a card. A card of neither
+        form is reported as itself, so its own lines do not count."""
+        rest, pos = [], 0
+        for c in cards:
+            rest.append(html[pos: c.start])
+            pos = c.end
+        rest.append(html[pos:])
+        return self.attr in "".join(rest)
+
+    def stamp(self, html: str, mapping: dict) -> str:
+        """The hub with every card whose page is in the mapping (with a
+        well-formed id) decked, and every other card plain. A card of
+        neither form, or the deck attribute outside a card, is an error:
+        rewriting around it would guess at what to keep."""
+        cards = self._cards(html)
+        for c in cards:
+            if c.decked is None:
+                raise ValueError(f"{self.page}: the card for {c.slug} ({c.name!r}) is neither a plain card "
+                                 "nor a decked card; fix its markup by hand")
+        if self._stray(html, cards):
+            raise ValueError(f"{self.page}: {self.attr} appears outside a {self.noun} card")
+        out, pos = [], 0
+        for c in cards:
+            out += [html[pos: c.start], self._card_html(c, _entry_id(mapping.get(c.slug)))]
+            pos = c.end
+        out.append(html[pos:])
+        return "".join(out)
+
+    def findings(self, html: str, mapping: dict) -> list[str]:
+        """Where the hub disagrees with the mapping: one finding per card
+        that differs from what stamp writes, each published page with no
+        card to carry its deck, and any Google Slides link outside a strip."""
+        found: list[str] = []
+        cards = self._cards(html)
+        for c in cards:
+            if c.decked is None:
+                found.append(f"{self.page}: the card for {c.slug} ({c.name!r}) is malformed: neither a plain "
+                             "card nor a decked card, so its deck markup cannot be read")
+                continue
+            want = _entry_id(mapping.get(c.slug))
+            if html[c.start: c.end] == self._card_html(c, want):
+                continue
+            if want and not c.decked:
+                found.append(f"{self.page}: the card for {c.slug} has no deck; its deck is published")
+            elif want:
+                found.append(f"{self.page}: the card for {c.slug} has the wrong deck markup for its published id")
+            else:
+                found.append(f"{self.page}: the card for {c.slug} carries a deck, but its deck is not published")
+        on_hub = {c.slug for c in cards}
+        for slug in sorted(mapping):
+            if _entry_id(mapping[slug]) and slug not in on_hub:
+                found.append(f"{self.page}: {slug} is published but has no card on the hub (one "
+                             f'<{self.tag} class="{self.card_class}"> per {self.noun})')
+        if self._stray(html, cards):
+            found.append(f"{self.page}: {self.attr} appears outside a {self.noun} card")
+        outside = "\n".join(ln for ln in html.splitlines() if self.attr not in ln)
+        if SLIDES_LINK in outside:
+            found.append(f"{self.page}: a {SLIDES_LINK} link sits outside a {self.noun} card's deck strip")
+        return found
+
+    def _read(self, root: Path) -> str:
+        try:
+            return (root / self.page).read_text(encoding="utf-8")
+        except OSError as e:
+            raise ValueError(f"{self.page}: cannot be read ({e.strerror or e})") from None
+
+    def plan(self, root: Path, mapping: dict) -> tuple[dict[Path, str], list[str]]:
+        """The hub's new text when --stamp would change it, or why it cannot
+        be stamped. Nothing is written."""
+        try:
+            html = self._read(root)
+            new = self.stamp(html, mapping)
+        except ValueError as e:
+            return {}, [str(e)]
+        return ({root / self.page: new} if new != html else {}), []
+
+    def check(self, root: Path, mapping: dict) -> list[str]:
+        try:
+            return self.findings(self._read(root), mapping)
+        except ValueError as e:
+            return [str(e)]
 
 
-def _hub_card_html(c: _HubCard, pres_id: str | None) -> str:
-    """The card as it is written for pres_id: decked, or plain when None."""
-    return c.head + (_hub_strip(pres_id, c.ind, c.name) if pres_id else "") + c.tail
-
-
-def _hub_want(c: _HubCard, mapping: dict) -> str | None:
-    return _entry_id(mapping.get(c.slug))
-
-
-def _hub_stray(html: str, cards: list[_HubCard]) -> bool:
-    """The deck attribute anywhere but inside a guide card. A card of
-    neither form is reported as itself, so its own lines do not count."""
-    rest, pos = [], 0
-    for c in cards:
-        rest.append(html[pos: c.start])
-        pos = c.end
-    rest.append(html[pos:])
-    return HUB_DECK_ATTR in "".join(rest)
+HOWTO_HUB = CardHub(
+    page="cloud-security-how-to.html",
+    attr="data-howto-hub-deck",
+    tag="div",
+    card_class="resource-card",
+    slug_re=re.compile(r'<h3\b[^>]*>\s*<a\b[^>]*\bhref="howto/(?P<slug>[a-z0-9][a-z0-9-]*)\.html"'),
+    name_re=re.compile(r"<h3\b[^>]*>(?P<name>.*?)</h3\s*>", re.S),
+    noun="guide",
+)
+HUB = HOWTO_HUB.page
+HUB_DECK_ATTR = HOWTO_HUB.attr
 
 
 def stamp_hub(html: str, mapping: dict) -> str:
-    """The hub with every guide card whose guide is in the mapping (with a
-    well-formed id) decked, and every other guide card plain. A card of
-    neither form, or the deck attribute outside a guide card, is an error:
-    rewriting around it would guess at what to keep."""
-    cards = _hub_cards(html)
-    for c in cards:
-        if c.decked is None:
-            raise ValueError(f"{HUB}: the card for {c.slug} ({c.name!r}) is neither a plain card nor a "
-                             "decked card; fix its markup by hand")
-    if _hub_stray(html, cards):
-        raise ValueError(f"{HUB}: {HUB_DECK_ATTR} appears outside a guide card")
-    out, pos = [], 0
-    for c in cards:
-        out += [html[pos: c.start], _hub_card_html(c, _hub_want(c, mapping))]
-        pos = c.end
-    out.append(html[pos:])
-    return "".join(out)
+    return HOWTO_HUB.stamp(html, mapping)
 
 
 def hub_findings(html: str, mapping: dict) -> list[str]:
-    """Where the hub disagrees with the mapping: one finding per guide card
-    that differs from what stamp_hub writes, each published guide with no
-    card to carry its deck, and any Google Slides link outside a strip."""
-    findings: list[str] = []
-    cards = _hub_cards(html)
-    for c in cards:
-        if c.decked is None:
-            findings.append(f"{HUB}: the card for {c.slug} ({c.name!r}) is malformed: neither a plain card "
-                            "nor a decked card, so its deck markup cannot be read")
-            continue
-        want = _hub_want(c, mapping)
-        if html[c.start: c.end] == _hub_card_html(c, want):
-            continue
-        if want and not c.decked:
-            findings.append(f"{HUB}: the card for {c.slug} has no deck; the guide's deck is published")
-        elif want:
-            findings.append(f"{HUB}: the card for {c.slug} has the wrong deck markup for its published id")
-        else:
-            findings.append(f"{HUB}: the card for {c.slug} carries a deck, but the guide's deck is not published")
-    on_hub = {c.slug for c in cards}
-    for slug in sorted(mapping):
-        if _entry_id(mapping[slug]) and slug not in on_hub:
-            findings.append(f"{HUB}: {slug} is published but has no card on the hub (one "
-                            f'<div class="resource-card"> per guide, its h3 linking howto/{slug}.html)')
-    if _hub_stray(html, cards):
-        findings.append(f"{HUB}: {HUB_DECK_ATTR} appears outside a guide card")
-    outside = "\n".join(ln for ln in html.splitlines() if HUB_DECK_ATTR not in ln)
-    if SLIDES_LINK in outside:
-        findings.append(f"{HUB}: a {SLIDES_LINK} link sits outside a guide card's deck strip")
-    return findings
-
-
-def _read_hub() -> str:
-    """The hub's text; raises ValueError naming it when it cannot be read."""
-    try:
-        return (ROOT / HUB).read_text(encoding="utf-8")
-    except OSError as e:
-        raise ValueError(f"{HUB}: cannot be read ({e.strerror or e})") from None
-
+    return HOWTO_HUB.findings(html, mapping)
 
 def read_mapping() -> tuple[dict, str | None]:
     """The mapping and None, or {} and why it cannot be read. A missing file
@@ -835,10 +884,7 @@ def check_all() -> int:
     if not map_problem:
         for page in pages:
             findings += link_findings(page.stem, page.read_text(encoding="utf-8"), mapping)
-        try:
-            findings += hub_findings(_read_hub(), mapping)
-        except ValueError as e:
-            findings.append(str(e))
+        findings += HOWTO_HUB.check(ROOT, mapping)
     for f in findings:
         print(f)
     print(
@@ -934,14 +980,9 @@ def plan_stamps(mapping: dict) -> tuple[dict[Path, str], list[str]]:
             continue
         if new != html:
             changes[page] = new
-    try:
-        hub = _read_hub()
-        new = stamp_hub(hub, mapping)
-    except ValueError as e:
-        errors.append(str(e))
-    else:
-        if new != hub:
-            changes[ROOT / HUB] = new
+    hub_changes, hub_errors = HOWTO_HUB.plan(ROOT, mapping)
+    changes.update(hub_changes)
+    errors += hub_errors
     return changes, errors
 
 
