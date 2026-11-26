@@ -277,6 +277,12 @@ class DeckKind:
     # (presentation id, indentation) -> more whole lines --stamp writes under
     # the deck line, or None for none.
     deck_line_extra: Callable[[str, str], str] | None = None
+    # Files beyond the pages that show a deck: given the mapping, extra_plan
+    # returns the new text of each file --stamp changes plus the errors that
+    # stop it, and extra_findings what --check reports. Both run with the
+    # pages' own, so one refusal writes nothing.
+    extra_plan: Callable[[dict], tuple[dict[Path, str], list[str]]] | None = None
+    extra_findings: Callable[[dict], list[str]] | None = None
 
 
 # The callables name functions defined further down; a lambda reads the name
@@ -1388,6 +1394,8 @@ def check_all(kind: DeckKind = BREACH) -> int:
     if not map_problem:
         for page in pages:
             findings += link_findings(page.stem, page.read_text(encoding="utf-8"), mapping, kind)
+        if kind.extra_findings:
+            findings += kind.extra_findings(mapping)
     for f in findings:
         print(f)
     print(
@@ -1492,6 +1500,10 @@ def plan_stamps(mapping: dict, kind: DeckKind = BREACH) -> tuple[dict[Path, str]
             continue
         if new != html:
             changes[page] = new
+    if kind.extra_plan:
+        more, more_errors = kind.extra_plan(mapping)
+        changes.update(more)
+        errors += more_errors
     return changes, errors
 
 

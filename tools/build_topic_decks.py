@@ -658,6 +658,191 @@ def insert_deck_line(html: str, pres_id: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# The hub: each card on topics.html whose topic has a deck carries the deck's
+# links and a closed preview.
+# ---------------------------------------------------------------------------
+
+HUB = "topics.html"
+HUB_DECK_ATTR = "data-topic-hub-deck"
+HUB_CARD_CLASS = "resource-card--topic-deck"
+SLIDES_LINK = "docs.google.com/presentation"
+
+# A card is found by its first line and ends at the first line closing it at
+# the same indent, so a pattern over its markup cannot run into the next card.
+_HUB_START_RE = re.compile(
+    r'^(?P<ind> *)(?:(?P<a><a\b[^>\n]*\bclass="card-link"[^>\n]*>)|'
+    r'(?P<d><div class="resource-card ' + HUB_CARD_CLASS + r'"[^>\n]*>))',
+    re.M,
+)
+_INNER = r"(?P<inner>(?:(?P=ind)        [^\n]*\n)*)"
+_PLAIN_CARD_RE = re.compile(
+    r'(?P<ind> *)(?P<a><a\b[^>\n]*\bclass="card-link"[^>\n]*>)\n'
+    r'(?P=ind)    <div class="resource-card"(?P<dattr>[^>\n]*)>\n' + _INNER +
+    r"(?P=ind)    </div>\n(?P=ind)</a>\n"
+)
+_DECKED_CARD_RE = re.compile(
+    r'(?P<ind> *)<div class="resource-card ' + HUB_CARD_CLASS + r'"(?P<dattr>[^>\n]*)>\n'
+    r'(?P=ind)    (?P<a><a\b[^>\n]*\bclass="card-link"[^>\n]*>)\n' + _INNER +
+    r"(?P=ind)    </a>\n"
+    r'(?P=ind)    <p class="deck-actions" ' + HUB_DECK_ATTR + r'>(?:(?!</p>)[^\n])*</p>\n'
+    r'(?P=ind)    <details class="deck-preview" ' + HUB_DECK_ATTR + r'>(?:(?!</details>)[^\n])*</details>\n'
+    r"(?P=ind)</div>\n"
+)
+_H3_RE = re.compile(r"<h3\b[^>]*>(.*?)</h3\s*>", re.S | re.I)
+
+
+@dataclass
+class _HubCard:
+    start: int
+    end: int
+    slug: str | None
+    name: str
+    decked: bool | None  # None: neither form
+    a: str = ""
+    dattr: str = ""
+    inner: str = ""
+    ind: str = ""
+
+
+def _hub_slug(a_tag: str) -> str | None:
+    href = HREF_ATTR_RE.search(a_tag)
+    value = htmllib.unescape(href.group(1)) if href else ""
+    return value[:-5] if TOPIC_PAGE_RE.fullmatch(value) else None
+
+
+def _hub_cards(html: str) -> list[_HubCard]:
+    cards: list[_HubCard] = []
+    pos = 0
+    for m in _HUB_START_RE.finditer(html):
+        if m.start() < pos:
+            continue
+        ind, close = m.group("ind"), "</a>" if m.group("a") else "</div>"
+        end_m = re.compile(r"^" + ind + close + r"[ \t]*(?:\n|\Z)", re.M).search(html, m.end())
+        end = end_m.end() if end_m else html.find("\n", m.start()) + 1 or len(html)
+        pos = end
+        body = html[m.start(): end]
+        form = _DECKED_CARD_RE if m.group("d") else _PLAIN_CARD_RE
+        f = form.fullmatch(body)
+        a_tag = f.group("a") if f else (A_TAG_RE.search(body, 0 if m.group("a") else len(m.group(0))) or [""])[0]
+        slug = _hub_slug(a_tag)
+        if f is None:
+            where = slug or f"at line {html.count(chr(10), 0, m.start()) + 1}"
+            cards.append(_HubCard(m.start(), end, slug, where, None))
+            continue
+        h3 = _H3_RE.search(f.group("inner"))
+        cards.append(_HubCard(m.start(), end, slug, slug or "?", bool(m.group("d")), a_tag, f.group("dattr"),
+                              f.group("inner"), ind))
+        cards[-1].name = re.sub(r"<[^>]+>", "", h3.group(1)).strip() if h3 else (slug or "?")
+    return cards
+
+
+def _hub_card_html(c: _HubCard, pres_id: str | None) -> str:
+    """The card as it is written for pres_id: decked, or plain when None."""
+    i = c.ind
+    if pres_id is None:
+        return (
+            f'{i}{c.a}\n{i}    <div class="resource-card"{c.dattr}>\n{c.inner}{i}    </div>\n{i}</a>\n'
+        )
+    base = f"https://docs.google.com/presentation/d/{pres_id}"
+    ext = 'target="_blank" rel="noopener noreferrer"'
+    title = c.name.replace('"', "&quot;")
+    return (
+        f'{i}<div class="resource-card {HUB_CARD_CLASS}"{c.dattr}>\n'
+        f'{i}    {c.a}\n{c.inner}{i}    </a>\n'
+        f'{i}    <p class="deck-actions" {HUB_DECK_ATTR}><strong>Slides:</strong> '
+        f'<a href="{base}/export/pdf" {ext}>PDF</a> <a href="{base}/copy" {ext}>Editable copy</a></p>\n'
+        f'{i}    <details class="deck-preview" {HUB_DECK_ATTR}><summary>Preview the slides</summary>'
+        f'<div class="deck-frame"><iframe src="{base}/embed" title="Preview of the {title} slides" '
+        f'loading="lazy" allowfullscreen></iframe></div></details>\n'
+        f'{i}</div>\n'
+    )
+
+
+def _hub_stray(html: str, cards: list[_HubCard]) -> bool:
+    """The deck attribute somewhere other than inside a decked card. A card
+    of neither form is reported as itself, so its own lines do not count."""
+    rest, pos = [], 0
+    for c in cards:
+        if c.decked is not False:
+            rest.append(html[pos: c.start])
+            pos = c.end
+    rest.append(html[pos:])
+    return HUB_DECK_ATTR in "".join(rest)
+
+
+def _hub_want(c: _HubCard, mapping: dict) -> str | None:
+    return bbd._entry_id(mapping.get(c.slug)) if c.slug else None
+
+
+def stamp_hub(html: str, mapping: dict) -> str:
+    """topics.html with every card whose topic is in the mapping (with a
+    well-formed id) in its decked form and every other card plain. A card of
+    neither form, or the deck attribute outside a decked card, is an error:
+    rewriting around it would guess at what to keep."""
+    cards = _hub_cards(html)
+    for c in cards:
+        if c.decked is None:
+            raise ValueError(f"{HUB}: the card for {c.name!r} is neither a plain card nor a decked card")
+    if _hub_stray(html, cards):
+        raise ValueError(f"{HUB}: {HUB_DECK_ATTR} appears outside a decked card")
+    out, pos = [], 0
+    for c in cards:
+        out += [html[pos: c.start], _hub_card_html(c, _hub_want(c, mapping))]
+        pos = c.end
+    out.append(html[pos:])
+    return "".join(out)
+
+
+def hub_findings(html: str, mapping: dict) -> list[str]:
+    """Where topics.html disagrees with the mapping: one finding per card
+    that differs from what stamp_hub writes, and any Google Slides link
+    outside a decked card's two strip lines."""
+    findings: list[str] = []
+    cards = _hub_cards(html)
+    for c in cards:
+        if c.decked is None:
+            findings.append(f"{HUB}: the card for {c.name!r} is malformed: neither a plain card nor a decked "
+                            "card, so its deck markup cannot be read")
+            continue
+        want = _hub_want(c, mapping)
+        if html[c.start: c.end] == _hub_card_html(c, want):
+            continue
+        if want and not c.decked:
+            findings.append(f"{HUB}: the card for {c.name!r} ({c.slug}) has no deck; it is published")
+        elif want:
+            findings.append(f"{HUB}: the card for {c.name!r} ({c.slug}) has the wrong deck markup for "
+                            "its published id")
+        else:
+            findings.append(f"{HUB}: the card for {c.name!r} ({c.slug}) carries a deck, but the topic is "
+                            "not published")
+    if _hub_stray(html, cards):
+        findings.append(f"{HUB}: {HUB_DECK_ATTR} appears outside a decked card")
+    outside = "\n".join(ln for ln in html.splitlines() if HUB_DECK_ATTR not in ln)
+    if SLIDES_LINK in outside:
+        findings.append(f"{HUB}: a {SLIDES_LINK} link sits outside a decked card's strip lines")
+    return findings
+
+
+def hub_plan(mapping: dict) -> tuple[dict[Path, str], list[str]]:
+    """The new text of topics.html when --stamp would change it, or the
+    reason it cannot be stamped. Nothing is written."""
+    path = bbd.ROOT / HUB
+    try:
+        html = path.read_text(encoding="utf-8")
+        new = stamp_hub(html, mapping)
+    except (OSError, ValueError) as e:
+        return {}, [str(e) if isinstance(e, ValueError) else f"{HUB}: {e}"]
+    return ({path: new} if new != html else {}), []
+
+
+def hub_check(mapping: dict) -> list[str]:
+    try:
+        return hub_findings((bbd.ROOT / HUB).read_text(encoding="utf-8"), mapping)
+    except OSError as e:
+        return [f"{HUB}: {e}"]
+
+
+# ---------------------------------------------------------------------------
 # The page gate: what a deck may say, section by section.
 # ---------------------------------------------------------------------------
 
@@ -855,6 +1040,8 @@ TOPIC = bbd.DeckKind(
     entry_keys=("id", "outline_sha256", "page_sha256", "cover_sha256", "sections", "published"),
     page_state=_page_state,
     page_changes=_page_changes,
+    extra_plan=hub_plan,
+    extra_findings=hub_check,
 )
 
 
@@ -1017,6 +1204,48 @@ def _clean_outline(slug: str = "kube", page: str = "kube.html") -> str:
     return f"title: Kubernetes\npage: {page}\nas-of: 2026-11-01\npromise: What a managed cluster runs.\n\n" + slides
 
 
+HUB_IND = " " * 16
+
+
+def _plain_card(href: str, title: str, text: str = "About it.") -> str:
+    """A card as topics.html writes it: the link, then the card, then the
+    picture, h3 and p at the card's inner indent."""
+    i = HUB_IND
+    return (
+        f'{i}<a href="{href}" class="card-link">\n'
+        f'{i}    <div class="resource-card">\n'
+        f'{i}        <picture><img src="img/thumbs/x.jpg" alt="X graphic" width="1440" height="960"></picture>\n'
+        f'{i}        <h3>{title}</h3>\n'
+        f'{i}        <p>{text}</p>\n'
+        f'{i}    </div>\n'
+        f'{i}</a>\n'
+    )
+
+
+def _hub(*cards: str) -> str:
+    return '<main>\n            <div class="resource-grid">\n' + "".join(cards) + "            </div>\n</main>\n"
+
+
+def _decked_card(href: str, title: str, pres_id: str, text: str = "About it.") -> str:
+    i = HUB_IND
+    base = f"https://docs.google.com/presentation/d/{pres_id}"
+    ext = 'target="_blank" rel="noopener noreferrer"'
+    return (
+        f'{i}<div class="resource-card resource-card--topic-deck">\n'
+        f'{i}    <a href="{href}" class="card-link">\n'
+        f'{i}        <picture><img src="img/thumbs/x.jpg" alt="X graphic" width="1440" height="960"></picture>\n'
+        f'{i}        <h3>{title}</h3>\n'
+        f'{i}        <p>{text}</p>\n'
+        f'{i}    </a>\n'
+        f'{i}    <p class="deck-actions" data-topic-hub-deck><strong>Slides:</strong> '
+        f'<a href="{base}/export/pdf" {ext}>PDF</a> <a href="{base}/copy" {ext}>Editable copy</a></p>\n'
+        f'{i}    <details class="deck-preview" data-topic-hub-deck><summary>Preview the slides</summary>'
+        f'<div class="deck-frame"><iframe src="{base}/embed" title="Preview of the {title} slides" '
+        'loading="lazy" allowfullscreen></iframe></div></details>\n'
+        f'{i}</div>\n'
+    )
+
+
 def _topic_tree(root: Path, outlines: dict[str, str], pages: dict[str, str], mapping: dict | None = None,
                 cards: tuple[str, ...] | None = None) -> Path:
     """A scratch repository: topics.html carding the given pages (or
@@ -1026,7 +1255,7 @@ def _topic_tree(root: Path, outlines: dict[str, str], pages: dict[str, str], map
     decks.mkdir(parents=True)
     hrefs = cards if cards is not None else tuple(pages)
     (root / "topics.html").write_text(
-        "<main>\n" + "".join(f'<a href="{h}" class="card-link"><h3>{h}</h3></a>\n' for h in hrefs) + "</main>\n",
+        "<main>\n" + "".join(_plain_card(h, h) for h in hrefs) + "</main>\n",
         encoding="utf-8",
     )
     for name, html in pages.items():
@@ -1483,6 +1712,93 @@ def _case_stamp_idempotent(tmp: Path) -> None:
     assert bbd.stamp_page(topic, None, TOPIC) == both
 
 
+def _case_hub_stamp_decks_mapped_cards(tmp: Path) -> None:
+    plain = _hub(_plain_card("kube.html", "Kubernetes"), _plain_card("serverless.html", "Serverless &amp; more"))
+    out = stamp_hub(plain, {"kube": {"id": ID_A}})
+    assert out == _hub(_decked_card("kube.html", "Kubernetes", ID_A), _plain_card("serverless.html", "Serverless &amp; more"))
+    assert out.count(ID_A) == 3 and 'title="Preview of the Kubernetes slides"' in out, out
+    assert "<details class=\"deck-preview\" data-topic-hub-deck><summary>" in out and " open" not in out
+    # The h3 keeps its entities as written.
+    both = stamp_hub(plain, {"kube": {"id": ID_A}, "serverless": {"id": ID_B}})
+    assert 'title="Preview of the Serverless &amp; more slides"' in both, both
+    # An entry with no well-formed id decks nothing.
+    assert stamp_hub(plain, {"kube": {"id": "short"}}) == plain
+
+
+def _case_hub_stamp_reverses_and_is_idempotent(tmp: Path) -> None:
+    plain = _hub(_plain_card("kube.html", "Kubernetes"), _plain_card("serverless.html", "Serverless"))
+    once = stamp_hub(plain, {"kube": {"id": ID_A}})
+    assert stamp_hub(once, {"kube": {"id": ID_A}}) == once
+    assert stamp_hub(once, {}) == plain
+    swapped = stamp_hub(once, {"kube": {"id": ID_B}})
+    assert swapped.count(ID_B) == 3 and ID_A not in swapped, swapped
+    # A card with extra attributes on its link and box survives the round trip.
+    odd = plain.replace('class="card-link">', 'class="card-link" data-x="1">', 1).replace(
+        '<div class="resource-card">', '<div class="resource-card" data-y="2">', 1)
+    assert stamp_hub(stamp_hub(odd, {"kube": {"id": ID_A}}), {}) == odd
+    # The attribute outside a decked card is refused, and so is a card of neither form.
+    stray = plain.replace("<main>", '<main>\n<p class="x" data-topic-hub-deck>x</p>', 1)
+    broken = once.replace("</details>", "", 1)
+    for html, mapping, needle in ((stray, {}, "data-topic-hub-deck"), (broken, {"kube": {"id": ID_A}}, "'kube'")):
+        try:
+            stamp_hub(html, mapping)
+        except ValueError as e:
+            assert needle in str(e), e
+        else:
+            raise AssertionError(f"stamp_hub accepted a hub with {needle}")
+
+
+def _case_hub_findings(tmp: Path) -> None:
+    plain = _hub(_plain_card("kube.html", "Kubernetes"), _plain_card("serverless.html", "Serverless"))
+    mapping = {"kube": {"id": ID_A}}
+    good = stamp_hub(plain, mapping)
+    assert hub_findings(good, mapping) == [] and hub_findings(plain, {}) == []
+    missing = hub_findings(plain, mapping)
+    assert len(missing) == 1 and "topics.html" in missing[0] and "kube" in missing[0] and "no deck" in missing[0], missing
+    wrong = hub_findings(good.replace(ID_A, ID_B, 1), mapping)
+    assert len(wrong) == 1 and "kube" in wrong[0] and "wrong" in wrong[0], wrong
+    extra = hub_findings(good, {"kube": {"id": ID_A}, "serverless": {"id": ID_B}})
+    assert len(extra) == 1 and "serverless" in extra[0] and "no deck" in extra[0], extra
+    unmapped = hub_findings(good, {})
+    assert len(unmapped) == 1 and "kube" in unmapped[0] and "not published" in unmapped[0], unmapped
+    bad = hub_findings(good.replace("Editable copy</a></p>\n", "Editable copy</a>\n", 1), mapping)
+    assert len(bad) == 1 and "kube" in bad[0] and "malformed" in bad[0], bad
+    link = f"https://docs.google.com/presentation/d/{ID_B}/copy"
+    stray = hub_findings(good.replace("<h3>Serverless</h3>", f'<h3><a href="{link}">Serverless</a></h3>'), mapping)
+    assert len(stray) == 1 and "docs.google.com/presentation" in stray[0], stray
+    # Control: the strip's own links are not strays.
+    assert hub_findings(good, mapping) == []
+
+
+def _case_crosslink_skips_hub_deck_lines(tmp: Path) -> None:
+    import crosslink_pages as cp
+
+    key = "Slides"
+    patterns, slugs = cp.build_term_regexes([key]), {key.lower(): "term-slides"}
+    link = '<a class="glossary-link" href="glossary.html#term-slides">Slides</a>'
+    hub = stamp_hub(_hub(_plain_card("kube.html", "Kubernetes")), {"kube": {"id": ID_A}})
+    hub = hub.replace("</main>", "<p>Read the Slides first.</p>\n</main>")
+    strip = next(ln for ln in hub.splitlines() if 'class="deck-actions"' in ln)
+    assert "Slides" in strip, strip
+    page = tmp / "x.html"
+    old = cp.REPO_ROOT
+    cp.REPO_ROOT = tmp
+    try:
+        page.write_text(hub.replace("Preview the slides", "Preview the Slides"), encoding="utf-8")
+        cp.crosslink_page(page, patterns, slugs)
+        once = page.read_text(encoding="utf-8")
+        lines = once.splitlines()
+        assert strip in lines and "Preview the Slides" in next(ln for ln in lines if "deck-preview" in ln), once
+        assert not any(link in ln for ln in lines if "data-topic-hub-deck" in ln), once
+        assert once.count(link) == 1 and link in next(ln for ln in lines if "Read the" in ln), once
+        # Control: without its attribute the strip takes the link.
+        page.write_text(hub.replace(" data-topic-hub-deck>", ">", 1), encoding="utf-8")
+        cp.crosslink_page(page, patterns, slugs)
+        assert link in next(ln for ln in page.read_text(encoding="utf-8").splitlines() if "deck-actions" in ln)
+    finally:
+        cp.REPO_ROOT = old
+
+
 def _case_crosslink_skips_topic_deck_line(tmp: Path) -> None:
     import crosslink_pages as cp
 
@@ -1635,6 +1951,10 @@ CASES: list = [
     ("stamp_after_page_meta", _case_stamp_after_page_meta),
     ("stamp_idempotent", _case_stamp_idempotent),
     ("crosslink_skips_topic_deck_line", _case_crosslink_skips_topic_deck_line),
+    ("hub_stamp_decks_mapped_cards", _case_hub_stamp_decks_mapped_cards),
+    ("hub_stamp_reverses_and_is_idempotent", _case_hub_stamp_reverses_and_is_idempotent),
+    ("hub_findings", _case_hub_findings),
+    ("crosslink_skips_hub_deck_lines", _case_crosslink_skips_hub_deck_lines),
     ("record_writes_sections", _case_record_writes_sections),
     ("check_empty_tree", _case_check_empty_tree),
     ("real_pages", _case_real_pages),

@@ -486,6 +486,15 @@ Speaker notes, on every slide.
   Slides link or embed on the page is a finding. `--stamp` and `--record`
   write both and plan every page before writing any, as the breach tool
   does. The glossary cross-linker skips both lines.
+- `topics.html` shows the same deck on the topic's card. A card with a deck
+  is a `<div class="resource-card resource-card--topic-deck">` holding the
+  card's link (its picture, h3 and p unchanged), then two lines carrying
+  `data-topic-hub-deck`: a `.deck-actions` strip with the PDF and editable
+  copy links, and a closed `.deck-preview`. A card whose topic has no deck
+  stays a plain `<a class="card-link">` card. `--stamp` and `--record` write
+  every card from the mapping, in the same plan as the topic pages, and
+  `--check` fails a card that disagrees with it or any other Google Slides
+  link on the page. The cross-linker skips both lines here too.
 
 ## Topic build
 
