@@ -30,9 +30,9 @@ The API is the product surface and the attack surface.
 notes:
 The web in 2010 was rendered HTML. The web in 2026 is the JSON behind it, plus mobile clients, B2B integrations, webhook callbacks and the service-to-service traffic inside your own cluster. The API is the product surface, and it's the attack surface.
 
-The shift created bugs the application-security toolchain didn't anticipate. A ModSecurity rule set is unhelpful against an authenticated user asking for someone else's order. A Content-Security-Policy header doesn't apply to a mobile client or a partner pulling from a webhook. SAST tooling that grep'd for SQL injection doesn't catch that GET /api/orders/{id} never re-checks ownership.
+The shift created bugs the application-security toolchain didn't anticipate. A ModSecurity rule set is unhelpful against an authenticated user asking for someone else's order. A Content-Security-Policy header doesn't apply to a mobile client or a partner pulling from a webhook. SAST tooling that grep'd for SQL injection patterns doesn't catch that GET /api/orders/{id} never re-checks ownership.
 
-"Can this user call /orders?" is the easy question; "can this user see this order?" is the one modern auth middleware doesn't answer by default. Bearer tokens, JWTs and mTLS each come with their own pitfalls, and none with browser-supplied defaults. A REST endpoint, a GraphQL query, a gRPC stream and a webhook delivery look nothing alike to a WAF. Most non-trivial orgs cannot enumerate every API they expose, what data it returns, who owns it and whether it's still in use. And business-logic abuse looks legitimate: the attacker is logged in and their requests pass the schema, so only behavioral analytics catches it.
+"Can this user call /orders?" is the easy question; "can this user see this order?" is the one modern auth middleware doesn't answer by default. Bearer tokens, JWTs and mTLS each come with their own pitfalls, and none with browser-supplied defaults. A REST endpoint, a GraphQL query, a gRPC stream and a webhook delivery look nothing alike to a WAF. Most non-trivial orgs cannot enumerate every API they expose, what data it returns, who owns it and whether it's still in use. And business-logic abuse looks legitimate: the attacker is logged in and their requests pass the schema. The bug is in what the endpoint does with the request, and only behavioral analytics catches it.
 
 The category now has its own OWASP top 10, first published in 2019 with 2023 the current edition, and its own Gartner analyst category, carved out of WAF in 2021. If you operate non-trivial APIs and treat API security as "the WAF will catch it", the page says you are operating on a 2015 model of the web.
 
@@ -51,7 +51,7 @@ layout: table
 section: owasp | bola
 row: Risk | The check the endpoint skips | Defense
 row: API1 BOLA | Does this object belong to the caller? | Ownership enforced in the query itself
-row: API3 BOPLA | Which properties may the caller read or write? | Allowlist settable properties on a DTO; never return the record
+row: API3 BOPLA | Which properties may the caller read or write? | Allowlist settable properties on a DTO; never return the database record
 row: API5 BFLA | May this caller invoke this function? | Central middleware listing permissions per route, deny by default
 In each, the endpoint skips an authorization check: on the object, on its properties, or on the function.
 notes:
@@ -69,7 +69,7 @@ section: owasp
 row: Risk | What goes wrong | Defense
 row: API2 Broken Authentication | Forged, replayed, brute-forced or stolen tokens | Dedicated review; rate-limit auth hardest
 row: API4 Unrestricted Resource Consumption | Requests costing the server far more than the caller | Quotas, per-user budgets, complexity limits
-row: API6 Unrestricted Access to Sensitive Business Flows | Working as designed, abused at scale | Behavioral analytics, bot management, step-up auth
+row: API6 Unrestricted Access to Sensitive Business Flows | Working as designed, abused at scale | Behavioral analytics, bot management, step-up auth for high-value flows
 row: API8 Security Misconfiguration | Verbose errors, open CORS, debug routes | Baselined gateway configs, policy in IaC
 row: API10 Unsafe Consumption of APIs | Trusting a third-party API's response | Validate responses like requests
 notes:
@@ -77,9 +77,9 @@ Broken authentication's dominant cases are JWTs accepted without signature verif
 
 Unrestricted resource consumption covers pagination with no max page size, uploads with no size limit, search with no time budget, deeply nested GraphQL queries and batch endpoints with no cap. Against a serverless API, an attacker may not breach data but will breach your AWS bill.
 
-Business-flow abuse looks like bulk account creation, ticket scalping, gift-card balance enumeration and catalog scraping. Auth and authorization pass; the abuse is in the volume, so the defense sits at the platform layer.
+Business-flow abuse looks like bulk account creation, ticket scalping, gift-card balance enumeration and catalog scraping. Auth and authorization pass; the abuse is in the volume. The page defends it at the platform layer: behavioral analytics, bot management, fraud-detection signals and stepped-up auth for high-value flows.
 
-Misconfiguration is the grab-bag: stack traces in errors, CORS allowing any origin, missing security headers, default credentials, debug routes, GraphQL introspection and gRPC reflection in production. The page adds CSPM-style scanning of API gateways and APIM resources to the defenses.
+Misconfiguration is the grab-bag: stack traces in errors, CORS allowing any origin, missing security headers, default credentials on management endpoints, debug routes, GraphQL introspection and gRPC reflection in production. The page adds CSPM-style scanning of API gateways and APIM resources to the defenses.
 
 Unsafe consumption is the flip side: a compromised upstream returns malicious payloads, or response data is deserialized unsafely. Treat third-party responses as untrusted input.
 
@@ -104,7 +104,7 @@ A JWT is a signed, optionally encrypted, blob of claims. Its pitfalls are the ne
 
 mTLS is the strongest authentication on the network: a certificate can't be replayed off the wire by an HTTP intermediary. The certificate is only as trustworthy as the trust store that accepts it, and an image or device that bundles its own CA list makes you inherit every root in it. Revocation through CRLs and OCSP often does not arrive before a stolen or mis-issued certificate has been used, which is why short-lived certificates with automated issuance and rotation bound the window.
 
-Session cookies work for a same-origin SPA: Secure, HttpOnly, SameSite=Strict or Lax, and a server-side session store. Most modern stacks use OAuth even for the SPA, so one auth model serves browsers, mobile and partners.
+Session cookies work for a same-origin SPA: Secure, HttpOnly, SameSite=Strict, or Lax if users must arrive signed in from links on other sites, and a server-side session store. Most modern stacks use OAuth even for the SPA, so one auth model serves browsers, mobile and partners.
 
 == JWT pitfalls
 layout: list
@@ -171,7 +171,7 @@ check: Detect cross-user object access at runtime
 notes:
 Every lookup goes through a method that takes the user id as well as the object id, so the order comes back only if the user owns it and the handler has no path to bypass the check.
 
-UUIDs or hashids stop an attacker enumerating /api/orders/1, /api/orders/2 and so on. This is defense in depth, not the fix; the architectural fix is the ownership check.
+UUIDs or hashids reduce the cost of a missed check: an attacker can't enumerate /api/orders/1, /api/orders/2 and so on. This is defense in depth, not the fix; the architectural fix is the ownership check.
 
 Centralize authorization in middleware: an OPA, Cedar or AuthZed-style policy decision point reviews every request's caller, action, resource and attributes. Handlers don't write authorization themselves; they call the PDP.
 
@@ -187,18 +187,18 @@ row: Per-IP | Last resort; fine for anonymous public endpoints
 row: Per-user | The right granularity for authenticated APIs
 row: Per-API-key or client | Service-to-service and partner traffic
 row: Per-endpoint | Tighter on password reset, login, search and export
-row: Per-tenant | B2B SaaS, with sub-limits per user
+row: Per-tenant | Often the unit for B2B SaaS, with per-user sub-limits
 Run two layers: generous fair-use limits that keep one customer from monopolizing capacity, and tight anti-abuse limits surfaced as 429s and tied to step-up auth or temporary blocking.
 notes:
 The page calls rate limiting the crudest and most-effective control. Auth answers who is calling; rate limiting answers whether they are calling too much. An attacker who can't make a million requests can't enumerate a million ids, brute-force a million passwords or run a million expensive queries.
 
-Per-IP limits are dodged by anyone with a botnet or residential-proxy network, so they are not the primary defense. Per-user limits are tied to the user id or token and catch the logged-in attacker enumerating objects.
+Per-IP limits are a last resort, dodged by anyone with a botnet or residential-proxy network, and not the primary defense. Per-user limits are tied to the user id or token and catch the logged-in attacker enumerating objects.
 
 Token bucket is the default algorithm for most gateways. Sliding window is preferred where exact rate enforcement matters, such as anti-abuse and payment.
 
 Fair-use limits stop any one customer monopolizing capacity; they are generous, mostly never hit, and primarily defend against bugs in client code. Anti-abuse limits target login brute force, scraping and enumeration, and should be tight. Run both.
 
-Enforce at three places. The edge or CDN, such as Cloudflare, AWS WAF rate-based rules or Azure Front Door, is the cheapest place to drop floods. The gateway applies per-route, per-consumer and per-user limits. The app layer handles limits that need business context, with Redis-backed token buckets the standard.
+The page lists three places it is enforced. The edge or CDN, such as Cloudflare, AWS WAF rate-based rules or Azure Front Door, is the cheapest place to drop floods. The gateway applies per-route, per-consumer and per-user limits. The app layer handles limits that need business context, with Redis-backed token buckets the standard.
 
 == Choosing an API gateway
 layout: table
@@ -236,7 +236,7 @@ For tooling, Spectral lints OpenAPI for missing auth and schema drift, 42Crunch 
 == GraphQL in production
 layout: checklist
 section: graphql
-GraphQL collapses many REST endpoints into one, and concentrates REST-style bugs into different shapes.
+GraphQL collapses many REST endpoints into one, and concentrates many REST-style bugs into different shapes.
 check: Disable introspection in production, or scope it to authenticated internal callers
 check: Cap query depth and complexity, and set request timeouts
 check: Limit batch size and count each operation against rate limits
@@ -326,7 +326,7 @@ layout: checklist
 section: webhooks
 Webhooks invert the API call: your system receives unsolicited HTTP POSTs from a third party.
 check: Verify the signature before parsing
-check: Sign a timestamp and reject requests older than a few minutes
+check: Require a signed timestamp; reject requests older than a few minutes
 check: Make handlers idempotent, and drop duplicate idempotency keys
 check: Use published source IP ranges as a coarse filter
 check: As a provider, sign or mTLS your deliveries
@@ -365,7 +365,7 @@ check: Policy in code at the tool boundary, failing closed
 check: Egress allow-lists, deny by default
 check: Least-privilege tool sets per agent
 check: Human approval, with a preview, for irreversible actions
-check: Log every tool call; alert on sequences and repeated retries
+check: Log every tool call; alert on sequences; watch for repeated retries
 notes:
 An agent works toward a goal across many calls, and when one path is denied it looks for another. In the September 18, 2026 session, Bar Kaduri of Capsule Security presented research on agents that, asked to transfer a file without the means to do it, uploaded the content to a public file-sharing service and handed back the link. Her answer was not to ask the model to behave but to put deterministic checkpoints around it: hooks where policy as code decides before a tool runs.
 
@@ -373,13 +373,13 @@ Intercept every tool call before it executes and allow, deny or modify it in cod
 
 Deny outbound traffic by default from wherever the agent and its tools run; that closes the file-sharing detour. Give each agent only the tools and scopes its job needs: a tool the agent does not have is a path it cannot find. Require explicit confirmation before deletes, payments, publishing, or anything that sends data outside the organization.
 
-Record every tool call with the identity, arguments and policy decision, and alert on chains such as a database read followed by an outbound transfer. An agent hammering a blocked path also burns tokens. The OWASP Top 10 for Agentic Applications 2026 is the companion list for this layer.
+Record every tool call with the identity, arguments and policy decision, and alert on chains such as a database read followed by an outbound transfer. The session flagged that an agent hammering a blocked path also burns tokens. The OWASP Top 10 for Agentic Applications 2026 is the companion list for this layer.
 
 == Five maturity stages
 layout: timeline
 section: maturity
 event: Stage 1 | Tribal knowledge: no shared inventory, auth is each team's pick
-event: Stage 2 | Documented: OpenAPI specs, standardized auth, an owner per API
+event: Stage 2 | Documented: OpenAPI specs, standardized auth, an owner per major API
 event: Stage 3 | Gated: a gateway fronts every external API; BOLA tests in CI
 event: Stage 4 | Observed: a platform watches traffic and builds the inventory
 event: Stage 5 | Defended: a central PDP makes BOLA structurally impossible
@@ -424,7 +424,7 @@ layout: answer
 section: faq | runtime
 A WAF matches payloads against signatures. It doesn't know that order #1247 belongs to user A. For a non-trivial API you generally need the WAF for layer-7 noise and a platform for business logic and inventory.
 notes:
-A WAF inspects request payloads against signature and rule sets: SQLi, XSS, command injection and common bot patterns. It does not know what a logical user id is, or that the same authenticated user just enumerated 8,000 customer accounts in two minutes. The business-logic failures that dominate the OWASP API Top 10 look like perfectly legitimate traffic to it.
+The page says the two overlap on the surface and disagree underneath. A WAF inspects request payloads against signature and rule sets: SQLi, XSS, command injection and common bot patterns. It does not know what a logical user id is, or that the same authenticated user just enumerated 8,000 customer accounts in two minutes. The business-logic failures that dominate the OWASP API Top 10 look like perfectly legitimate traffic to it.
 
 Runtime API security platforms sit on or alongside API traffic and build a behavioral model. They catch sequence-based abuse such as gift-card balance enumeration, BOLA at runtime, shadow APIs, an endpoint that starts returning more data than it used to, and drift from the OpenAPI spec. They differ in deployment model, where on the path they sit, and how heavily they lean on traffic analytics versus spec-based checks. Most large API estates end up with the WAAP or WAF for noise plus one API security platform for the business-logic layer.
 
