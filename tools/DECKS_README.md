@@ -382,11 +382,12 @@ and last slides carry "Cloud Security Office Hours, csoh.org" and the licence.
 
 ## Public deck folders
 
-`cloud-security-how-to.html`, `breach-kill-chain-decks.html` and
-`topics.html` each open with a callout (`.deck-folder`) whose button links a
-Google Drive folder holding every deck of that kind: "CSOH how-to decks",
-"CSOH breach decks" and "CSOH topic decks". All three folders are shared
-view-only with anyone who has the link, so anything placed in them is public
+`cloud-security-how-to.html`, `breach-kill-chain-decks.html`,
+`breach-timeline.html` and `topics.html` each open with a callout
+(`.deck-folder`) whose button links a Google Drive folder holding every deck
+of that kind: "CSOH how-to decks", "CSOH breach decks" (from both breach
+pages) and "CSOH topic decks". All three folders are shared view-only with
+anyone who has the link, so anything placed in them is public
 at once and appears in the folder a reader is browsing. A deck that
 has not passed its render check and review must never be there.
 
