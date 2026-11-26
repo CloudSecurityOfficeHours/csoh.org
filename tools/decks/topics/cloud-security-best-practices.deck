@@ -1,0 +1,286 @@
+title: Cloud Security Best Practices
+page: cloud-security-best-practices.html
+as-of: 2026-11-25
+promise: Master the first three practice areas and you will prevent the majority of cloud incidents seen in industry, according to the page.
+
+== Ranked by what breaks in real incidents
+layout: text
+section: top
+Most "cloud security best practices" lists are long and unranked. This one is ordered by what appears as the root cause in our breach kill chains. The later areas are where mature programs differentiate.
+notes:
+Most cloud security best practices lists are 100 items long and unranked, which the page says is the same as not having a list. The areas here are ordered by what actually appears as the root cause in the site's breach kill chains.
+
+The page says that if you master the first three sections, you will prevent the majority of cloud incidents seen in industry. The later sections are where mature programs differentiate.
+
+The page is deliberate about scope: it calls out the high-leverage practices, and a practice left out is not necessarily one that does not matter.
+
+== The eight practice areas
+layout: compare
+section: practice-overview
+col: First four | Identity and access | Configuration and posture | Network controls | Data protection and secrets
+col: Last four | Logging and detection | Supply chain and CI/CD | Workloads and containers | AI and LLM workloads
+Ranked roughly by how often the absence of each shows up in real cloud incidents.
+notes:
+The eight areas are ranked roughly by how often the absence of each shows up in real cloud incidents. Identity and access is the most important: MFA, least privilege and no long-lived keys.
+
+Configuration and posture covers CIS benchmarks, public-block-by-default and encryption-by-default. Network controls cover segmentation, private endpoints and egress filtering. Data protection covers KMS, secrets managers, classification and exfiltration prevention.
+
+Then logging and detection, supply chain and CI/CD, workloads and containers, and finally AI and LLM workloads.
+
+== A maturity ladder
+layout: figure
+section: practice-overview
+figure: csm-title
+Start with the Stage 2 essentials, then layer Stage 3 tooling.
+notes:
+The figure shows a cloud security maturity model with four stages, from reactive to optimized, each with characteristic practices and tooling.
+
+The page says the practices that follow are roughly ordered by where they show up in this ladder. Start with the Stage 2 essentials, and layer Stage 3 tooling once those are in place.
+
+== Identity is the perimeter
+layout: text
+section: identity
+The Capital One WAF role had S3 list and read across 700 buckets. If you only fix one category, fix identity. Most cloud breaches we have documented involve an identity failure somewhere in the chain.
+notes:
+The page says that if you only fix one category, fix this one, because identity is the perimeter. Most cloud breaches the site has documented involve an identity failure somewhere in the chain.
+
+The Capital One breach happened because a WAF role had S3 list and read across 700 buckets. The page says read-only on one bucket would have stopped it.
+
+== Identity checklist
+layout: checklist
+section: identity
+check: Phishing-resistant MFA on every human identity
+check: Least privilege on every workload identity
+check: Eliminate long-lived access keys
+check: Enforce IMDSv2 on every EC2 instance
+check: Just-in-time access for privileged operations
+check: One IdP for everything
+check: Audit Conditional Access and IAM policies regularly
+notes:
+Push prompts and SMS codes are bypassable, and the page points to Uber 2022 and Scattered Spider at MGM. FIDO2 security keys, passkeys and platform authenticators are the bar, enforced through Conditional Access or IAM policies and not just policy documents.
+
+For least privilege, the page names IAM Access Analyzer on AWS, Microsoft Entra Privileged Identity Management and Google's IAM Recommender for finding and trimming unused permissions continuously.
+
+Use short-lived federated credentials through OIDC for CI/CD, workload-identity federation for service-to-service, and SSO for humans. IMDSv2 closes the Capital One pattern of SSRF to IMDSv1 to temporary credentials to S3 exfiltration. AWS makes v2 the default only on some launch paths, so set the account-level default and enforce it org-wide with an SCP.
+
+Standing admin is standing risk, so use just-in-time elevation with approval and time bounds. Federate everything to one IdP so joiner, mover and leaver events fire in one place. Policies drift, so weekly automated reports close gaps before attackers find them.
+
+== How identity nests
+layout: figure
+section: identity
+figure: ih-title
+SCP or org-policy at the root is the cheapest control by orders of magnitude.
+notes:
+The figure is a top-down view of how cloud identity nests: organization at the top, then accounts, then roles and service principals, then identities, then permissions.
+
+The page's caption says the deeper a permission lives, the more painful misconfiguration is at the top, and that an SCP or org-policy at the root is the cheapest control by orders of magnitude.
+
+== Configuration and posture
+layout: checklist
+section: configuration
+check: Continuous posture scanning across all accounts
+check: Default-deny on public access
+check: Encryption-at-rest defaults, enforced by policy
+check: Tag for ownership and blast radius
+check: Guardrail accounts, not exception lists
+check: Drift-detect Infrastructure as Code
+notes:
+The page says misconfigurations are a common breach root cause, but that posture management tools have made this category solvable for most organizations.
+
+Run a CSPM tool, with Prowler and ScoutSuite as the open-source defaults, scan against CIS benchmarks or your provider's equivalent, and fix the findings instead of just collecting them. Revoke default-public IAM grants on day one of every new account.
+
+Enforce encryption through SCP, Azure Policy or Org Policy so users cannot disable it. Give each business unit its own account, subscription or project, with floor-level controls enforced by policy and cross-account access made explicit. Run terraform plan in CI on every change, and use AWS Config, Azure Policy or GCP Asset Inventory to catch console-mode quick fixes.
+
+== Network controls
+layout: table
+section: network
+row: Control | What it does
+row: Default-deny security groups | No 0.0.0.0/0 on port 22 or 3389 except deliberate jump hosts
+row: Private endpoints | Keep managed-service traffic off the public internet
+row: Egress and DNS filtering | Catch exfiltration over HTTPS to attacker domains
+row: Zero trust between services | mTLS or workload-identity authorization
+row: WAF with modern rules | Explicit SSRF rule for 169.254.169.254
+Cloud networks are not on-prem perimeters, but they still limit lateral movement and exfiltration.
+notes:
+Cloud networks are not perimeters in the on-prem sense, but the controls still matter, especially for limiting lateral movement and exfiltration.
+
+Private Link and VPC endpoints reduce attack surface and give you flow logs you can audit. The page says most data exfiltration goes out over HTTPS to attacker-controlled domains, and that egress proxies, NAT-gateway logs and DNS filtering catch it when log monitoring is wired up.
+
+For zero trust between services, use mTLS through a service mesh or workload-identity-based authorization, and assume an attacker is already on the LAN. For WAFs, the page says defaults are not enough: add explicit rules for SSRF and the OWASP Top 10. It also covers DDoS protection on internet-facing services.
+
+== Data protection and secrets
+layout: checklist
+section: data
+check: Classify sensitive data and let classes drive policy
+check: Customer-managed keys for sensitive data
+check: Secrets in a managed store, never in code
+check: Encrypt in transit, end to end
+check: Back up, and test the restore
+check: DLP on data egress paths
+notes:
+Classifications from Purview, Macie or Google DLP drive access policy, encryption requirements and incident-response priority. Customer-managed keys give you a rotation policy, deletion control and a stop-the-bleeding lever during an incident.
+
+Use a managed secrets store, auto-rotate where supported, and run gitleaks, trufflehog or GitHub secret scanning in CI. For transit, the page says TLS 1.2 minimum and 1.3 preferred, and treats the trust store as part of the control: a bundled CA list commits you to every root in it, and short-lived certificates keep the window small.
+
+Untested backups do not count. Pair DLP with egress controls so the alert fires before the data leaves.
+
+== The detection baseline
+layout: figure
+section: data | detection
+figure: detection-baseline
+The logging section, reduced to the order that produces a detection program.
+notes:
+The figure shows four steps from the logging section: turn on native detection, centralize control-plane logs, write detections as code, then test them and rehearse.
+
+The page's caption calls this the logging section reduced to the order that actually produces a detection program.
+
+== Logging and detection
+layout: checklist
+section: detection
+check: Enable native threat detection in every account
+check: Centralize control-plane logs
+check: Build detection content as code
+check: Alert on impossible behavior, not signatures
+check: Test your detections
+check: Rehearse incident response
+notes:
+You cannot respond to what you do not see, and the page says the SolarWinds, Capital One and LastPass incidents all had detectable activity that nothing was watching for.
+
+GuardDuty, Defender for Cloud and Security Command Center are the cheapest credible detection layer available, so turn them on org-wide. Send CloudTrail, Activity Log and Audit Logs to a data lake or SIEM, with retention of 90+ days for incident response and longer for compliance.
+
+Keep Sigma, KQL or SPL detections versioned and peer-reviewed, mapped to MITRE ATT&CK Cloud techniques. Behavior-based detections survive attacker tooling changes. Detection content that has not been exercised in production conditions probably does not fire. Run tabletop exercises quarterly and real exercises at least annually.
+
+== Supply chain and CI/CD
+layout: checklist
+section: supply-chain
+check: Pin dependencies to exact versions
+check: SBOM for every artifact, signed with Sigstore or cosign
+check: Hardened, SLSA-style build pipelines
+check: OIDC, not stored credentials, for cloud deploys
+check: Scope CI tokens minimally
+check: Pin GitHub Actions to a full SHA
+notes:
+The page says modern attackers pivot through your build pipeline, with SolarWinds as the canonical case and npm and PyPI typosquats and the Codecov compromise as routine.
+
+Commit lockfiles, and use Renovate or Dependabot for bumps with PR review. Use SPDX or CycloneDX for SBOMs, signed so you can prove a binary came from your build. Builds should run in isolated, hermetic environments with signed provenance attestations.
+
+OIDC from GitHub Actions to AWS, Azure or GCP eliminates long-lived deploy keys, so there is no secret to leak. A test-runner job does not need write access to production. Tags can be moved silently by a compromised maintainer, while SHAs cannot.
+
+== Workloads and containers
+layout: table
+section: workloads
+row: Practice | Detail
+row: Scan images | At build and in the registry; a clean image can rot
+row: Run non-root | Read-only root filesystem, dropped capabilities, seccomp
+row: Network Policies | Default-deny inter-pod traffic
+row: Runtime detection | Falco or Tetragon catch process-level anomalies
+row: Patch both planes | You still own node images and worker patching
+row: No public K8s API | Private endpoints, bastion and audit logging
+Block builds on critical CVEs in base layers.
+notes:
+Scan container images with a tool such as Trivy or Grype at build and again in the registry. The page says to block builds on critical CVEs in base layers, and that a clean image at build can rot.
+
+Run as non-root with a read-only root filesystem, with Pod Security Standards restricted as the baseline on Kubernetes. Without Network Policies, a compromised pod is on a flat network. Falco and Tetragon are eBPF-based and catch things like an unexpected shell or privilege escalation.
+
+Managed Kubernetes handles control-plane patching, but you still own node-image refreshes and worker patching. Do not expose Kubernetes APIs directly to the internet; the page calls the kubelet API a known attack target.
+
+== AI and LLM workloads
+layout: checklist
+section: ai
+check: Treat every LLM input as untrusted
+check: Limit agent tool authority
+check: Sandbox indirect prompt injection sources
+check: Log model inputs, outputs and tool calls
+check: Review sensitive data sent to external model APIs
+check: Test against the OWASP LLM Top 10
+notes:
+The page calls this the newest category and the one with the most movement, and says to treat AI workloads as agentic systems with tool access.
+
+Prompt injection is the default vulnerability of any system that lets a model see attacker-controllable text. Guardrails help but are not sufficient. If an agent can call APIs, scope those calls to least privilege with the same discipline as IAM, because confused-deputy attacks are real.
+
+Retrieved web pages, emails and PDFs are attacker-controlled, so strip HTML and summarize through a constrained sub-call. Log model inputs, outputs and tool calls, tagged with user identity. Send production traffic to external model APIs through DLP and use enterprise tier endpoints with no-training guarantees for sensitive workloads.
+
+== Zero trust at every layer
+layout: figure
+section: ai
+figure: zt-title
+Verify explicitly, use least privilege, assume breach.
+notes:
+The figure shows the three foundational principles of zero trust: verify explicitly, use least privilege access, and assume breach.
+
+The page's caption says to apply all three at every layer of the defense-in-depth stack: the perimeter, the network, identity, workloads and data.
+
+== Governance and people
+layout: checklist
+section: governance
+check: Document the shared responsibility line per service
+check: Run cloud security through your SDLC
+check: Train developers and admins continuously
+check: Rehearse your incident response plan
+check: Vendor risk for the vendors of your vendors
+notes:
+The page says most cloud security failures are misunderstandings of who is supposed to do what, so document the shared responsibility line for every service you use.
+
+Threat model at design, scan IaC at the PR, scan posture at deploy and monitor runtime in production. A separate security org becomes a bottleneck nobody calls. The page calls annual compliance training theater, and suggests hands-on labs, tabletop exercises and breach walkthroughs.
+
+An incident response plan covers roles, escalation paths, communication templates and legal and PR triggers. For vendors, SaaS your SaaS uses can leak your data without you noticing, so ask for SOC 2 reports of subprocessors as well as direct vendors.
+
+== Build the controls once
+layout: figure
+section: governance
+figure: cv-title
+Most cloud configuration evidence maps to SOC 2, ISO 27001 and PCI DSS.
+notes:
+The figure is a three-circle Venn diagram showing how SOC 2, ISO 27001 and PCI DSS share a common control core, with framework-specific extensions on the outside.
+
+The page's caption says most cloud configuration evidence, such as CloudTrail, IAM policies and encryption settings, maps to all three frameworks. Build the controls once, and tag them per framework for the auditor.
+
+== Anti-patterns: things to stop doing
+layout: list
+section: anti-patterns
+The page lists these and one more: no monitoring until later. Fix them before working on more sophisticated controls.
+item: Long-lived IAM access keys for service-to-service auth
+item: Public S3 buckets for convenience
+item: Wildcard IAM policies
+item: SSH into instances to debug
+item: "Just give me admin" and sort it out later
+item: Using the root account for daily work
+item: Email as MFA
+notes:
+The page frames these as the flip side of the best practices: if you see any of them in your environment, fix them before working on more sophisticated controls.
+
+Use OIDC federation or workload identity instead of long-lived keys. Use signed URLs, CloudFront with OAC or proper authentication instead of public buckets. Scope even admin roles to the actions and resources actually needed. Use Session Manager, Azure Bastion or Google IAP, which leave audit trails and do not require open inbound 22.
+
+For the admin request, the right answer is to find out what is needed and grant exactly that, and IAM Access Advisor or Access Analyzer can answer that after a trial period. Lock the root credentials in a vault with hardware MFA and break glass only for billing or account closure. Email is push-bombable, phishable and account-takeover-able, so use FIDO2 or platform authenticators.
+
+The page's eighth item is that you will add monitoring later: turn on GuardDuty, Defender or Security Command Center before you turn the workload on.
+
+== Why is identity first, not last?
+layout: question
+section: identity
+Think about where most breaches in the kill chains started.
+notes:
+Ask this and let the room answer before moving on.
+
+== Identity is the new perimeter
+layout: answer
+section: identity
+Most cloud breaches involve at least one identity failure, so identity is the page's first and most important category.
+notes:
+The page's answer is that in the cloud, identity is the new perimeter, and most cloud breaches involve at least one identity failure. That is why the identity section is first, not last.
+
+== Why test your detections?
+layout: question
+section: detection
+Think about a rule that has never been exercised.
+notes:
+Ask this and let the room answer before moving on. The page names Atomic Red Team and Stratus Red Team as examples of tools for this.
+
+== Untested rules probably do not fire
+layout: answer
+section: detection
+Detection content that has not been exercised in production conditions probably does not fire. Test it, and rehearse the response at least annually.
+notes:
+The page says detection content that has not been exercised in production conditions is detection content that probably does not fire. Test with tools such as Atomic Red Team, Stratus Red Team, the GuardDuty Tester or Microsoft Attack Simulator.
+
+Run tabletop exercises quarterly, and real exercises, with the SOC team responding in a sandbox account, at least annually. Rehearse the embarrassing scenarios.
