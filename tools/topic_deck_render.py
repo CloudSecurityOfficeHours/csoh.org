@@ -8,8 +8,9 @@ with a topic page class and topic generated slides. This module adds:
 
 - the figure layout: one of the page's diagrams, rendered to PNG, scaled to
   fit with its aspect ratio kept and never past 1.5 image pixels per point
-  of placed width, on a white panel, with the page's own <figcaption> under
-  it and the SVG's <title> as its alt text;
+  of placed width, on a white panel, with the page's own <figcaption> (or
+  the sentences of it the slide's caption: line selects) under it and the
+  SVG's <title> as its alt text;
 - the code layout: the slide's excerpt of one of the page's <pre> blocks in
   howto_deck_render.code_box, the how-to decks' code box, with the tab the
   how-to build would print for the same excerpt (the page's language
@@ -309,19 +310,21 @@ def _checked(where: str, path: Path) -> tuple[int, int]:
 
 
 def _render_figure(page: _TopicPage, s) -> None:
-    """The heading, the slide's prose, then the figure on its panel with the
-    page's caption under it, the two centred in the room left."""
+    """The heading, the slide's prose, then the figure on its panel with its
+    caption under it (the page's, or the sentences the slide's caption: line
+    selects), the two centred in the room left."""
     fig = page.ctx.page.figures.get(s.figure)
     path = page.ctx.art.get(s.figure)
     if fig is None or path is None:
         raise FigureError(f"{s.where}: no picture of figure {s.figure!r} from {page.deck.page}")
+    caption = btd.slide_caption(fig, s)
     px_w, px_h = _checked(s.where, path)
     y = r._heading(page, s.heading, r.Y)
     if s.paragraphs or s.bullets:
         y = r._body(page, s.paragraphs, s.bullets, y + STYLE["block_gap"], pt=LOOK["lead_pt"])
     top = y + r.LOOK["section_gap"]
     pad, cpt = LOOK["panel_pad"], LOOK["caption_pt"]
-    cap_h = r._block_h([fig.caption], r.W, cpt) + LOOK["caption_gap"] if fig.caption else 0.0
+    cap_h = r._block_h([caption], r.W, cpt) + LOOK["caption_gap"] if caption else 0.0
     room = page.floor - top - cap_h - 2 * pad
     if room < LOOK["min_picture_h"]:
         raise LayoutError(f"{s.where}: the figure has {room:.2f} in of height left, under "
@@ -332,9 +335,9 @@ def _render_figure(page: _TopicPage, s) -> None:
     page.box("figure-panel", x - pad, top, w + 2 * pad, h + 2 * pad, fill=LOOK["panel"],
              line=(LOOK["panel_line"], LOOK["panel_line_pt"]))
     page.picture("figure", path, x, top + pad, w, h, fig.title)
-    if fig.caption:
+    if caption:
         page.box("figure-caption", r.X, top + h + 2 * pad + LOOK["caption_gap"], r.W, cap_h - LOOK["caption_gap"],
-                 [r._p(fig.caption, cpt, page.muted)], align=PP_ALIGN.CENTER)
+                 [r._p(caption, cpt, page.muted)], align=PP_ALIGN.CENTER)
 
 
 def page_code_tab(page_html: str, lines: list[str]) -> str | None:
@@ -461,7 +464,7 @@ def _code_problems(tag: str, slide, s, page_html: str) -> list[str]:
 def verify_pptx(path: Path, deck, pictures: bool = True, page_html: str | None = None) -> list[str]:
     """Every breach verify finding (pictures allowed when pictures is True),
     plus the pictures: the cover carries the art, each figure slide its one
-    figure with the page's caption, and no other slide a picture; every
+    figure with the caption it prints, and no other slide a picture; every
     picture has the expected alt text, its image's aspect ratio, at least
     MIN_PX_PER_PT pixels per point, no crop, and more than one colour. And
     the code: each code slide's box holds its excerpt with the page's tab,
@@ -483,8 +486,10 @@ def verify_pptx(path: Path, deck, pictures: bool = True, page_html: str | None =
             fig = page.figures.get(s.figure)
             want = [("figure", fig.title if fig else None)]
             got = [sh.text_frame.text for sh in slide.shapes if sh.name == "figure-caption"]
-            if fig is not None and got != ([fig.caption] if fig.caption else []):
-                findings.append(f"{tag}: figure caption is {got!r}; the page's is {fig.caption!r}")
+            cap = btd.slide_caption(fig, s) if fig is not None else ""
+            if fig is not None and got != ([cap] if cap else []):
+                whose = "its caption: line selects" if s.caption else "the page's is"
+                findings.append(f"{tag}: figure caption is {got!r}; {whose} {cap!r}")
         pics = [sh for sh in slide.shapes if sh.shape_type == MSO_SHAPE_TYPE.PICTURE]
         if [p.name for p in pics] != [name for name, _ in want]:
             findings.append(f"{tag}: pictures {[p.name for p in pics]}, expected {[name for name, _ in want]}")
@@ -652,6 +657,29 @@ def _case_caption_from_page(tmp: Path) -> None:
     assert _one(list(r.reopen(again).slides)[3], "figure-caption").text_frame.text.endswith("the code you wrote.")
     # Control: verify against the edited page names the stale caption.
     f = verify_pptx(out, deck, page_html=edited)
+    assert any("caption" in x and "slide 4" in x for x in f), f
+
+
+def _case_caption_selected(tmp: Path) -> None:
+    """A figure slide with a caption: line prints the sentences it selects,
+    not the page's whole caption, and verify holds the slide to them."""
+    html = btd.CAPTION_PAGE
+    picked = "The cluster runs more than your code. Each check is numbered!"
+    deck = _deck(FIG_A, FIG_B)
+    deck.slides[1].caption = "The cluster runs  more than your code.\tEach check is numbered!"
+    out = _render(tmp, deck, _art(tmp), html=html)
+    slides = list(r.reopen(out).slides)
+    assert _one(slides[3], "figure-caption").text_frame.text == picked
+    # Control: the slide with no caption: line prints its page's caption.
+    assert _one(slides[4], "figure-caption").text_frame.text == "Each provider runs the control plane for you."
+    assert verify_pptx(out, deck, page_html=html) == [], verify_pptx(out, deck, page_html=html)
+    # Control: the same deck without the line prints the whole caption, and
+    # verify of the selected render against that deck names slide 4.
+    whole = _deck(FIG_A, FIG_B)
+    again = _render(tmp, whole, _art(tmp), html=html, name="w.pptx")
+    full = btd.figures(html)["cluster-supply-chain"].caption
+    assert full != picked and _one(list(r.reopen(again).slides)[3], "figure-caption").text_frame.text == full
+    f = verify_pptx(out, whole, page_html=html)
     assert any("caption" in x and "slide 4" in x for x in f), f
 
 
@@ -891,6 +919,7 @@ RENDER_CASES: list = [
     ("figure_resolution", _case_figure_resolution),
     ("list_has_dots_not_boxes", _case_list_has_dots_not_boxes),
     ("caption_from_page", _case_caption_from_page),
+    ("caption_selected", _case_caption_selected),
     ("picture_alt_text", _case_picture_alt_text),
     ("blank_png_refused", _case_blank_png_refused),
     ("cover_hero_or_tile", _case_cover_hero_or_tile),

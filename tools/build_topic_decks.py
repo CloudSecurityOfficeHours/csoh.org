@@ -20,6 +20,7 @@ Outline format (what differs from a breach outline):
     layout: figure
     section: <id> | <id>
     figure: <figure id>
+    caption: <whole sentences of the figure's caption>
     Prose lines join into one paragraph.
     notes:
     Speaker notes run to the next "== " line.
@@ -44,6 +45,9 @@ Outline format (what differs from a breach outline):
   the rendered diagram with the page's own caption under it. A deck whose
   page has a diagram figure has at least one figure slide, and shows each
   figure once.
+- A figure slide's optional caption: line prints instead of the whole
+  caption. It holds whole sentences of that caption, each word for word
+  and in the page's order; findings about it name its line.
 - A code slide holds one fenced code block, as a how-to outline writes it:
   whole, consecutive lines of one <pre> in a section the slide cites, at
   most 12 rows once long lines wrap. The builder draws it in the how-to
@@ -900,6 +904,46 @@ def _code_findings(s: bbd.BSlide, page: TopicPage, known: list[str], on: str) ->
     return [f"{s.code_where}: code is not whole, consecutive lines of one <pre> block {on}"]
 
 
+# A caption sentence ends at ".", "?" or "!" followed by whitespace or the
+# end of the caption.
+SENTENCE_END_RE = re.compile(r"(?<=[.?!])\s+")
+
+
+def caption_sentences(text: str) -> list[str]:
+    """text's sentences, whitespace collapsed."""
+    return [x for x in SENTENCE_END_RE.split(_norm(text)) if x]
+
+
+def slide_caption(fig: Figure, s: bbd.BSlide) -> str:
+    """What a figure slide prints under its picture: the sentences its
+    caption: line selects, whitespace collapsed, else the page's whole
+    <figcaption>."""
+    return _norm(s.caption) if s.caption else fig.caption
+
+
+def _caption_findings(s: bbd.BSlide, fig: Figure, page: TopicPage) -> list[str]:
+    """A caption: line must be whole sentences of the figure's page caption,
+    each word for word and in the page's order, so the slide prints only
+    what the page says. The finding names the caption: line."""
+    where = s.caption_where
+    if not fig.caption:
+        return [f"{where}: figure {fig.id} has no caption on {page.path}, so caption: has nothing to select"]
+    have = caption_sentences(fig.caption)
+    out: list[str] = []
+    last = -1
+    for sent in caption_sentences(s.caption or ""):
+        nxt = next((i for i, x in enumerate(have) if x == sent and i > last), None)
+        if nxt is not None:
+            last = nxt
+        elif sent in have:
+            out.append(f"{where}: caption: sentence {sent!r} is out of the page's order or repeats one; "
+                       f"keep the sentences in the order figure {fig.id}'s caption has them")
+        else:
+            out.append(f"{where}: caption: {sent!r} is not a whole sentence of figure {fig.id}'s caption, "
+                       f"word for word; the caption is {fig.caption!r}")
+    return out
+
+
 def _slide_findings(s: bbd.BSlide, page: TopicPage) -> list[str]:
     if not s.section:
         return [f"{s.where}: slide has no section: line; cite the ids of the sections it draws on"]
@@ -926,6 +970,8 @@ def _slide_findings(s: bbd.BSlide, page: TopicPage) -> list[str]:
             )
         elif fig.section not in s.section:
             out.append(f"{s.where}: figure {s.figure} is in section {fig.section}, which this slide does not cite")
+        if fig is not None and s.caption is not None:
+            out += _caption_findings(s, fig, page)
     return out
 
 
@@ -940,14 +986,15 @@ def _discloses(texts: list[str]) -> bool:
     return any(DISCLOSURE_RE.search(t) for t in texts)
 
 
-def _figure_shown_text(page: TopicPage, key: str | None) -> list[str]:
+def _figure_shown_text(page: TopicPage, s: bbd.BSlide) -> list[str]:
     """What a figure slide's picture and caption put in front of the
-    audience: the SVG's text with its markup stripped, and the page's
-    <figcaption>, which the builder prints under the picture."""
+    audience: the SVG's text with its markup stripped, and the caption the
+    builder prints under the picture (slide_caption)."""
+    key = s.figure
     if not key or key not in page.figures:
         return []
     svg = " ".join(htmllib.unescape(re.sub(r"<[^>]+>", " ", page.svgs[key])).split())
-    return [svg, page.figures[key].caption]
+    return [svg, slide_caption(page.figures[key], s)]
 
 
 def _wiz_findings(deck: bbd.BDeck, page: TopicPage) -> list[str]:
@@ -970,7 +1017,7 @@ def _wiz_findings(deck: bbd.BDeck, page: TopicPage) -> list[str]:
             break
         shown = bbd._slide_text_fields(s, notes=False) + ([s.source[0]] if s.source else []) + (s.code or [])
         if s.layout == "figure":
-            shown += _figure_shown_text(page, s.figure)
+            shown += _figure_shown_text(page, s)
         if not shown_yet and _names_wiz(shown):
             shown_yet = notes_done = True
             if not _discloses(shown):
@@ -1078,7 +1125,7 @@ TOPIC = bbd.DeckKind(
         "text", "stats", "checklist", "list", "links", "layers", "timeline", "compare", "table", "bars",
         "matrix", "question", "answer", "figure", "code",
     }),
-    control_keys=frozenset({"layout", "section", "figure", "source", "credit"}),
+    control_keys=frozenset({"layout", "section", "figure", "caption", "source", "credit"}),
     min_slides=15,
     max_slides=30,
     max_notes_words=300,
@@ -1540,6 +1587,90 @@ def _case_figure_prose_limit(tmp: Path) -> None:
     assert bbd.slide_findings(deck.slides[0], TOPIC) == []
     deck = _tparse(_tslide("section: what-is", "Text.", notes=" ".join(["n"] * 301)))
     _only(bbd.slide_findings(deck.slides[0], TOPIC), "notes are 301 words; the limit is 300")
+
+
+# PAGE with a three-sentence caption on the supply-chain figure, the middle
+# sentence pointing at the page, as many real captions do.
+CAPTION_PAGE = _plant(
+    PAGE, "<figcaption>The cluster runs more than your code.</figcaption>",
+    "<figcaption>The cluster runs more than your code. The checks\n"
+    "            below are the detail. Each check is numbered!</figcaption>",
+)
+FIG_LINES = ("layout: figure", "section: supply-chain", "figure: cluster-supply-chain")
+
+
+def _caption_check(caption_line: str, lines: tuple[str, ...] = FIG_LINES,
+                      html: str = CAPTION_PAGE) -> list[str]:
+    """What --check reports for a one-slide deck whose last control line is
+    caption_line: its parse error, else its slides' page-gate findings."""
+    try:
+        deck = _tparse(_tslide(*lines, caption_line, "Five checks."))
+    except OutlineError as e:
+        return [str(e)]
+    return [f for f in topic_page_findings(deck, html, pages=PAGES) if re.match(r"d\.deck:\d+:", f)]
+
+
+def _case_figure_caption_selected(tmp: Path) -> None:
+    """A figure slide's caption: line selects whole sentences of the page's
+    caption, in the page's order, word for word; the slide then prints them
+    instead of the whole caption. Each way it goes wrong is a finding that
+    names the caption: line."""
+    # THEADER is five lines and "== S" the sixth, so the caption: line
+    # follows the slide's other control lines.
+    at = f"d.deck:{7 + len(FIG_LINES)}:"
+    for ok in ("The cluster runs more than your code.",
+               "The cluster runs more than your code. Each check is numbered!",
+               "The  cluster runs more than   your code."):
+        assert _caption_check(f"caption: {ok}") == [], ok
+    bad = {
+        "paraphrase": ("The cluster runs more than just your code.", "not a whole sentence"),
+        "another figure's caption": ("Each provider runs the control plane for you.", "not a whole sentence"),
+        "out of order": ("Each check is numbered! The cluster runs more than your code.", "page's order"),
+        "repeated": ("The cluster runs more than your code. The cluster runs more than your code.",
+                     "page's order"),
+        "partial sentence": ("The cluster runs more than your code. The checks", "'The checks'"),
+        "no full stop": ("The cluster runs more than your code", "not a whole sentence"),
+        "fragment": ("runs more than your code.", "not a whole sentence"),
+    }
+    for name, (text, needle) in bad.items():
+        f = _caption_check(f"caption: {text}")
+        _only(f, needle, "cluster-supply-chain")
+        assert f[0].startswith(at), (name, f)
+    f = _caption_check("caption:")
+    _only(f, "empty caption: line")
+    assert f[0].startswith(at), f
+    f = _caption_check("caption: The cluster runs more than your code.", lines=("section: what-is",))
+    _only(f, "a text slide does not take a caption: line")
+    assert f[0].startswith("d.deck:8:"), f
+    # A figure the page gives no caption has nothing to select from.
+    nocap = re.sub(r"<figcaption>The cluster.*?</figcaption>", "", CAPTION_PAGE, count=1, flags=re.S)
+    assert figures(nocap)["cluster-supply-chain"].caption == "", figures(nocap)
+    f = _caption_check("caption: The cluster runs more than your code.", html=nocap)
+    _only(f, "no caption")
+    assert f[0].startswith(at), f
+    # The slide prints the selection, whitespace collapsed; without the line
+    # it prints the page's whole caption.
+    fig = figures(CAPTION_PAGE)["cluster-supply-chain"]
+    sel = _tparse(_tslide(*FIG_LINES, "caption: The cluster runs  more than your code.", "Five checks."))
+    assert sel.slides[0].caption_where == at[:-1], sel.slides[0].caption_where
+    assert slide_caption(fig, sel.slides[0]) == "The cluster runs more than your code."
+    plain = _tparse(_tslide(*FIG_LINES, "Five checks."))
+    assert plain.slides[0].caption is None
+    assert slide_caption(fig, plain.slides[0]) == fig.caption and fig.caption.endswith("is numbered!")
+    # The Wiz gate reads the caption the slide prints, not the page's.
+    wiz_page = _plant(CAPTION_PAGE, "Each check is numbered!", "Each check is numbered, says Wiz.")
+
+    def wiz(text: str) -> list[str]:
+        deck = _tparse(_tslide(*FIG_LINES, f"caption: {text}", "Five checks."))
+        return [f for f in topic_page_findings(deck, wiz_page, pages=PAGES) if "Wiz" in f]
+
+    _only(wiz("Each check is numbered, says Wiz."), "first slide to show Wiz")
+    assert wiz("The cluster runs more than your code.") == []
+    # caption: is a topic control: a breach outline refuses it.
+    assert "caption" in TOPIC.control_keys and "caption" not in bbd.BREACH.control_keys
+    _raises(lambda: bbd.parse_outline_text(
+        bbd.HEADER + "== S\ncaption: The cluster runs.\nText.\nnotes:\nN.\n", "d.deck"),
+        "unknown line key 'caption'")
 
 
 def _extract_tree(tmp: Path) -> Path:
@@ -2237,6 +2368,7 @@ CASES: list = [
     ("figure_twice", _case_figure_twice),
     ("figure_required", _case_figure_required),
     ("figure_prose_limit", _case_figure_prose_limit),
+    ("figure_caption_selected", _case_figure_caption_selected),
     ("extract_format", _case_extract_format),
     ("extract_drops_glossary_links", _case_extract_drops_glossary_links),
     ("extract_lists_figures", _case_extract_lists_figures),

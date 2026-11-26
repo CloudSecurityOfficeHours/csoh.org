@@ -434,8 +434,8 @@ Speaker notes, on every slide.
   section gets a slug of its text (`Where next` is `where-next`). The text
   above the first h2 is section `top`. The ids are the `{#id}` marks in the
   extract.
-- Control lines are `layout`, `section`, `figure`, `source` and `credit`;
-  there is no `stage`, `stages` or `phase`.
+- Control lines are `layout`, `section`, `figure`, `caption`, `source` and
+  `credit`; there is no `stage`, `stages` or `phase`.
 - Layouts: `text`, `stats`, `checklist`, `list`, `links`, `layers`,
   `timeline`, `compare`, `table`, `bars`, `matrix`, `question`, `answer`,
   `figure` and `code`, with the breach layouts' typed lines. There is no
@@ -446,10 +446,20 @@ Speaker notes, on every slide.
 - A `figure` slide has one `figure: <id>` line naming one of the page's
   diagrams, which must sit in a section the slide cites; its id is the
   `[figure #id]` in the extract (the figure's own `id`, or its SVG
-  `<title>`'s id where the figure has none). The drafter never types the
-  caption: the builder places the page's `<figcaption>` under the picture.
-  Each figure appears at most once per deck, and a deck whose page has a
-  diagram has at least one `figure` slide.
+  `<title>`'s id where the figure has none). The builder places the page's
+  `<figcaption>` under the picture. Each figure appears at most once per
+  deck, and a deck whose page has a diagram has at least one `figure`
+  slide.
+- A `figure` slide may carry one `caption: <text>` line, and the builder
+  then prints that text under the picture instead of the whole caption.
+  Use it to drop a sentence that points at the page ("the cards above",
+  "the next section"), which points at nothing on a slide. The text is one
+  or more whole sentences of the figure's caption (the `(caption: ...)` in
+  the extract), each word for word and in the page's order; a sentence ends
+  at `.`, `?` or `!` followed by a space or the end, and runs of whitespace
+  count as one space. `--check` reports any other text, naming the
+  `caption:` line; an empty `caption:` line, or one on another layout, is a
+  parse error. Breach outlines take no `caption:` line.
 - A `code` slide shows an excerpt of one of the page's code blocks, written
   as a how-to outline writes one: a fence line of three backticks (a
   language after them is allowed and ignored), the excerpt, then a line that
@@ -483,8 +493,8 @@ Speaker notes, on every slide.
   held to the whole page.
 - On a page that carries "(disclosure: the site's author works at Wiz)", the
   first slide that shows Wiz carries the disclosure on the slide, where the
-  audience sees it. A `figure` slide shows its picture's text and the page's
-  caption too, and a `code` slide its code, so a diagram or an excerpt that
+  audience sees it. A `figure` slide shows its picture's text and the caption
+  it prints too, and a `code` slide its code, so a diagram or an excerpt that
   names Wiz makes its slide one that shows Wiz. The notes never count for
   this: they are not shown, and the PDF leaves them out. A title or promise
   that names Wiz carries it in the title or the promise. Separately, notes
@@ -552,7 +562,7 @@ everything afresh.
 
 - A `figure` slide shows its heading, its prose, then the picture on a white
   panel, scaled to fit with its aspect ratio kept and never past 1.5 image
-  pixels per point of its width, with the page's caption under it. When the
+  pixels per point of its width, with its caption under it. When the
   room left is too small, a `LayoutError` names the slide; shorten the
   heading or the prose.
 - A `code` slide shows its heading, its prose, then the how-to decks' code
@@ -571,7 +581,7 @@ everything afresh.
 - Every picture carries alt text: the SVG's `<title>` for a figure, the
   hero's label, or the card image's `alt`.
 - Verification also checks that the cover carries the art, each `figure`
-  slide its one picture and the page's caption, and no other slide a
+  slide its one picture and the caption it prints, and no other slide a
   picture, and that every picture has the expected alt text, its image's
   aspect ratio, enough pixels, no crop and more than one colour. It checks
   that each `code` slide carries one code box holding its excerpt line for

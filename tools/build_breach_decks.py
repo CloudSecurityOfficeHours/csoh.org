@@ -222,6 +222,11 @@ class BSlide:
     # Only a kind whose control keys include them reads these lines.
     section: list[str] | None = None
     figure: str | None = None
+    # A figure slide's caption: line, the whole sentences of the page's
+    # caption it prints in place of the whole caption, and that line's
+    # file:line, which caption findings name.
+    caption: str | None = None
+    caption_where: str = ""
     # A code slide's excerpt, the language after its opening fence (which,
     # as in a how-to outline, nothing reads: the box's tab comes from the
     # page), and the fence's file:line, which code findings name. Only a
@@ -432,6 +437,11 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str, kind: DeckKind
                 name, seen["figure"],
                 f"a {cur.layout} slide does not take a figure: line; a figure slide does",
             )
+        if "caption" in seen and cur.layout != "figure":
+            raise _err(
+                name, seen["caption"],
+                f"a {cur.layout} slide does not take a caption: line; a figure slide does",
+            )
         if cur.code is not None and cur.layout != "code":
             raise _err(
                 name, int(cur.code_where.rsplit(":", 1)[1]),
@@ -542,6 +552,8 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str, kind: DeckKind
                 cur.source = (parts[0], parts[1])
             elif key == "stages":
                 cur.stages = rest.split()
+            elif key == "caption":
+                cur.caption, cur.caption_where = rest, f"{name}:{lineno}"
             elif key == "section":
                 cur.section = _fields(name, lineno, key, rest)
                 if len(cur.section) > MAX_SECTIONS:
