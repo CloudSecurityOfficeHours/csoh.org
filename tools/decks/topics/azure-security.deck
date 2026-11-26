@@ -1,7 +1,7 @@
 title: Azure Security
 page: azure-security.html
 as-of: 2026-11-25
-promise: Azure security is a Microsoft-shaped stack where Entra ID is the front door, RBAC inherits silently, licensing decides which features you get, and the Enterprise-Scale Landing Zone is the reference architecture.
+promise: Azure security is a Microsoft-shaped stack where identity is the front door, RBAC inherits silently, licensing decides which features you get, and the Enterprise-Scale Landing Zone is the reference architecture.
 
 == The 30-second version
 layout: table
@@ -23,7 +23,7 @@ The reference architecture is the Cloud Adoption Framework Enterprise-Scale Land
 layout: text
 section: top
 Compared with AWS or GCP:
-- Entra ID is the front door: Azure, Microsoft 365 and federated apps
+- Identity is the front door: Entra ID spans Azure, Microsoft 365, federated apps
 - Conditional Access is the universal policy engine
 - RBAC inherits silently down the management-group hierarchy
 - The licensing maze decides which features you get
@@ -94,7 +94,7 @@ section: services
 row: Service | What it is
 row: Defender for Cloud | The Azure-native CSPM and CWPP
 row: Microsoft Sentinel | Cloud-native SIEM and SOAR on Log Analytics, queried in KQL
-row: Defender XDR | One portal: Defender for Endpoint, Identity, Office 365, Cloud Apps
+row: Defender XDR | One portal: Defender for Endpoint, Identity, Office 365, Cloud Apps, Entra ID Protection
 row: Security Copilot | LLM-assisted analyst tooling, billed in Security Compute Units
 row: Azure Monitor | Metrics, logs and alerts underneath every detection
 row: Activity Log, Diagnostic Settings | Control-plane audit log; per-resource logs shipped onward
@@ -123,7 +123,7 @@ row: Entra ID | Cloud identity provider for Azure, M365 and federated SaaS
 row: Conditional Access | Per sign-in: allow, block, require MFA or a compliant device
 row: PIM | Just-in-time elevation for Entra and Azure RBAC roles
 row: Entra ID Governance | Access reviews, access packages, lifecycle workflows
-row: Managed identities | Azure resources authenticate with no stored credentials
+row: Managed identities | Azure resources authenticate to other Azure resources without stored credentials
 row: CIEM in Defender CSPM | Permissions discovery for high-privileged identities
 Plan Conditional Access like code, and keep a break-glass account excluded.
 notes:
@@ -144,7 +144,7 @@ row: Information Protection | Sensitivity labels that encrypt content in the fil
 row: Storage encryption | On by default; customer-managed keys per account
 row: Always Encrypted | SQL column encryption with keys held by the client
 notes:
-Key Vault is the secret, key and certificate store. Soft-delete and purge protection are required for compliance, so turn both on at create time. The Premium tier backs keys with FIPS 140-2 Level 2 HSMs, and Diagnostic Settings send its audit log to Log Analytics and Sentinel. Managed HSM is single-tenant at FIPS 140-2 Level 3 and pricier: the upgrade path when regulators do not accept multi-tenant Key Vault Premium, or auditors push back on key isolation.
+Key Vault is the secret, key and certificate store. Soft-delete and purge protection are required for compliance, so turn both on at create time. The Premium tier backs keys with FIPS 140-2 Level 2 HSMs, and Diagnostic Settings send its audit log to Log Analytics and Sentinel. Managed HSM is single-tenant at FIPS 140-2 Level 3, and required for regulators that do not accept multi-tenant Key Vault Premium. It is pricier: the upgrade path when SOC 2, FedRAMP or PCI auditors push back on key-isolation guarantees.
 
 Purview is the umbrella for data governance, DLP across M365 and endpoints, insider risk management and Compliance Manager. Azure Information Protection labels now live in the Purview portal, and because they encrypt the file itself, access decisions follow the document wherever it travels.
 
@@ -163,7 +163,7 @@ row: DDoS Protection | Infrastructure protection free by default; protection pla
 notes:
 Azure Firewall is stateful and cloud-native: Standard for L3 and L4, while Premium adds TLS inspection, IDPS, URL filtering and web categories. Firewall Manager centralizes policy across hubs. The firewall is priced per hour plus data processed, so size it with a real traffic estimate. Front Door is the global edge for apps that want anycast, TLS termination and DDoS-resilient ingress. Application Gateway WAF suits regional traffic.
 
-Private Link makes Storage, SQL, Key Vault and other PaaS services reachable over a private IP in your VNet; the page calls it the most effort-efficient move for shrinking public-internet exposure. Pair it with Private DNS Zones. It has largely superseded Service Endpoints for new designs. NSGs are the Azure analogue of AWS security groups: default-deny inbound on workload subnets, explicit allow-lists, and service tags instead of IP literals. ASGs let rules name application tiers so the policy survives IP churn, and Azure Virtual Network Manager adds security-admin rules that override NSGs across many VNets.
+Private Link makes Storage, SQL, Key Vault and other PaaS services reachable over a private IP in your VNet; the page calls it the most effort-efficient move for shrinking the public-internet exposure of a Microsoft-managed service. Pair it with Private DNS Zones. It has largely superseded Service Endpoints for new designs. NSGs are the Azure analogue of AWS security groups: default-deny inbound on workload subnets, explicit allow-lists, and service tags instead of IP literals where possible. ASGs let rules name application tiers so the policy survives IP churn, and Azure Virtual Network Manager adds security-admin rules that override NSGs across many VNets.
 
 DDoS infrastructure protection is on for every public IP at no charge. The Network and IP protection plans add tuned mitigation and telemetry, and the page says they are required for any serious public-facing workload.
 
@@ -196,22 +196,22 @@ Sentinel SOAR playbooks are Logic Apps that trigger on analytics-rule incidents.
 
 Defender XDR's investigation graph correlates an Entra sign-in, an endpoint detection, a mailbox forwarding rule and a Defender for Cloud alert into one incident. Automatic attack disruption can isolate a device or disable an account when high-confidence patterns hit.
 
-Security Copilot gives natural-language incident summaries, suggested KQL for hunting and step-by-step responder guidance. The page says that by mid-2026 incident-response acceleration is the most-validated use case, and to assume verification is still required on every action.
+Security Copilot gives natural-language incident summaries, suggested KQL for hunting and step-by-step responder guidance. The page says that as of mid-2026 incident-response acceleration is the most-validated use case, and to assume verification is still required on every action.
 
 == The Enterprise-Scale Landing Zone
 layout: table
 section: landing-zones
-row: Level | What goes there
+row: Management group | What goes there
 row: Tenant Root Group | Minimal policy; tenant-wide reader roles
 row: Intermediate root | Defender plans, MCSB initiative, diagnostic-settings enforcement, region and SKU denies
 row: Platform | Identity; Management (Log Analytics, Sentinel); Connectivity (hub firewall)
-row: Landing zones | Corp and online apps; RBAC scoped here, no Owner above
+row: Landing zones | App subscriptions, typically corp and online; RBAC scoped here, no Owner above
 row: Sandbox | Experiments, bounded by policy denies on expensive or risky resource types
 row: Decommissioned | Quarantine for subscriptions on the way out
 notes:
 The CAF Enterprise-Scale Landing Zone is Microsoft's reference architecture for a multi-subscription tenant, the equivalent of AWS Control Tower or Organizations plus a hub-spoke network. The page calls it prescriptive without being rigid: treat it as the default unless you have specific reasons to diverge.
 
-The Tenant Root Group carries minimal policy, mostly the Security Reader or Global Reader assignments that need full-tenant visibility. The intermediate root, often named after the organization, is where tenant-wide policy goes: Defender for Cloud plans, so every subscription inherits them, the Microsoft cloud security benchmark initiative, diagnostic-settings enforcement and deny-lists for unapproved regions and SKUs. The Management subscription holds the central Log Analytics workspace that receives every Activity Log and Diagnostic Setting, with Sentinel on top. In the Connectivity subscription, Azure Firewall or an NVA sits at the hub and all spoke traffic transits it. Workload teams build inside the guardrails the platform team set above.
+The Tenant Root Group carries minimal policy, since Microsoft applies its own, and is used mostly for the Security Reader or Global Reader role assignments that need full-tenant visibility. The intermediate root, often named after the organization, is where tenant-wide policy goes: Defender for Cloud plans, so every subscription inherits them, the Microsoft cloud security benchmark initiative, diagnostic-settings enforcement and deny-lists for unapproved regions and SKUs. The Management subscription holds the central Log Analytics workspace that receives every Activity Log and Diagnostic Setting, with Sentinel on top. In the Connectivity subscription, Azure Firewall or an NVA sits at the hub and all spoke traffic transits it. Workload teams build inside the guardrails the platform team set above.
 
 Entra ID is tenant-wide; it does not live in a subscription. Treat the identity tenant as the most sensitive Azure-adjacent asset you operate: a tenant compromise dwarfs almost any single-subscription incident.
 
@@ -222,7 +222,7 @@ row: Misconfiguration | Fix
 row: Anonymous Storage blob access | allowBlobPublicAccess: false, enforced by Azure Policy at management-group scope
 row: Classic co-administrator still active | Migrate to scoped RBAC and remove the assignment
 row: No MFA on Global Administrator | Conditional Access requiring MFA for admins, plus PIM
-row: Weak Conditional Access | Disable legacy auth tenant-wide; minimize and register exclusions
+row: Weak Conditional Access | Disable legacy auth tenant-wide; minimize exclusions, track them in a register
 row: Anonymous Function App or App Service | Easy Auth, or API Management with OAuth
 notes:
 These are the patterns CSPM tools find most often in real Azure tenants. Each one shows up in a Defender for Cloud secure-score scan, or any vendor-neutral CSPM, within minutes of connecting.
@@ -263,10 +263,10 @@ Owner at the management group cascades silently to every subscription, resource 
 layout: table
 section: attack-paths
 row: Attack path | Defense
-row: Managed identity abuse | Audit identity role assignments; remove unused permissions
+row: Managed identity abuse | Audit managed identities' role assignments continuously; remove unused permissions
 row: Illicit consent grants | Limit user consent to verified publishers and low-risk permissions
 row: Conditional Access bypass | Disable legacy auth; monitor device-code sign-ins; revoke refresh tokens on suspicious activity
-row: Storage account key abuse | Prefer Entra auth; rotate keys and keep them in Key Vault
+row: Storage account key abuse | Prefer Entra auth where possible; rotate keys, store them in Key Vault
 row: ARM template or Bicep injection | Review templates like code; scope deployment identities narrowly
 notes:
 These are techniques pentesters and incident responders see in Azure tenants. A compromised VM or Function App with an over-permissioned managed identity turns a workload compromise into subscription-wide access.
@@ -313,7 +313,7 @@ section: comparison
 row: Capability | Defender for Cloud | Third-party CNAPP
 row: Azure depth | Deep, first-party | Strong, not always first-party-deep
 row: Multi-cloud | AWS and GCP supported; parity lags | The design center
-row: Attack paths | In the Defender CSPM plan | Mature
+row: Attack paths | Defender CSPM plan; needs agentless VM scanning or Servers vulnerability assessment | Mature
 row: Pricing | Per resource per month, opt-in per plan | Annual contract, environment-sized
 The third-party column is Wiz, Orca, FortiCNAPP and CrowdStrike Falcon Cloud (disclosure: the site's author works at Wiz). Calibrate against your own evaluation.
 notes:
@@ -330,7 +330,7 @@ The decision is rarely all native or all third-party. Decide workload by workloa
 notes:
 The page frames this as a workload-by-workload, control-by-control fit question. Native usually wins when the workload is purely Azure and M365, where Defender for Cloud, Sentinel and Entra give integration depth third-party tools rarely match. It wins when the license is already paid: Microsoft 365 E5 or A5 bundles Defender XDR, Sentinel benefits, Entra ID P2 and Purview, so using something else duplicates spend. It wins when the auditor's evidence is Microsoft-shaped, and when you want enforcement: Azure Policy and Conditional Access act at the API, while third-party tools mostly observe and alert.
 
-Third-party usually wins for multi-cloud: Wiz, Orca, FortiCNAPP, Cortex Cloud, CrowdStrike Falcon Cloud and others were designed multi-cloud from day one. Wiz built its platform around the attack-path graph and most competitors now offer it; Microsoft's Defender CSPM attack paths exist but are newer. Splunk is mature at very large scale, with flexible search and a large ecosystem, and not every shop already invested in it wants to switch. Okta, Ping and SailPoint shops have integration depth Entra cannot replicate as a non-host IdP, and Idira, Delinea and BeyondTrust cover shared accounts, network gear, mainframes and on-prem databases, a surface PIM does not cover.
+Third-party usually wins for multi-cloud: Wiz, Orca, FortiCNAPP, Cortex Cloud, CrowdStrike Falcon Cloud and others were designed multi-cloud from day one. Wiz built its platform around the attack-path graph and most third-party competitors now offer it too; Microsoft's Defender CSPM attack paths exist but are newer. Splunk is mature at very large scale, with flexible search and a large ecosystem, and not every shop already invested in it wants to switch. Okta, Ping and SailPoint shops have integration depth Entra cannot replicate as a non-host IdP, and Idira, Delinea and BeyondTrust cover shared accounts, network gear, mainframes and on-prem databases, a surface PIM does not cover.
 
 == The Microsoft licensing maze
 layout: table
@@ -342,7 +342,7 @@ row: Microsoft 365 E5 | Defender XDR products, Entra ID P2, Purview Premium feat
 row: Foundational CSPM | Free: secure score, compliance dashboards
 row: Defender CSPM plan | About $5 per resource per month at list
 row: Sentinel | Log Analytics ingestion per GB; some Microsoft logs free
-Keep a license-mapping spreadsheet, owned by security, and renew it whenever Microsoft renames or rebundles anything.
+This list is not exhaustive. Keep a license-mapping spreadsheet, owned by security, and renew it whenever Microsoft renames or rebundles anything.
 notes:
 The page calls the licensing maze the place where Microsoft loses customers' patience. Entra ID Free gives base identity, with SSO and MFA through Security Defaults only. P1 adds Conditional Access, group-based licensing, dynamic groups and password write-back; P2 adds PIM, Identity Protection, Access Reviews and Entra ID Governance bundling. Microsoft 365 E3 brings Defender for Office Plan 1 and base AIP; E5 is the everything-Microsoft SKU, and A5 is the education-sector equivalent.
 
@@ -394,7 +394,7 @@ This is the second FAQ question. Again, ask it before showing the answer.
 == Where your data lives, and what your SOC runs
 layout: answer
 section: faq
-Azure- and Microsoft 365-heavy: the page calls Sentinel hard to beat on integration depth and cost. Splunk wins on flexibility, ecosystem and non-Microsoft parity. Splunk shops rarely switch; greenfield Microsoft shops rarely pick anything else.
+Azure- and Microsoft 365-heavy: Sentinel is hard to beat on integration depth and cost. Splunk wins on flexibility, ecosystem and non-Microsoft parity. Splunk shops rarely switch; greenfield Microsoft shops rarely pick anything else.
 notes:
 If your environment is Azure-heavy and Microsoft 365-heavy, the page calls Sentinel hard to beat on integration depth and cost: most of the M365, Entra and Defender connectors are first-party and free of license cost. Ingestion is still billed for most data, though Azure Activity, Office 365 audit logs and Defender alerts are free.
 
