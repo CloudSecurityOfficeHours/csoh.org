@@ -434,6 +434,7 @@ never hand-edit the output.
 | Glossary "Used on N pages" lists (`<dd class="term-usage">`) | `tools/sync_glossary_usage.py`, after `crosslink_pages.py` | `--check` in `validate-html.yml` |
 | How-to deck links (`data-howto-deck`) on howto/ pages | `tools/build_howto_decks.py --stamp` | `--check` in `validate-html.yml`; `--stale --published-only` there warns |
 | Breach deck links (`data-breach-deck`) on breaches/ pages | `tools/build_breach_decks.py --stamp` | `--check` in `validate-html.yml`; `--stale --published-only` there warns |
+| Topic deck links (`data-topic-deck`) on topic pages | `tools/build_topic_decks.py --stamp` | `--check` in `validate-html.yml`; `--stale --published-only` there warns |
 | Search field and kill chain index on breach-timeline.html (between `breach-index` markers) | `tools/sync_breach_timeline_index.py`, after adding or renaming a timeline card | `--check` in `validate-html.yml` |
 | Deck index, search field and cards on breach-kill-chain-decks.html (between `breach-decks` markers) | `tools/sync_breach_deck_index.py`, after every `build_breach_decks.py --record` | `--check` in `validate-html.yml` |
 | "Find on this page" field, and its script tag: in the On this page box on the pages in its `PAGES` list, and above the chain on every breaches/ page | `tools/sync_page_finder.py`, then `update_sri.py` | `--check` in `validate-html.yml` |
