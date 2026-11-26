@@ -1,0 +1,413 @@
+title: How We Deploy csoh.org
+page: cloud-deployment.html
+as-of: 2026-11-25
+promise: One static site runs on three clouds behind Cloudflare, with eight imperfect layers stacked so an attacker has to be lucky on every one at once.
+
+== One site, three clouds, one edge
+layout: text
+section: top | big-picture
+csoh.org is one static site in two environments, served active/active from AWS, GCP and Azure behind Cloudflare. Every choice is on the page, with why it is there and what attack it stops.
+notes:
+csoh.org is a community for cloud security practitioners, and the community hosts it itself. The page treats the deployment as a teaching artifact: every choice is on the page with a plain-English explanation of why it's there and what attack it stops, and the Terraform and GitHub Actions YAML that runs in production is linked throughout.
+
+The shape: changes land on the qa branch and deploy to qa.csoh.org, a staging copy behind a Cloudflare Access login. When it looks right, a gated one-button promotion fast-forwards main, and production ships the same container image staging already ran to three cloud origins. Cloudflare spreads live traffic across all three, active/active. There is one edge in front of all of it, and no stored cloud password anywhere in the path.
+
+The page assumes you know HTML and HTTP basics. It does not assume you know GCP, IAM, CI/CD or container security.
+
+== Defense in depth: eight layers
+layout: figure
+section: big-picture
+figure: dind-title
+Instead of one strong wall, stack many imperfect ones. If an attacker gets past one layer, the next one is still in the way.
+notes:
+The page calls defense in depth its most important idea. The site is at the center, and each ring is a separate layer of defense an attacker would have to defeat to reach it.
+
+From the outside in: the Cloudflare edge, with CDN, DDoS absorption, WAF and load balancer; three cloud origins, active/active, with health checks; TLS at Full (strict) plus security headers; locked-down origins; hardened bytes, meaning a digest pin, a vulnerability scan and no leaked files; keyless deploys to three clouds through OIDC federation; pipeline guards; and audit logs kept for 400 days.
+
+None of the individual controls is unbreakable, but together an attacker has to be lucky on every layer at once. The rest of the deck takes the layers in turn.
+
+== What a static site has to defend against
+layout: table
+section: threat-model
+With no database, login, accounts or per-user data, most of the OWASP Top 10 is gone. What is left, most likely first:
+row: Threat | Mitigated by
+row: Build tampering | Pinned base image and Actions, image scanning
+row: Stolen deploy credentials | No deploy password at all
+row: DNS or TLS tampering | Two-factor on Cloudflare, registrar lock, HSTS preload
+row: Defacement | The first two rows, plus a one-command rollback
+row: DDoS or an outage | Edge absorption, caching, three health-checked origins
+row: Bot scraping and probing | The WAF's Managed Ruleset and a rate limit
+notes:
+Before designing controls you need a threat model: a list of what could go wrong, and roughly how likely it is. For a public static site the surface is smaller than you might think. There is no database to inject into, no login form to brute-force, no user accounts, sessions or cookies to hijack, and no per-user data to steal.
+
+The table ranks what is left. Build tampering means an attacker compromises the base image, a GitHub Action or a CI token and slips malicious bytes into the deploy, so the site looks normal but ships malware to readers. Stolen deploy credentials were historically the worst single way to compromise a website, and the answer here is to have no deploy password at all. DNS or TLS tampering, such as a misissued certificate, an on-path HTTPS downgrade or a DNS hijack, is also met by allowing modern TLS only. For defacement, every Cloud Run revision is pinned to a specific image hash, so going back to yesterday's deploy is a single CLI call. Three independent origins behind a health-checked load balancer mean an entire cloud can fail and the site keeps serving from the other two. The WAF and rate limit drop bot probes at the edge, so they never reach any origin.
+
+What the page explicitly does not defend against, because none of it applies to a static site: authenticated session theft, broken access control, business-logic abuse and privilege escalation from an application server. If you copy this design for a site with logged-in users, you need more than what is here.
+
+== The whole system in one picture
+layout: figure
+section: architecture
+figure: arch-title
+caption: Left: what a request reaches (three production origins behind the load balancer, and the staging copy that shares the same edge but sits deliberately outside the pool). Right: the release path, read top to bottom.
+notes:
+On the left is the production request path. A reader's browser reaches Cloudflare's edge, which load-balances across three cloud origins: AWS S3 plus CloudFront, GCP Cloud Run, and Azure Blob static website. Below them is the staging copy at qa.csoh.org, a fourth origin behind a Cloudflare Access login. It shares the same edge but sits deliberately outside the load balancer pool.
+
+On the right is the release path, read top to bottom. A push to the qa branch builds and scans a container image and deploys it to the QA service. A gated manual promotion fast-forwards main. That triggers a single production build, which fans out to three keyless OIDC publish jobs, with the GCP job reusing the image staging already ran rather than rebuilding it. Nothing reaches production that staging didn't run first. An observability layer spans the bottom.
+
+Every origin setting, Cloudflare rule and IAM permission is code in infra/terraform/, one directory per cloud, and the consoles are read-only for normal operation. Nobody clicks around in a cloud console to make changes. This is infrastructure as code, and the page calls it how you keep a real multi-cloud setup from drifting into three different snowflakes nobody can rebuild.
+
+== Layer 1: Cloudflare is the one edge
+layout: compare
+section: cloudflare
+Cloudflare is the load balancer, WAF, TLS terminator, redirect engine and security-header layer at once. Public DNS points only to Cloudflare, which does one of three things with each request.
+col: Cached | Answered from the edge | We never see the request | Most traffic, for a static site
+col: Not cached | Fetched from our load balancer | Then cached for the next reader
+col: Bad | Flagged by bot mitigation, rate limiting or threat intelligence | Blocked before it reaches us
+notes:
+What this layer stops: volumetric attacks, known-bad bots, exposing the origins to the public internet, and a whole cloud going down. The page maps it to ATT&CK T1498, T1499 and T1595.
+
+Running the same controls again on a per-cloud load balancer would be paying twice for them, so one edge does all of it, in front of three interchangeable origins.
+
+When you type csoh.org, the DNS lookup returns a Cloudflare IP, and your browser opens its TLS connection to Cloudflare. This pattern is called a reverse proxy or CDN, and the security wins are big. The origin IP is hidden, so an attacker has to attack Cloudflare first. Floods get absorbed at the edge, because Cloudflare's network is much bigger. The browser sees Cloudflare's certificate, which Cloudflare renews itself. And one origin failing doesn't take the site down: AWS, GCP and Azure would all have to be down at once for the site to go dark.
+
+There is a trade-off. Cloudflare's free-plan WAF is a lighter rule set than a tunable OWASP Core Rule Set, which the page calls an easy trade for a static site with no database or login. And because the origins only ever see requests from Cloudflare IPs, per-IP rate limiting belongs at the edge, where the real client IP is visible.
+
+== Layer 2: three origins, active/active
+layout: compare
+section: load-balancer
+Cloudflare spreads live traffic across every healthy origin and pulls a failing one out. Each origin must answer over HTTPS with a valid certificate, so the origin leg can run at Full (strict).
+col: AWS | Private S3 bucket behind CloudFront | S3's website endpoint is HTTP-only
+col: GCP | Cloud Run, scale-to-zero | run.app is already HTTPS with a managed cert
+col: Azure | Storage Account static website | $web is HTTPS out of the box
+notes:
+The exact same static site lives on three clouds at once. Cloudflare's Load Balancer holds all three in one pool and uses random origin steering. Active/active means they all serve real traffic simultaneously, rather than one live and two on standby. A health monitor probes each origin every five minutes; any that fails is pulled out of rotation and slipped back in when it recovers.
+
+The one hard requirement drives each choice. On AWS, the cheap S3 static website endpoint is HTTP-only, so the bucket stays fully private and CloudFront serves it over HTTPS with a valid cloudfront.net certificate. On GCP, the run.app URL is already HTTPS with a Google-managed certificate, so there is no cloud load balancer in front of it. Google Cloud Storage's website endpoint is HTTP-only too. On Azure, the special $web container is served over a built-in HTTPS endpoint with a managed cert: the simplest of the three.
+
+None of the three needs a cloud load balancer, a managed-cert dance or a WAF product, because Cloudflare does all of that once at the edge.
+
+The staging origin, qa.csoh.org, is deliberately not in the pool; it is a plain proxied DNS record. Every pool member is health-probed around the clock, often enough to keep a scale-to-zero service permanently warm. Staging should cost nothing while nobody is looking at it, and it has no availability requirement worth failing over for.
+
+== Each cloud's deployment, end to end
+layout: figure
+section: load-balancer
+figure: stacks-title
+Two origins run no code and the third runs a zero-permission container. The less each origin is trusted to do, the smaller the blast radius.
+notes:
+Each column shows one cloud's keyless deploy mechanism above its HTTPS origin, fed from a single GitHub Actions build at the top and pulled by the Cloudflare edge at the bottom.
+
+AWS uses OIDC AssumeRoleWithWebIdentity to the csoh-site-publisher IAM role, then s3 sync and a CloudFront invalidation. It serves a private S3 bucket through CloudFront on a cloudfront.net certificate and runs no code. GCP uses OIDC Workload Identity Federation to the csoh-deployer service account, then a container build with a Trivy scan, deployed to Cloud Run. It serves an nginx container on a run.app certificate, as a zero-permission service account. Azure uses an Entra federated credential with no client secret, then az storage blob sync to the web container. It serves the storage account static website on a web.core.windows.net certificate and runs no code.
+
+The throughline: each cloud does the one thing it does cheapest, and everything else moves up to the single Cloudflare edge: TLS to the browser, caching, WAF, redirects, headers and failover. That is why two origins run zero code and the third runs a zero-permission container. The less each origin is trusted to do, the smaller the blast radius if any one of them is ever compromised.
+
+== Set once at the edge
+layout: table
+section: load-balancer
+All of it applies no matter which origin serves the response.
+row: Setting | What it does at the edge
+row: WAF | Free Managed Ruleset plus a rate-limit rule, mostly eating bot probes
+row: Legacy redirects | 301 maps as Redirect Rules, identical for every origin
+row: www to the apex | Scheme and host written out; only the path carried over
+row: Caching | HTML 1h, assets 1y immutable, search.html 60s
+row: HTTP to HTTPS | Always Use HTTPS; no plain-HTTP path to any origin
+row: Host header | Each pool origin overrides Host to its own hostname
+notes:
+Everything here lives at Cloudflare, set once. Caching is set at the edge because the object-storage origins don't emit consistent Cache-Control headers, so the edge gives uniform caching whichever cloud answered.
+
+Each origin answers on its own hostname. If Cloudflare forwarded the public Host header, each origin would reject the request because it doesn't recognize the name. The page calls this the thing that most often trips people up the first time they put object storage behind a proxy.
+
+The www redirect is written the boring way on purpose. The clever-looking version matches a www pattern against the full request URL and hands back whatever the wildcard captured. But the edge runs its features in a fixed order, and dynamic redirects run before Always Use HTTPS. A plaintext request to the www hostname fires the rule, fails the HTTPS pattern, and gets a 301 back to the exact URL it requested. The browser loops until it gives up, in cleartext the whole time, so it never receives an HSTS header for the www hostname.
+
+Building the target from the request path, with the scheme and host hardcoded, removes the failure mode. The rule's preserve_query_string setting brings any query string along. The general rule: at a CDN edge, know which phase your rule runs in. State the scheme and host outright, and take only the path from the caller.
+
+== Layer 3: TLS on both legs
+layout: compare
+section: tls
+Cloudflare accepts only TLS 1.2 and 1.3. HSTS with preload makes browsers use HTTPS even on a first visit, and every certificate renews itself.
+col: Browser to Cloudflare | Cloudflare's Universal SSL certificate | The one the browser validates | Auto-renews; we don't manage it
+col: Cloudflare to each origin | The provider-managed origin certificate | Full (strict): Cloudflare validates it | No unauthenticated hop anywhere
+notes:
+What it stops: someone reading or modifying the page in transit. The page maps it to T1557, T1040 and T1565.002.
+
+TLS, Transport Layer Security, is the modern name for what people called SSL. Two computers prove identity to each other with certificates, agree on a shared secret, and encrypt everything from there.
+
+There are two separate TLS layers, which often confuses people. The browser validates Cloudflare's Universal SSL certificate, valid for csoh.org and www.csoh.org. Behind Cloudflare, a separate connection goes to whichever origin it picked, and each origin presents its own provider-managed certificate. Full (strict) means Cloudflare validates that certificate rather than blindly trusting it. Why two layers? Cloudflare doesn't have your domain's private key. Each certificate covers what its owner can prove it controls, and neither side has to share secrets.
+
+Cloudflare refuses TLS 1.0 and 1.1, which the page calls the easiest free hardening you can do. HSTS tells the browser to always use HTTPS for csoh.org for the next year, and preload puts the domain on a list browsers ship with. The edge certificate and all three origin certificates renew on their own provider's schedule. Expired certificates cause more outages than they prevent attacks, so eliminating manual renewal eliminates that risk.
+
+== Security headers on every response
+layout: table
+section: tls
+Cloudflare adds the set on the way out, so readers get the same headers whichever cloud served the bytes.
+row: Header | What it does
+row: Content Security Policy | First-party scripts only; no inline JS or eval()
+row: X-Frame-Options | With frame-ancestors, stops clickjacking
+row: X-Content-Type-Options | nosniff: trust the declared type, no guessing
+row: Referrer-Policy | Other sites see only that a visit came from csoh.org
+row: Permissions-Policy | Unused APIs denied: camera, microphone, geolocation, more
+row: COOP and CORP | Limit how other origins use our windows and resources
+notes:
+HSTS is the highest-impact header but not the only one. Cloudflare adds the set with a response-header Transform Rule.
+
+The page calls CSP the single highest-impact defense against XSS, even if an attacker were able to inject a script tag into the HTML. The policy allows only first-party scripts, no inline JavaScript, no eval(), and only specific image and frame sources.
+
+X-Frame-Options: DENY plus frame-ancestors 'none' in the CSP prevents anyone embedding the pages in an iframe, which stops clickjacking, where an attacker invisibly overlays the page under their own UI. nosniff tells the browser to trust the declared content type instead of guessing from the first bytes. Referrer-Policy strict-origin-when-cross-origin means a destination only sees that the reader came from csoh.org, not the specific page or query parameters. Permissions-Policy denies APIs the site doesn't use. Cross-Origin-Opener-Policy and Cross-Origin-Resource-Policy defend against newer-class side-channel attacks.
+
+You can see all of these by running curl -I against the home page from any terminal. They're public; that's the point.
+
+== Headers at the origins, checked from outside
+layout: compare
+section: tls
+A request straight to an origin's own hostname skips the edge. And a control that only exists in Git is not a control.
+col: Set at the origins too | GCP: nginx-security-headers.conf in the image | AWS: a CloudFront response headers policy | Azure: can't, so it depends on the edge
+col: Checked from outside | Terraform ignores changes to the edge ruleset's rules | check_edge_headers.py compares rules.tf with live headers | Drift fails the deploy
+notes:
+Each origin has its own public hostname, and each answers anyone who finds it, not just Cloudflare. If headers existed only at the edge, the bare origin would serve a fully working copy of the site with no CSP, no HSTS and no X-Frame-Options. So where the platform allows it, each origin sets the headers too. The nginx container has always carried them. The CloudFront policy emits the same set, with Permissions-Policy, COOP and CORP declared as custom headers. An Azure Storage static website has no mechanism for custom response headers at all, so that origin depends on the edge, and the page writes the gap down. The cost is three files that have to agree, and each says so in a comment naming the other two.
+
+The Cloudflare copy has a subtler problem. Its ruleset ignores changes to rules, a workaround for a provider bug that produces a permanent phantom diff. But rules is the only attribute that means anything, so you could tighten the CSP in Git, get a clean plan and a green pipeline, and change nothing at the edge.
+
+Since Terraform can't enforce it, the deploy asserts it from outside. check_edge_headers.py parses the header names and values out of rules.tf and compares them with what csoh.org returns over the wire. Any header that is missing or has drifted fails the deploy. The script is meant to be deleted when the provider upgrade removes the workaround.
+
+== Layer 4: each origin exposes only the site
+layout: compare
+section: cloud-run
+Each origin is locked down so the only thing reachable is the site. The one origin that runs code runs as csoh-run-runtime, a service account with zero IAM roles.
+col: AWS | The bucket blocks all public access | Only CloudFront reads it, through Origin Access Control
+col: GCP | Public run.app URL, ingress all | Its identity can touch nothing else in the project
+col: Azure | Only the $web container is public | Deploys write through a data-plane role
+notes:
+What it stops: reaching data an origin shouldn't expose, and over-permissive cloud access if an origin were ever compromised. The page maps it to T1530, T1078.004 and T1098.003.
+
+On AWS, an Origin Access Control policy keyed to the distribution's ARN lets only that CloudFront distribution read the bucket, so there is no public S3 URL to find and poke at. On GCP, ingress is all because Cloudflare reaches the run.app URL directly, which is fine because the container only serves static files. On Azure, the static-website feature exposes exactly one container, and every other blob in the account stays private.
+
+Every GCP workload runs as a service account. The page calls a misconfigured workload service account one of the most common cloud security mistakes: people grant Editor to make it work, and every CVE in the application becomes a potential path to rewriting the project's resources. The site is static nginx that makes no GCP API calls, so it runs as a dedicated account with zero roles. If the container were compromised, through RCE in nginx or malicious bytes in the image, the attacker gets a process that can't talk to anything else in the project. AWS and Azure run no code at all, so there is no runtime identity to abuse there.
+
+The page calls this zero trust applied to your own application: don't grant your code anything you can't justify, and "I might need it later" is not a justification.
+
+== Layer 5: the bytes we ship
+layout: table
+section: supply-chain
+Pinning names a dependency by something the publisher cannot quietly redefine. A tag can move; a hash can't.
+row: Where bytes could be swapped | Control
+row: The file set on S3 and Azure | Stage only the allowlisted public set; never upload the rest
+row: The base image | Pin it to its SHA-256 digest
+row: OS packages in the base | Run apk upgrade in the build
+row: The built image | Trivy fails the build on HIGH or CRITICAL
+row: The deploy | Hand Cloud Run the digest, not the tag
+notes:
+What it stops: shipping malicious or vulnerable bytes by accident, or publishing a file that should never be public. The page maps it to T1195.002, T1525 and T1552.001.
+
+Object storage has no request-time rules: whatever you upload is world-readable. So stage_site.sh stages a dist/ directory holding only the public file set, and the build fails loudly if a secret-shaped file slips in. Not uploading a file is a stronger guarantee than serving it and hoping a deny rule catches every request for it.
+
+A label like nginx:1.27-alpine or actions/checkout@v4 looks specific, but whoever owns it can repoint it at different bytes tomorrow. Pinning replaces it with an immutable identifier: the image digest, or the full commit SHA for an Action. If anyone tampers upstream, the hash no longer matches and the build fails closed. The trade-off is that somebody updates the pin by hand, and that friction is the feature.
+
+A digest pinned months ago carries months of CVEs, so apk upgrade fetches current packages in the build. Trivy then scans every package against public CVE databases and skips CVEs with no fix yet, because including them would only train people to ignore the scan.
+
+Each deploy resolves the tag to its digest and hands Cloud Run that, so moving a tag afterwards can't change the bytes a revision runs. Immutable tags had to go: Artifact Registry will not delete a tagged artifact while they are on, so immutability and deletion-based retention are mutually exclusive. The honest trade is that two workflows racing the same tag now end in a silent overwrite. Rollback is one CLI command. The registry keeps only the newest ten images, so plan on rolling back that far at most; further back, redeploy the older commit from git.
+
+== What Cloud Run will run
+layout: code
+section: supply-chain
+IAM authorizes the verb, not the argument, so a deploy identity can name any image it can pull. Binary Authorization allowlists our one repository and denies everything else.
+```
+admission_whitelist_patterns {
+  name_pattern = "us-central1-docker.pkg.dev/csoh-org-495800/csoh-containers/**"
+}
+
+default_admission_rule {
+  evaluation_mode  = "ALWAYS_DENY"
+  enforcement_mode = "ENFORCED_BLOCK_AND_AUDIT_LOG"
+}
+```
+notes:
+Everything before this makes the image we build trustworthy. None of it answers a different question: will Cloud Run run an image we didn't build at all? roles/run.admin grants creating revisions, and there is no variant that grants creating revisions from approved images. So an identity that can deploy can name any image it can pull, like something off Docker Hub.
+
+Binary Authorization is a policy Cloud Run consults before it will create a revision. The trailing double star is load-bearing: a single star matches anything except a slash, so it would stop covering nested paths. Getting that wrong over-denies, which surfaces as a failed deploy rather than a control that quietly isn't there. Both Cloud Run services, production and staging, opt in to the one project policy, because staging builds the image production later runs.
+
+Two things are worth stating precisely. It checks provenance, not a signature: it accepts our own registry as the answer and verifies no attestation. And it fails at deploy time, not request time: a rejection breaks the next deploy and leaves the serving revision running, which is why it was enabled enforcing rather than in dry-run mode.
+
+== Layer 6: deploying with no stored password
+layout: figure
+section: identity
+figure: wif-title
+A stored service-account key never expires unless someone rotates it. Workload Identity Federation replaces it with proof of who you are, when you ask.
+notes:
+What it stops: credential theft from the deploy pipeline. The page maps it to T1552.001, T1552.004 and T1528, and calls this the most consequential design choice on the page.
+
+The naive way stores three long-lived credentials in GitHub Secrets: an AWS access key, a GCP service-account JSON and an Azure client secret. A JSON key never expires unless someone rotates it, anyone who reads the secrets store gets it, it survives the engineer who created it leaving, and a leaked copy is still useful months later.
+
+The diagram shows the GCP version in five steps. GitHub mints a short-lived OIDC token for the workflow run, with claims describing the run that the workflow cannot write itself. The runner presents it to GCP's Security Token Service. STS verifies it against a policy that pins both the repository and the production environment. STS returns a short-lived access token, scoped to impersonating the csoh-deployer service account. The runner uses it to deploy. The whole exchange takes a few hundred milliseconds, and the token expires after one hour.
+
+There is no JSON key anywhere in this flow. A leaked workflow log would give an attacker a token valid for at most one hour, scoped to deploying to one project. There's nothing to rotate, because there's nothing stored.
+
+== Pin the subject, not the repository
+layout: code
+section: identity
+A repository condition trusts every workflow on every branch. Pin the sub claim, which GitHub stamps with the environment only when a job declares one.
+```
+assertion.repository == 'CloudSecurityOfficeHours/csoh.org' &&
+(assertion.sub == 'repo:CloudSecurityOfficeHours/csoh.org:environment:production' ||
+ assertion.sub == 'repo:CloudSecurityOfficeHours/csoh.org:environment:qa')
+```
+notes:
+The page says the token check is where nearly all the security of this design lives, and that it is the step most tutorials get wrong. A condition on the repository claim reads like a tight rule, and it is a lot better than a stored key. But it trusts every workflow in the repository, on every branch: link checkers, an SEO audit, a news updater, a scheduled job that reads pages from around the web. The blast radius of a bug in the least important scheduled job becomes the permissions of the most important one.
+
+So all three clouds pin the sub claim. GitHub composes the subject itself and only stamps the environment form onto a token when the job declares one, so entering the environment becomes the gate. Each environment's deployment branch policy has one entry, production only main and qa only qa, so pinning the environment pins the branch too. And a job can only enter production by declaring it in the workflow file, a Code Owners-protected path.
+
+GCP states this in two places that have to agree: the pool provider's attribute condition, which rejects the token outright, and an IAM member naming one exact principal rather than a whole group. Agreeing means a future edit to one doesn't silently widen the other.
+
+The rule to take away: federate on the narrowest claim that describes the job you mean to authorize, not the broadest one that happens to be true.
+
+== Two environments, and jobs with none
+layout: compare
+section: identity
+A staging token cannot deploy production, even arriving through the same pool from the same repository. A condition is only as narrow as the widest thing that satisfies it.
+col: production | Trusted by AWS, Azure and GCP | GCP: csoh-deployer, run.admin project-wide
+col: qa | Trusted by GCP only | GCP: csoh-deployer-qa, run.admin on csoh-site-qa alone
+col: No environment | Weekly docs review, pull-request security review | Their tokens carry a subject no cloud trusts
+notes:
+The staging copy is why GCP's condition names two subjects. Each has its own IAM member pointing at its own service account, and the two are not equivalent. csoh-deployer holds run.admin at the project level, which covers every Cloud Run service, production included. csoh-deployer-qa holds it on the staging service only, plus read-only run.viewer and registry write. Reusing the production account would hand a qa-branch workflow the ability to deploy production, which is the entire thing the split exists to prevent.
+
+AWS and Azure name exactly one subject each, the production one, which is the direct reason staging is one origin rather than three. Cloud Run is the only origin that executes nginx.conf and the security-header config, so the single staging origin exercises more of the serving path than the two it leaves out.
+
+The part to remember: two workflows read input nobody here controls, the weekly docs review and the pull-request security review, and both hold id-token: write. They are safe for exactly one reason: they declare no environment at all. Their warning says don't add any environment line, rather than naming production, because with qa federated too, a warning written against one environment's name stops covering the case the moment a second one exists.
+
+== Layer 7: guarding the workflow file
+layout: checklist
+section: pipeline
+deploy.yml can ship code to three production clouds, so the file is as sensitive as a production secret. Three entries on the bypass list can still push straight to main.
+check: CODEOWNERS review on workflows, infra, the Dockerfile and security docs
+check: Branch protection on main: a code-owner approval and six status checks
+check: Environment gates on every job that talks to a cloud
+check: Secret scanning and push protection
+check: Dependabot security updates
+check: Every third-party Action pinned to a commit SHA, enforced by policy
+notes:
+What it stops: a malicious or accidental change to the workflow that does the deploying. The page maps it to T1195.001, T1199 and T1078.
+
+The Main ruleset requires a pull request with at least 1 approving review from a code owner, and six status checks. None of those checks carries a paths filter on its pull-request trigger, deliberately: a filtered-out workflow never reports, so a required check waiting on it blocks the pull request with no failure to look at. The filtering lives inside each job instead.
+
+The page is candid about the bypass list. Three entries can push straight to main: the OrganizationAdmin role, which is every owner of the GitHub organization; the csoh-ci GitHub App the automation runs as; and the site owner's own account. Housekeeping workflows commit their own fixes and cannot review their own pull requests, and the owner keeps the bypass to repair a broken deploy without waiting on a second reviewer. So in practice this control means everyone else needs a reviewed pull request, not that nothing reaches main unreviewed, and the App's token is treated as a production credential.
+
+A pull request from a fork can enter neither environment, so it can't run the cloud jobs. Push protection blocks a credential-shaped string at git push. The sha_pinning_required policy rejects an unpinned uses: reference at run time, rather than relying on someone spotting a version tag in a diff.
+
+== From qa to three origins
+layout: timeline
+section: pipeline
+A promoted commit is never rebuilt: production deploys the image staging already ran.
+event: deploy-qa.yml | Every push to qa: same gates, build and Trivy scan, then staging
+event: promote-qa.yml | Manual; refuses unless main is an ancestor of qa and Deploy QA passed
+event: build | deploy.yml stages dist/ once, so every origin gets identical bytes
+event: Publish | AWS, Azure and GCP jobs in parallel; GCP reuses staging's image
+event: purge-cloudflare | Clears the edge, then checks live asset hashes and headers
+notes:
+A change reaches a reader through three workflow files. deploy-qa.yml fires on every push to qa with no paths filter. That looks like a missing safeguard and is the opposite: GitHub's star doesn't match a slash, so a pattern list is easy to write narrower than what is published, and a filtered-out change deploys nothing while looking successful.
+
+promote-qa.yml is manual and designed to refuse. main must be an ancestor of qa, so the fast-forward can't discard housekeeping commits, and the exact commit being promoted must have a successful Deploy QA run. That second gate is only trustworthy because every push to qa produces a run.
+
+Both build workflows tag the image with the short commit SHA, and production's publish step skips the push when the tag is already there, then deploys the digest it resolves to. So production runs the identical bytes staging ran. That holds only while the two produce identical images, so staging-specific settings live at the Cloudflare edge, outside the image. A staging environment is only evidence if the thing it tested is the thing that ships.
+
+deploy.yml holds one concurrency lock and never cancels a run in flight. Cancelling between a publish job's asset pass and its HTML pass would leave an origin serving the new style.css beside HTML naming the old hash, which SRI then blocks. The last job re-derives the hash of every versioned asset the home page references from what the edge returns, compares it with the page's integrity attribute, and compares the live security headers with the Terraform. Either mismatch fails the deploy. Everything before it verifies intent; only these checks verify the result. It fetches one page, so per-page scripts are not covered.
+
+== Automation that reads the open web
+layout: checklist
+section: pipeline
+One scheduled job drafts resource links from pages written by strangers: untrusted input meeting a job that holds credentials.
+check: No shell or interpreter on the tool allowlist
+check: Mint the repo-write token after the model runs
+check: Set persist-credentials: false on the checkout
+check: Open a pull request; never publish
+notes:
+The job's allowlist is exactly Read, Edit, Glob, Grep, WebSearch and WebFetch, all in-process tools, with no Bash pattern at all. The page states it flatly: an allowlist that contains a shell or an interpreter is not an allowlist, because python3 -c executes anything. A harmless-looking utility is no better. grep takes a path, so allowlisting Bash(grep:*) grants a general read primitive over the runner's filesystem, including that step's own environment and secrets. The built-in Grep tool on the list is different: it searches the checked-out workspace and is not a shell. An entry naming a command that accepts a path is a file-read capability. If the job ever needs Python, it gets a checked-in script allowlisted by its exact path.
+
+The csoh-ci App token could change the repository, and the App sits on the bypass list, so it is a production credential. It is issued in a step below the model step, right before the create-PR step that uses it, so during the research pass it does not exist on the runner. What is reachable then is the model's own OAuth token, which buys inference and nothing else. That is the residual risk, priced deliberately: WebFetch is unqualified and Read takes absolute paths, because researching the open web is the job. Step order is the control that keeps a successful injection cheap.
+
+actions/checkout writes its token into .git/config by default and leaves it there for the job. In a job that processes web pages, that's a gift you don't want to give, so it is turned off. A credential should live as briefly and in as few places as the work allows.
+
+Everything the job proposes still has to clear Code Owners review and land on main before it reaches a reader.
+
+== Layer 8: logs kept for 400 days
+layout: code
+section: logging
+By default Cloud Logging keeps most logs for 30 days, and supply-chain attacks are often found months later. A sink routes three categories into a 400-day bucket.
+```
+(resource.type="cloud_run_revision" AND httpRequest.status>=400)
+OR protoPayload.serviceName="iam.googleapis.com"
+OR protoPayload.@type="type.googleapis.com/google.cloud.audit.AuditLog"
+```
+notes:
+What it stops: nothing directly, but it is how you'd notice if any layer above failed. The page maps its detection coverage to T1190, T1098 and T1078.004. Assume something will eventually go wrong. Logging turns "an attack happened" into when it happened, what they did, and what needs fixing.
+
+With three clouds, logging lives in two places. At the edge, Cloudflare's zone analytics and Load Balancer health dashboards show requests, cache hit ratio, WAF blocks and which origins are healthy. The origins log only what got past the cache, and the GCP origin keeps the deepest forensic trail, because that is where the IAM and audit story lives. By default, Admin Activity audit logs get 400 days.
+
+The filter captures every 4xx and 5xx from the Cloud Run origins, keyed on the resource type so staging is included; every IAM change; and the full audit log stream, every API call with who made it, when and the outcome.
+
+What is missing so far: a SIEM, real-time alerting and anomaly detection. For a community site the page says the cost and benefit don't justify it. For a production SaaS workload you'd want this same sink plus an export to BigQuery or Pub/Sub.
+
+== What we didn't do, and why
+layout: table
+section: did-not-do
+Each is defensible for a small static site and less so as the threat surface grows. Copying this for something bigger? This list is your homework.
+row: Not done | Why
+row: Signed-image enforcement | Staging builds images before anything approves them
+row: Origins locked to Cloudflare IPs | An IP allowlist to maintain for three vendors
+row: SLSA provenance, cosign | On the to-do list; cosign is best done with SLSA
+row: Full OWASP CRS | Mostly demonstrative without a database or login
+row: Multi-region within a cloud | Cross-cloud failover covers the realistic outage
+row: SIEM, real-time alerting | Logs are kept; the right call for a community site
+notes:
+Binary Authorization is on, but not its stronger mode, REQUIRE_ATTESTATION. Cloud Run accepts only the project's single default policy, so one rule governs production and staging, and staging is where images are born, before anything has approved them. The attestation would also be gated on the same identity boundary that already gates registry write: a second lock that opens with the same key. That calculus changes the day the builder and the deployer stop being the same job.
+
+All three origin hostnames answer anyone who discovers them. For anything with private data behind it, you should lock each to Cloudflare's published ranges, but that is a standing maintenance cost for three vendors. What direct reachability costs here is narrow, because the origins hold the same public bytes the edge serves. You'd miss the WAF, the rate limit, the redirects and the headers, and origin-set headers close most of that, leaving Azure Blob as the known gap.
+
+Also not done: a distroless or scratch base image, because nginx-on-alpine gives the flexibility needed today; Cloudflare Polish, a Pro-plan feature; a VPC-SC perimeter, because the runtime identity has access to nothing; and an enterprise landing zone, which a single static site with one deployer doesn't need.
+
+== Copying this for your own site
+layout: checklist
+section: starter
+Each item on the page links to the real file it describes.
+check: Pick how many clouds you want, then start with one
+check: Stand up each origin from its Terraform directory
+check: Feed each origin's hostname into the Cloudflare directory
+check: Copy deploy.yml and stage_site.sh; set resource IDs as repo Variables
+check: Create a production environment and CODEOWNERS; enable branch protection, secret scanning, Dependabot
+check: Add a staging environment once an origin runs containers
+check: Cut over with the old origin kept as a fallback
+notes:
+The page gives this as a checklist rather than a tutorial, with each item linking to the real file. The design degrades gracefully, so start with one origin and add more later; the Cloudflare pool just grows. Each Terraform directory is self-contained: terraform apply in aws/ builds the private bucket, CloudFront and the OIDC role. Applying the Cloudflare directory creates the load balancer, pool, health monitor, and the header, redirect and cache rules. Every cloud authenticates keyless, so there are no secrets to paste.
+
+For staging, two properties make it worth having, and both are easy to lose. The staging deploy has no paths filter, so every push produces a run the promotion gate can check for. And both workflows derive the same image tag from the commit, so promotion redeploys the tested image rather than rebuilding it. If your staging origin is object storage rather than a container, you get the first property and not the second.
+
+To cut over, verify each origin directly, add them to the load balancer with the old origin kept as a fallback, then flip DNS. The page's estimate if you've never used Terraform: a weekend to read everything carefully and a day to stand up all three clouds, or an evening for one origin.
+
+== Why isn't trusting your own repository enough?
+layout: question
+section: identity
+Think about every workflow in a repository that can ask GitHub for an OIDC token.
+notes:
+This question is drawn from the identity layer. Ask it and let the room answer before moving on.
+
+== It trusts every workflow, on every branch
+layout: answer
+section: identity
+A link checker could mint deploy credentials just by asking. Pin the subject, environment included, so only a job that declares the environment passes. Federate on the narrowest claim that describes the job.
+notes:
+A repository-only condition trusts every workflow in the repository, on every branch, whether or not it has anything to do with deploying. Under it, any of them could mint deploy credentials simply by asking, and the blast radius of a bug in the least important scheduled job becomes the permissions of the most important one.
+
+Pinning the sub claim, environment name included, turns entering the environment into the gate, and the environment's branch policy pins the branch along with it. The page's rule: federate on the narrowest claim that describes the job you mean to authorize. "This is my repo" is true of everything in your repo, and that's the problem with it.
+
+== Would Binary Authorization stop a compromised deploy identity?
+layout: question
+section: supply-chain
+The policy admits images from our own registry. Consider what else each deploy identity is allowed to do.
+notes:
+This one comes from the supply-chain layer. Give the room a moment before the answer.
+
+== Not entirely: both deploy identities can write the registry
+layout: answer
+section: supply-chain
+An attacker could push a malicious image into our repository and the policy would admit it. What it removes is running an image that never passed through our registry.
+notes:
+The page says what this buys is narrower than it first sounds. Both deploy identities also hold registry write, so an attacker who compromised one could push a malicious image into our own repository, and the policy would admit it, because it came from the allowlisted repository.
+
+What the policy removes is the ability to run an image that never passed through our registry at all: a public image named directly at deploy time, whether by a mistake in a workflow file or by an identity that acquires Cloud Run deploy rights without registry write. And it forces the remaining path to leave evidence, because an attacker's image now has to exist in our registry, in a repository we can list.

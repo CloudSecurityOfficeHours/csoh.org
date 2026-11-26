@@ -108,6 +108,10 @@ on:
       # The breach deck gate reads its outlines (under tools/decks/**) and the
       # breach pages (covered by `**.html`) with this tool.
       - 'tools/build_breach_decks.py'
+      # The topic deck gate reads its outlines (under tools/decks/**) and the
+      # topic pages (covered by `**.html`) with this tool, on top of the
+      # breach deck builder above.
+      - 'tools/build_topic_decks.py'
       - 'tools/decks/**'
       # The deck list gate renders from the same outlines and mapping, and
       # imports the outline parser from build_breach_decks.py.
@@ -119,6 +123,9 @@ on:
       # The industry vocabulary and synonyms both index gates render, and
       # whose self-test the kill chain index step runs.
       - 'tools/breach_industries.py'
+      # The page finder gate: its tool holds the field's markup and the
+      # list of pages that carry it.
+      - 'tools/sync_page_finder.py'
       # The kill chain registration gate, and the files it reads that no
       # other pattern here covers: the sitemap, the breach preview images and
       # the list that generates them.
@@ -570,6 +577,55 @@ jobs:
             echo "::warning title=Breach deck needs review::$line"
           done < stale-breach-decks-list.log
 
+      # Topic deck outlines in tools/decks/topics/ must obey the style limits
+      # and say nothing their cited page sections do not; a page that carries
+      # the Wiz disclosure must show it on the first slide that shows Wiz. A
+      # deck line with no mapping entry, a mapping entry with no line, a second
+      # line, or a line holding a different id points readers at the wrong
+      # deck. Unconditional: a page edit can move a number or a section id out
+      # from under an outline with no outline in the diff. The self-test runs
+      # first as the control, and --check runs even when it fails so the
+      # finding that names the outline line still shows.
+      - name: Assert topic deck outlines and links
+        id: topic-decks
+        run: |
+          set -o pipefail
+          status=0
+          python3 tools/build_topic_decks.py --self-test 2>&1 | tee check-topic-decks.log || status=1
+          python3 tools/build_topic_decks.py --check 2>&1 | tee -a check-topic-decks.log || status=1
+          exit "$status"
+
+      # A published topic deck whose outline, cover art or cited page sections
+      # changed since it was recorded still shows the old slides. Re-publishing
+      # needs the owner's go, so this step reports and never fails: each stale
+      # deck, with the sections that changed, is a warning on the run and a
+      # line in the job summary. A tool error is itself only a warning.
+      - name: Report published topic decks that need review
+        if: ${{ !cancelled() }}
+        run: |
+          if ! python3 tools/build_topic_decks.py --stale --published-only > stale-topic-decks.log 2>&1; then
+            cat stale-topic-decks.log
+            echo "::warning title=Topic decks::build_topic_decks.py --stale could not run; see this step's log"
+            printf '### Topic decks that need review\n\nThe stale check could not run; see the step log.\n' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cat stale-topic-decks.log
+          grep -v '^stale check: ' stale-topic-decks.log > stale-topic-decks-list.log || true
+          {
+            echo "### Topic decks that need review"
+            echo
+            if [ -s stale-topic-decks-list.log ]; then
+              sed 's/^/- /' stale-topic-decks-list.log
+            else
+              echo "None: every published topic deck matches its outline and its page."
+            fi
+            echo
+            grep '^stale check: ' stale-topic-decks.log || true
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r line; do
+            echo "::warning title=Topic deck needs review::$line"
+          done < stale-topic-decks-list.log
+
       # breach-kill-chain-decks.html lists every published breach deck. The
       # list is rendered from tools/decks/breaches/published.json, each deck's
       # outline and the order of breach-timeline.html, so a deck recorded
@@ -602,6 +658,22 @@ jobs:
           python3 tools/breach_industries.py --self-test 2>&1 | tee check-breach-timeline-index.log || status=1
           python3 tools/sync_breach_timeline_index.py --self-test 2>&1 | tee -a check-breach-timeline-index.log || status=1
           python3 tools/sync_breach_timeline_index.py --check 2>&1 | tee -a check-breach-timeline-index.log || status=1
+          exit "$status"
+
+      # The "Find on this page" field (page-finder.js) is stamped into the
+      # contents box of the pages tools/sync_page_finder.py lists. A listed
+      # page without it, a hand-edited copy, or an unlisted page that took it
+      # from a copied sibling all fail here. Unconditional, because a change
+      # to the tool's list or markup changes the verdict with no page in the
+      # diff. The self-test runs first as the control; it also asserts the
+      # glossary cross-linker never edits the field.
+      - name: Assert the page finder is current
+        id: page-finder
+        run: |
+          set -o pipefail
+          status=0
+          python3 tools/sync_page_finder.py --self-test 2>&1 | tee check-page-finder.log || status=1
+          python3 tools/sync_page_finder.py --check 2>&1 | tee -a check-page-finder.log || status=1
           exit "$status"
 
       # Every page in breaches/ must appear everywhere a kill chain is listed
@@ -733,6 +805,7 @@ jobs:
           OUTCOME_BREACH_DECKS: ${{ steps.breach-decks.outcome }}
           OUTCOME_BREACH_DECK_INDEX: ${{ steps.breach-deck-index.outcome }}
           OUTCOME_BREACH_TIMELINE_INDEX: ${{ steps.breach-timeline-index.outcome }}
+          OUTCOME_PAGE_FINDER: ${{ steps.page-finder.outcome }}
           OUTCOME_KILL_CHAIN_REGISTRATION: ${{ steps.kill-chain-registration.outcome }}
           OUTCOME_NEWS_DATES: ${{ steps.news-dates.outcome }}
           OUTCOME_HTML5: ${{ steps.html5.outcome }}
@@ -758,6 +831,7 @@ jobs:
               { name: 'Assert breach deck outlines and links', outcome: process.env.OUTCOME_BREACH_DECKS, file: 'check-breach-decks.log' },
               { name: 'Assert the breach deck list is current', outcome: process.env.OUTCOME_BREACH_DECK_INDEX, file: 'check-breach-deck-index.log' },
               { name: 'Assert the kill chain index is current', outcome: process.env.OUTCOME_BREACH_TIMELINE_INDEX, file: 'check-breach-timeline-index.log' },
+              { name: 'Assert the page finder is current', outcome: process.env.OUTCOME_PAGE_FINDER, file: 'check-page-finder.log' },
               { name: 'Assert every kill chain is registered', outcome: process.env.OUTCOME_KILL_CHAIN_REGISTRATION, file: 'check-kill-chain-registration.log' },
               { name: 'Reject future publish dates (news freshness gate)', outcome: process.env.OUTCOME_NEWS_DATES, file: 'check-news-dates.log' },
               { name: 'Validate HTML5', outcome: process.env.OUTCOME_HTML5, file: 'log.log' },

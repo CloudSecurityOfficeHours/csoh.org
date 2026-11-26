@@ -1,0 +1,367 @@
+title: Kubernetes & Managed Kubernetes
+page: kubernetes.html
+as-of: 2026-11-25
+promise: Managed Kubernetes hosts the control plane, but you still own the workloads, workload identity, network policy, RBAC and admission controls.
+
+== The 30-second version
+layout: text
+section: top
+Managed Kubernetes (EKS, AKS, GKE) hosts the control plane. You still own the workloads, workload identity, network policy, RBAC and admission controls. The API surface is the same on every cloud, and the default posture is permissive.
+notes:
+Kubernetes orchestrates containers across a fleet of machines. On EKS, AKS and GKE the cloud hosts the control plane for you, but everything you configure on top is yours: the workloads, the workload identity, the network policy, the RBAC and the admission controls.
+
+The Kubernetes API surface is the same on every cloud. The configuration surface is enormous, and the default posture is permissive.
+
+The page names two risks as the largest cloud-specific ones: identity chaining, where a compromised pod steals the worker node's cloud role via IMDS, and RBAC sprawl, where some operator you installed has cluster-admin and can read every secret. Fix those first, then layer on network policy, admission control and runtime detection.
+
+== Two halves: control plane and data plane
+layout: compare
+section: what-is
+col: Control plane | kube-apiserver, the front door | etcd, the source of truth and secret material | Scheduler and controller-manager
+col: Data plane | Worker nodes, VMs or bare metal | kubelet, container runtime, kube-proxy | Your workload pods
+A pod is the unit of scheduling. A service account is the pod's identity inside the cluster.
+notes:
+You declare what you want, for example three replicas with certain env vars and memory, and Kubernetes places that across worker nodes, restarts containers that crash, redirects traffic on failure and rolls out new versions without downtime.
+
+The control plane holds the kube-apiserver, etcd, the scheduler and the controller-manager. etcd is the cluster's source of truth, where all configuration and secret material lives. The data plane is the worker nodes running the kubelet, a container runtime such as containerd or CRI-O, kube-proxy, and your pods.
+
+A pod is the unit of scheduling: one or more containers sharing a network namespace and storage. A service account is the pod's identity inside the cluster, and with workload identity it is also the pod's identity to the cloud.
+
+== Why Kubernetes runs the cloud-native world
+layout: text
+section: why-cloud
+The security cost: Kubernetes is the largest source of misconfiguration in cloud environments.
+- Workload definitions that port across clouds
+- One operational model for every kind of workload
+- A very large ecosystem
+- Dense multi-tenant packing, decisive at more than 50 services
+notes:
+Kubernetes reached critical mass because it solved problems first-party cloud services left open. A Helm chart or set of manifests describes a workload the same way on EKS, AKS, GKE, on-prem and in a kind cluster, while cloud-specific services do not move.
+
+Stateless apps, databases, batch jobs and ML workloads all use the same primitives. The CNCF landscape lists roughly 1,500 projects and products. Bin-packing many workloads onto fewer larger nodes is much cheaper than one VM per service, and above 50 services the page calls the math decisive.
+
+The security cost is that Kubernetes is also the largest source of misconfiguration in cloud environments. Wiz, Snyk and Datadog all publish State-of-Cloud reports (disclosure: the site's author works at Wiz), and every year Kubernetes-specific misconfigurations top the list. The configuration surface that makes the platform powerful is also the attack surface.
+
+== Shared responsibility: managed Kubernetes
+layout: table
+section: shared-resp
+row: Layer | Self-managed | Standard managed | Fully managed
+row: Control plane | You | Cloud | Cloud
+row: Worker node OS patching | You | You | Cloud
+row: Workload identity setup | You | You | You
+row: RBAC | You | You | You
+row: Admission control | You | You | You (Autopilot pre-installs some)
+row: Image security | You | You | You
+Fully managed means GKE Autopilot, EKS Auto Mode or AKS Automatic.
+notes:
+This is an excerpt of the page's responsibility table. The cloud takes more on the higher-tier managed modes, but the user always owns the workload layer. On standard managed clusters, managed node groups let the cloud auto-upgrade nodes, but you trigger it, and the cloud provides the plumbing for workload identity while the setup stays yours.
+
+Even on the most managed offering, everything above the node OS is yours. The cloud cannot configure your RBAC, cannot decide which workloads should talk to which, and cannot decide whether a sidecar's permissions are reasonable. That is the security work of running Kubernetes in the cloud.
+
+The page's full table also covers etcd encryption and backup, cluster networking, network policy, pod security context and runtime threat detection.
+
+== The threat model arc
+layout: timeline
+section: threat-model
+event: Foothold | Code execution in a pod
+event: Token | The pod's token calls the API server
+event: Node role | Without workload identity, IMDS yields the node role
+event: Lateral | Movement over the flat pod network
+event: Persist | New DaemonSet or backdoor service account
+event: Exfiltrate | Out through outbound network, typically unrestricted
+Almost every Kubernetes-in-cloud breach narrative follows this arc.
+notes:
+Almost every Kubernetes-in-cloud breach narrative follows the same arc. The foothold can be a vulnerable web app, leaked credentials or a supply chain attack in a base image: any code-execution primitive will do.
+
+The default service-account token is auto-mounted into every pod, and RBAC determines how far it gets, too often to cluster-admin through an unaudited operator. If workload identity is not configured, the attacker reaches the worker node's IMDS and steals the node IAM role.
+
+From there they move to other pods on the node or over the flat pod network, persist by deploying a DaemonSet or creating a backdoor service account, and exfiltrate through the typically unrestricted outbound network.
+
+== Each defense targets a step
+layout: table
+section: threat-model
+row: Defense | What it targets
+row: Workload identity | Theft of the node's cloud role
+row: Network policy | Lateral movement
+row: RBAC scoping | Token abuse and persistence
+row: Admission control | Privileged pods and hostPath
+row: Runtime detection | Steps that slip through
+notes:
+Every defense on the page targets a step in the arc. Workload identity breaks the node-role step. Network policy breaks lateral movement. RBAC scoping breaks the service-account token step and the persistence step. Admission control prevents the worst-case primitives of the foothold, such as privileged pods and hostPath. Runtime detection catches the steps that slip through.
+
+== Identity chaining: pod to node to cloud
+layout: compare
+section: identity
+col: Default service-account token | Auto-mounted in every pod | Default RBAC gives only API discovery | An elevated binding makes it a stepping stone
+col: Node IAM role | Needed to pull images and attach volumes | Reachable via the node's IMDS | Open to hostNetwork pods or with no hop-limit enforcement
+The page calls this the failure that produces the worst outcomes.
+notes:
+The page calls identity chaining the cloud-Kubernetes security failure that produces the worst outcomes, with two added wrinkles over the container version.
+
+Every pod gets a Kubernetes service-account JWT auto-mounted. With default RBAC the token has no permissions beyond API discovery, but if any RoleBinding or ClusterRoleBinding has elevated the default service account, that is the attacker's stepping stone.
+
+Worker nodes need an IAM role to pull images, attach volumes, write logs and register with the load balancer. That role is reachable via the node's IMDS, from any pod with hostNetwork: true or no IMDS hop-limit enforcement.
+
+== The fix is workload identity
+layout: table
+section: identity
+row: Cloud | Per-pod identity | Keep pods off IMDS
+row: AWS | IRSA, or the newer EKS Pod Identity | IMDSv2 with hop-limit 1
+row: Azure | AKS Workload Identity, federated to Entra ID | Reachable by default; opt-in restriction, in preview
+row: GCP | GKE Workload Identity | GKE metadata server intercepts; hostNetwork pods bypass it
+Also set automountServiceAccountToken: false on every workload that is not an operator.
+notes:
+Every cloud offers a per-pod identity that breaks both legs. On AWS, an EKS cluster runs an OIDC issuer, you annotate a service account with an IAM role, and pods exchange the token for a scoped role session. EKS Pod Identity is the newer, simpler alternative. AKS Workload Identity is federated to Entra ID on the same OIDC pattern. GKE maps Kubernetes service accounts to Google service accounts through Workload Identity Federation.
+
+Once that is configured, also block IMDS from pods. On EKS, enforce IMDSv2 with hop-limit 1. On GKE the metadata server intercepts pods' metadata requests, though pods with hostNetwork: true bypass it. On AKS, pods can reach IMDS by default, and the opt-in restriction, in preview, blocks non-host-network pods.
+
+Finally, disable automatic token mounting for pods that do not talk to the API server.
+
+== How RBAC goes wrong
+layout: text
+section: rbac
+- cluster-admin handed to a service account by a chart
+- Wildcard verbs on wildcard resources
+- get on secrets where it is not needed
+- impersonate, escalate or bind verbs
+- Aggregated ClusterRoles that silently widen edit
+notes:
+Kubernetes RBAC is the equivalent of cloud IAM, scoped to the API server. The page lists common failures.
+
+A Helm chart for a logging agent, monitoring operator or autoscaler may ship a ClusterRoleBinding granting cluster-admin just to be safe, so any compromised pod in that namespace is cluster-admin. Wildcard verbs on wildcard resources are functionally cluster-admin in a different shape. Granting get on secrets grants access to every credential in the namespace.
+
+The impersonate, escalate and bind verbs let a principal change its own permissions or impersonate someone else, which the page calls hard to audit and easy to abuse. Default ClusterRoles such as view, edit and admin are aggregated, so an operator installed later can silently expand what edit means.
+
+== What good RBAC looks like
+layout: checklist
+section: rbac
+check: One service account per workload
+check: Narrowest Role, bound within one namespace
+check: Humans use cloud SSO, not long-lived kubeconfig tokens
+check: Audit bindings with kube-bench and KubiScan
+check: API server audit logs flow to your SIEM
+notes:
+Each workload gets its own service account, with a workload-specific Role holding the narrowest permission set that works, bound by a RoleBinding scoped to a single namespace.
+
+Humans reach the cluster through cloud SSO mapped to ClusterRoles rather than long-lived kubeconfig tokens. The page points to kube-bench and KubiScan for auditing over-permissioned bindings.
+
+The audit log earns its place: it catches a service account creating a pod with privileged: true in a way nothing else does.
+
+== Pod Security Standards
+layout: compare
+section: pod-security
+col: Privileged | No restrictions | Never in prod
+col: Baseline | Blocks privileged, hostPath, hostPID, hostNetwork, hostIPC, certain capabilities | For namespaces needing slightly more flexibility
+col: Restricted | Non-root user, no privilege escalation | Dropped capabilities, RuntimeDefault or Localhost seccomp | On production namespaces
+Applied with namespace labels. PSS replaced PodSecurityPolicy, removed in 1.25.
+notes:
+The escape paths from the Containers page all apply inside Kubernetes: privileged pods, sensitive capabilities, hostPath, hostPID, hostNetwork and kernel CVEs. Kubernetes adds tooling to enforce hardening cluster-wide.
+
+Pod Security Standards come in three levels. Privileged has no restrictions. Baseline blocks the worst known escape paths. Restricted enforces hardened defaults.
+
+You apply them with namespace labels: enforce restricted on production namespaces, baseline on namespaces that need slightly more flexibility, and never privileged in prod. PSS replaced PodSecurityPolicy, which was removed in 1.25. The Pod Security admission controller that enforces it is on by default from 1.23 and stable from 1.25.
+
+== The minimum hardened pod spec
+layout: checklist
+section: pod-security
+check: runAsNonRoot: true, with a non-zero UID
+check: readOnlyRootFilesystem: true
+check: allowPrivilegeEscalation: false
+check: capabilities: drop: ["ALL"]
+check: seccompProfile: type: RuntimeDefault
+check: automountServiceAccountToken: false unless it calls the API
+check: Resource requests and limits set
+notes:
+This is the minimum hardened pod spec for production. Write to the root filesystem only through explicit emptyDir mounts. Drop all capabilities and add back only where needed. Disable service-account token mounting unless the workload calls the API. Set resource requests and limits, otherwise a noisy neighbor or runaway loop affects everything else.
+
+== Sandbox runtimes for untrusted code
+layout: compare
+section: pod-security
+col: GKE Sandbox | gVisor | Per-pod user-space syscall sandbox
+col: AKS | Confidential Containers or Kata Containers | Per-pod micro-VM
+col: EKS on Fargate | Per-pod Firecracker micro-VM | Not even two of your own pods share a kernel
+For customer-supplied or otherwise untrusted code, the host kernel is not enough isolation. The performance cost is modest; the escape-resistance gain is significant.
+notes:
+For workloads that run customer-supplied or otherwise untrusted code, the page says the host kernel is not enough isolation, and lists three options.
+
+GKE Sandbox uses gVisor, a per-pod user-space syscall sandbox. On AKS, Confidential Containers or Kata Containers give each pod a micro-VM. EKS on Fargate runs each pod in its own Firecracker micro-VM, so you cannot even put two of your own pods on the same kernel.
+
+The page says the performance cost is modest and the escape-resistance gain is significant.
+
+== Networking: flat by default
+layout: checklist
+section: networking
+check: Default-deny for all pods in production namespaces
+check: Allow only the flows each workload needs
+check: Always allow egress to kube-dns
+check: Deny egress to 169.254.0.0/16, which is IMDS
+check: Confirm your CNI supports NetworkPolicy
+Out of the box every pod can talk to every other pod.
+notes:
+Out of the box the pod CIDR is flat: no segmentation between namespaces or trust levels. The page calls this a design choice that makes service discovery simple and a security problem, because a compromised pod scans the cluster.
+
+NetworkPolicy defines allowed ingress and egress at the pod label level. The standard pattern is default-deny in production namespaces, then explicit allows such as frontend ingress from the ingress controller and egress to backend. Always allow egress to kube-dns in kube-system or DNS breaks, and always deny egress to the link-local range, which is IMDS.
+
+NetworkPolicy needs a CNI plugin that supports it. The page says all three managed clouds support this, and tells you to verify before assuming.
+
+== NetworkPolicy or a service mesh
+layout: compare
+section: networking
+col: NetworkPolicy | L3 and L4: IP and port | Usually enough for a small cluster
+col: Service mesh | L7 controls and mTLS between workloads | For multi-team production at different trust levels
+Options: Istio, Linkerd, Cilium. AWS retired App Mesh on 30 September 2026.
+notes:
+NetworkPolicy is L3 and L4. For L7 controls such as HTTP method, path and header, and for mutual TLS between every workload, a service mesh adds an identity-aware proxy alongside every pod.
+
+Istio is comprehensive but has a large operational footprint. Linkerd is minimal and fast with a lower operational cost. Cilium is eBPF-based and can do mesh and CNI in one project. Managed equivalents are Cloud Service Mesh on GKE and the Istio-based add-on for AKS. AWS retired App Mesh on 30 September 2026, so on EKS you run Istio, Linkerd or Cilium yourself, or use Amazon VPC Lattice for service-to-service networking.
+
+For a small cluster NetworkPolicy is usually enough. For multi-team production with workloads at different trust levels, the mesh's mTLS and identity-based authorization are the right primitives.
+
+== Admission control: the policy chokepoint
+layout: text
+section: admission
+Every change flows through the API server, where admission controllers can mutate or reject it. That is the place the cluster cannot bypass. Roll new policies out in audit mode first, then flip to enforce once the log is clean.
+notes:
+Admission controllers intercept requests to the API server. This is the chokepoint for rules such as no privileged pods, no unsigned images, and a NetworkPolicy in every namespace.
+
+Pod Security Standards is the most important built-in admission control. For richer rules, install a policy engine: Kyverno, which is Kubernetes-native and the easier of the two to adopt, or OPA Gatekeeper, which uses Rego and is more expressive with a steeper learning curve.
+
+Roll policies out in audit mode first, logging violations without blocking. Once the log is clean, or fixes have shipped, flip to enforce. That avoids the outage where a new policy leaves half the cluster unable to start.
+
+== Policies worth running on day one
+layout: checklist
+section: admission
+check: Reject privileged, hostPID, hostNetwork, hostIPC, hostPath
+check: Reject images from unapproved registries
+check: Require runAsNonRoot and readOnlyRootFilesystem
+check: Require resource requests and limits
+check: Require a default-deny NetworkPolicy per namespace
+check: Reject cluster-admin bindings to service accounts
+check: Require signed images
+notes:
+These are the policies the page says are worth running on day one. For signed images, the page names Binary Authorization on GKE and Kyverno with Cosign elsewhere.
+
+Start each in audit mode, as the previous slide says, and enforce once the violations are cleared.
+
+== A Kubernetes Secret is only base64-encoded
+layout: text
+section: cluster-secrets
+It is not encrypted. Production clusters need etcd encryption at rest with a KMS provider, and an external source of truth for the values. KMS encryption protects against direct etcd reads, but not against an attacker with API access.
+notes:
+A kind: Secret only base64-encodes its values, and kubectl with base64 -d recovers the plaintext. The same applies to anyone reading etcd directly.
+
+Production clusters need two things: etcd-level encryption at rest, and an external source of truth so rotation, audit and lifecycle live in a real secrets manager, not in git and not in kubectl.
+
+KMS encryption is the minimum bar, and EKS, AKS and GKE each make it one toggle. It protects against etcd-snapshot exfiltration, backup theft and direct etcd reads. It does not protect against an attacker with API access, because the API server will decrypt and serve. The page calls it necessary but not sufficient.
+
+== Patterns for getting secrets in
+layout: table
+section: cluster-secrets
+row: Pattern | What it does
+row: External Secrets Operator | Syncs an external store into Kubernetes Secrets
+row: Secrets Store CSI Driver | Mounts secrets as a volume, by default not in etcd
+row: Vault Agent Injector | Sidecar fetches secrets from Vault
+row: SOPS | Encrypts values in git for GitOps
+row: Sealed Secrets | Cluster-bound; controller is a single point of failure
+row: SPIFFE / SPIRE | One identity fabric across environments
+The patterns are typically combined. Without etcd encryption, any of them is incomplete.
+notes:
+The page says these patterns are typically combined, not picked individually.
+
+External Secrets Operator is the de-facto standard. It materializes an external store's values as Kubernetes Secrets, so the secret does land in etcd and is reachable via the API for anyone with RBAC. The Secrets Store CSI Driver mounts secrets as a tmpfs volume, so by default they never hit etcd, but apps read files. Mounted files pick up new values only with the driver's secret auto-rotation, which is alpha and off by default; without it, and for any secret consumed as an environment variable, new values arrive when the pod restarts.
+
+Vault Agent Injector suits teams that already run Vault and want dynamic secrets. SOPS fits GitOps teams who want the source of truth in git. Sealed Secrets is simple but cluster-bound, and its controller is a single point of failure for decryption. SPIFFE and SPIRE suit multi-cluster, multi-cloud or hybrid deployments.
+
+Any of these without etcd encryption enabled is incomplete: turn on KMS encryption first. kubectl create secret is fine for demos and bootstrap, not as the source of truth in production.
+
+== What else runs in your cluster
+layout: figure
+section: supply-chain
+figure: cluster-supply-chain
+Every chart, operator, CRD and add-on is third-party code with cluster permissions.
+notes:
+The figure shows five checks on third-party code that runs in the cluster: chart RBAC, image signatures, digest pins, an SBOM, and rescanning what is already running. The cluster runs more than your code, and these are the five checks from the supply-chain section.
+
+Read the RBAC manifests before helm install, and ask why if a chart grants cluster-admin to a service account. Verify signatures at admission. Pin images to digests, because floating tags silently re-pull a different image. Keep an SBOM database so that when a CVE drops, whether anything is vulnerable is one query, and rescan running workloads against the latest CVE feed.
+
+== EKS, AKS and GKE side by side
+layout: table
+section: comparison
+row: Building block | EKS | AKS | GKE
+row: Fully managed mode | EKS Auto Mode, Fargate | AKS Automatic | GKE Autopilot
+row: Workload identity | IRSA, Pod Identity | Workload Identity | Workload Identity
+row: Image admission | Kyverno or Gatekeeper with AWS Signer | Image integrity policies | Binary Authorization
+row: Runtime detection | GuardDuty EKS Protection and Runtime Monitoring | Defender for Containers | SCC Container Threat Detection
+All three run upstream Kubernetes: same API, same primitives.
+notes:
+All three managed services run upstream Kubernetes, so the API, primitives and kubectl are the same. The differences are in the managed scope, the cloud integrations and the operational defaults.
+
+This is an excerpt of the page's comparison table, which also covers control plane management, default CNI, NetworkPolicy support, audit log destinations, private control planes and auto-upgrade.
+
+For teams new to Kubernetes, the page says fully managed modes remove enormous classes of operational and security work: no node patching, fewer privileged-pod admission decisions, and no CNI choice to second-guess. EKS Auto Mode still leaves those privileged-pod admission decisions to you. The trade-off is reduced flexibility, which for most application workloads the page calls a feature.
+
+== The hardening checklist
+layout: table
+section: hardening
+row: Area | Non-negotiables
+row: Identity | Workload identity, IMDS blocked, no default token mount, cloud SSO
+row: RBAC | One service account per workload, no wildcards, audited bindings, audit logs to SIEM
+row: Pod and node | PSS restricted, sandbox for untrusted code, nodes auto-patched
+row: Network and admission | Default-deny, egress allow-list, admission rejecting risky configs, signed images
+Add runtime detection, central logs, image scanning at build and in the registry, an SBOM database and autoscaler limits.
+notes:
+The page calls this the non-negotiable Kubernetes-in-cloud hardening list, in four groups.
+
+Identity: workload identity for every pod that talks to the cloud, IMDS blocked from pods, default service-account token mounting disabled, and cloud SSO for human access. RBAC: one service account per workload, the narrowest possible Role with no wildcards, audited ClusterRoleBindings, and audit logs flowing to a SIEM. Pod and node: Pod Security Standards restricted on prod namespaces, a sandbox runtime for untrusted workloads, and nodes auto-patched on a defined cadence. Network and admission: default-deny NetworkPolicy, an egress allow-list, admission control rejecting risky configs, and signed-image enforcement.
+
+On top of that the page adds runtime detection such as Falco or Tetragon, centralized container and audit logs, image scanning at build and in the registry, an SBOM database, and cluster autoscaler limits to cap blast radius from runaway pods.
+
+== Common pitfalls
+layout: list
+section: pitfalls
+The page lists these and three more: unanalyzed audit logs, drift from IaC, and workload security ignored on fully managed clusters.
+item: One giant cluster for every environment
+item: cluster-admin granted to operators
+item: No workload identity
+item: Pod Security Standards not enforced
+item: No NetworkPolicy
+item: Admission control in audit-only forever
+item: Treating namespaces as security boundaries
+notes:
+These are the pitfalls the page lists. One giant cluster means a compromise crosses every trust boundary, and the page says multi-cluster, or at least one cluster per environment, is the standard pattern. Without workload identity, pods inherit the node's broad cloud role, which the page describes as one app exploit away from Capital-One-style identity chaining.
+
+The page says Pod Security Standards are two namespace labels, so apply them. Flat networking means lateral movement on day one. Admission control left in audit-only forever is documentation, not control. Namespaces are for organization, not hard security boundaries: use clusters for those.
+
+The rest: wire the audit log to your SIEM on day one, run all changes through GitOps so hot-fixes with kubectl edit do not become silent drift, and remember that even on Autopilot you own the workload security context.
+
+== Do I need Kubernetes at all?
+layout: question
+section: faq
+Consider how many distinct workloads you run, and what infrastructure they share.
+notes:
+This is a question from the page's FAQ. Ask it and let the room answer before moving on.
+
+== Often, no
+layout: answer
+section: faq
+With one or two workloads, a serverless container service (Cloud Run, Fargate, Container Apps) gives you containers without a cluster. The decision point is around 5-10 distinct workloads with shared infrastructure needs.
+notes:
+Often, no. If you have one or two workloads, a serverless container service such as Cloud Run, Fargate or Container Apps gives you containerized deployment without operating a cluster.
+
+The decision point is around 5-10 distinct workloads with shared infrastructure needs, such as service-to-service identity, scheduled jobs and multi-region rollout. Below that, Kubernetes is overhead. Above it, the page says the operational model pays back.
+
+== Which of EKS, AKS and GKE is most secure?
+layout: question
+section: faq
+Consider what differs between the three managed services, and what does not.
+notes:
+This is the second FAQ question. Again, ask it before showing the answer.
+
+== The API is the same; the cloud you live in matters more
+layout: answer
+section: faq
+The API surface is the same on all three. GKE has historically led on built-in defaults, but EKS and AKS have closed the gap. The bigger driver is which cloud you already live in.
+notes:
+The Kubernetes API surface is the same on all three. GKE has historically led on built-in defaults such as Workload Identity, Binary Authorization, GKE Sandbox and Autopilot, but EKS and AKS have closed the gap and offer equivalents.
+
+The page says the bigger driver is which cloud you already live in. Running EKS from an Azure organization, or GKE from AWS, adds federation complexity you do not need.

@@ -1282,12 +1282,14 @@ a.glossary-link:hover {
     text-decoration-thickness: 2px;
 }
 
-/* Every hero variant is a dark surface, in light mode too, and the .hero
-   gradient ends on --secondary-color itself, so the prose-link colour has no
-   contrast there. sky-100 clears 4.5:1 against every hero gradient stop; the
-   underline, not the hue, is what separates it from the white hero text. The
-   dark branch restores --secondary-color, which already clears the dark hero.
-   Two classes are needed to outrank a.glossary-link. */
+/* Every hero variant is a dark surface in light mode too, except
+   .hero--illustrated, which is pale in light mode and sets its own link
+   colour. The .hero gradient ends on --secondary-color
+   itself, so the prose-link colour has no contrast there. sky-100 clears
+   4.5:1 against every hero gradient stop; the underline, not the hue, is what
+   separates it from the white hero text. The dark branch restores
+   --secondary-color, which already clears the dark hero. Two classes are
+   needed to outrank a.glossary-link. */
 .hero :is(p, li) a:not([class]),
 .hero :is(p, li) a.glossary-link {
     color: #e0f2fe;
@@ -1800,9 +1802,23 @@ main :is(
 .deck-actions .card-action {
     margin-top: 0;
 }
+/* A topic page's slide preview: a closed panel right under its deck line,
+   holding the deck in a .deck-frame (or, with scripts off, a link to it; see
+   .deck-preview-link). It tucks up under the deck line's rule and reads at
+   the meta line's size. */
+.deck-preview {
+    margin: -0.75rem 0 1.25rem;
+    font-size: var(--fs-14);
+}
+.deck-preview > summary {
+    cursor: pointer;
+    color: var(--secondary-color);
+    font-weight: 600;
+}
 /* A Google Slides /embed or Drive /preview iframe; both carry their own
-   prev/next controls, and loading="lazy" holds each back until it nears
-   the viewport. */
+   prev/next controls. An iframe with a src and loading="lazy" waits until
+   it nears the viewport while scripts run; a slide preview's iframe has
+   only a data-src, which main.js copies into src when its panel opens. */
 .deck-frame {
     position: relative;
     width: 100%;
@@ -1843,6 +1859,40 @@ main :is(
    the page's row flex; in this column it would set the height. */
 .resource-card:has(> .deck-frame) > .card-link {
     flex: none;
+}
+
+/* A topics.html card with a deck (tools/build_topic_decks.py). The card is
+   the grid item, so cards in a row share one height; its link takes the
+   space above, which drops the deck strip to the foot so strips in a row
+   line up. The lift matches a plain card's, driven by the link's hover.
+   The strip's and preview's selectors name their elements, so they tie
+   with .resource-grid--compact .resource-card p and win by coming later. */
+.resource-card--topic-deck {
+    display: flex;
+    flex-direction: column;
+}
+.resource-card--topic-deck > .card-link {
+    flex: 1 1 auto;
+}
+.resource-card--topic-deck:has(> .card-link:hover) {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+    border-left-color: var(--primary-color);
+}
+.resource-card--topic-deck > p.deck-actions {
+    margin: 0.5rem 0 0;
+    font-size: var(--fs-14);
+}
+.resource-card--topic-deck > .deck-preview {
+    margin: 0.5rem 0 0;
+}
+/* With scripts off a slide preview's panel holds this link in a <noscript>,
+   and noscript.css hides the empty frame. It reads at the panel's size.
+   Named with its element so that in a topics.html card it ties with
+   .resource-grid--compact .resource-card p and wins by coming later. */
+.deck-preview p.deck-preview-link {
+    margin: 0.5rem 0 0;
+    font-size: inherit;
 }
 
 /* Card finder (tools/card_finder.py, card-finder.js): one box above a page's
@@ -1922,6 +1972,157 @@ main :is(
     font-size: var(--fs-14);
     font-weight: 600;
     color: var(--text-muted);
+}
+
+/* Page finder (tools/sync_page_finder.py, page-finder.js): "Find on this
+   page" at the top of a long guide's On this page box, and between a breach
+   kill chain's incident header and its first step (.incident-panel, placed by
+   breach-timeline.css). The script highlights every match and, in a guide,
+   narrows the box's list to the sections holding one, with a count beside
+   each. Scoped under its container so the paragraph and type rules that
+   reach into the box (`.contribute-article p`, the rail's smaller text) lose
+   to it; :is() keeps the guide's specificity whichever container matches.
+   noscript.css hides it when scripts are off.
+
+   Colours come from tokens, which flip in dark mode, except the borders: the
+   field and buttons sit on the box's tinted background, and their edge has
+   to reach 3:1 against it there, which --border-color does not. */
+:is(.toc, .incident-panel) .page-finder {
+    margin: 0 0 1rem;
+}
+:is(.toc, .incident-panel) .page-finder .search-wrapper {
+    min-width: 0;
+}
+:is(.toc, .incident-panel) .page-finder .search-wrapper::before {
+    left: 0.7rem;
+    width: 15px;
+    height: 15px;
+}
+:is(.toc, .incident-panel) .page-finder input.page-finder-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem 0.75rem 0.5rem 2.1rem;
+    font-family: inherit;
+    font-size: var(--fs-16);
+    line-height: 1.4;
+    color: var(--text-color);
+    background: var(--white);
+    border: 1px solid #64748b;
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+:is(.toc, .incident-panel) .page-finder input.page-finder-input::placeholder {
+    color: var(--text-muted);
+}
+:is(.toc, .incident-panel) .page-finder input.page-finder-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.25);
+}
+:is(.toc, .incident-panel) .page-finder .page-finder-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.375rem;
+    margin: 0.5rem 0 0;
+    font-size: var(--fs-14);
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+/* Nothing to say until the reader types, so the line takes no space. */
+:is(.toc, .incident-panel) .page-finder .page-finder-status:has(> .page-finder-count:empty) {
+    margin: 0;
+}
+:is(.toc, .incident-panel) .page-finder .page-finder-count {
+    flex: 1 1 auto;
+}
+:is(.toc, .incident-panel) .page-finder .page-finder-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    font-family: inherit;
+    font-size: var(--fs-16);
+    line-height: 1;
+    color: var(--text-color);
+    background: var(--white);
+    border: 1px solid #64748b;
+    border-radius: 6px;
+    cursor: pointer;
+}
+:is(.toc, .incident-panel) .page-finder .page-finder-step:hover {
+    border-color: var(--primary-color);
+}
+:is(.toc, .incident-panel) .page-finder .page-finder-step:focus-visible {
+    outline: 2px solid var(--secondary-color);
+    outline-offset: 2px;
+}
+/* The match count beside a section in the narrowed list. */
+.toc .page-finder-hits {
+    display: inline-block;
+    margin-left: 0.375rem;
+    padding: 0 0.4rem;
+    font-size: var(--fs-13);
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--text-muted);
+    background: var(--white);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+}
+/* In the wide-screen rail the box's text is smaller, and a phone's zoom on
+   focusing a field under 16px does not arise. */
+@media (min-width: 1360px) {
+    .contribute-article > .toc .page-finder input.page-finder-input {
+        padding: 0.375rem 0.5rem 0.375rem 1.875rem;
+        font-size: var(--fs-14);
+    }
+    .contribute-article > .toc .page-finder .search-wrapper::before {
+        left: 0.55rem;
+        width: 13px;
+        height: 13px;
+    }
+    .contribute-article > .toc .page-finder .page-finder-status {
+        font-size: var(--fs-13);
+    }
+    .contribute-article > .toc .page-finder .page-finder-step {
+        width: 1.75rem;
+        height: 1.75rem;
+        font-size: var(--fs-14);
+    }
+    /* The rail is too narrow for a count to follow a wrapped entry, where it
+       lands alone on a line of its own, so while a search is on each entry
+       keeps a gutter on the right and its count sits there, level with the
+       entry's first line. page-finder.js sets .is-finding. */
+    .contribute-article > .toc.is-finding li {
+        position: relative;
+        padding-right: 2.25rem;
+    }
+    /* A nested list hands its parent's gutter back, so a child's count lines
+       up with its parent's rather than a gutter further in. */
+    .contribute-article > .toc.is-finding li > :is(ol, ul) {
+        margin-right: -2.25rem;
+    }
+    .contribute-article > .toc .page-finder-hits {
+        position: absolute;
+        top: 0;
+        right: 0;
+        margin-left: 0;
+        font-size: var(--fs-12);
+    }
+}
+/* Matches the page finder found, painted with the CSS Custom Highlight API.
+   Each sets its text colour with its background, so the pair is the same in
+   both themes: 11.8:1 for every match, 7.8:1 for the one stepped to. */
+::highlight(page-finder) {
+    background-color: #fde68a;
+    color: #1f2937;
+}
+::highlight(page-finder-current) {
+    background-color: #fb923c;
+    color: #111827;
 }
 
 /* "Industries hit: Finance, Healthcare" on breach kill chain and deck cards
@@ -4582,6 +4783,18 @@ footer {
     color: var(--secondary-color);
 }
 
+/* The page finder's field and buttons need an edge of 3:1 against the dark
+   box (#141e2a); the light value would be too dark here. */
+[data-theme="dark"] :is(.toc, .incident-panel) .page-finder input.page-finder-input,
+[data-theme="dark"] :is(.toc, .incident-panel) .page-finder .page-finder-step {
+    border-color: #5b7591;
+}
+
+[data-theme="dark"] :is(.toc, .incident-panel) .page-finder input.page-finder-input:focus,
+[data-theme="dark"] :is(.toc, .incident-panel) .page-finder .page-finder-step:hover {
+    border-color: var(--primary-color);
+}
+
 [data-theme="dark"] .contribution-type {
     color: #eaf6ff;
     font-weight: 500;
@@ -6042,13 +6255,17 @@ main > .incident-pager .pager-index { font-weight: 600; }
 /* =========================================================================
    Illustrated hero - gradient + dot pattern + side-by-side text & SVG art.
    Used on pillar pages to replace the generic banner.
+
+   Pale in light mode, whether the light comes from the OS or the toggle; the
+   dark theme puts it back on a dark surface (the dark rules at the end of
+   this section, plus `[data-theme="dark"] .hero`).
    ========================================================================= */
 .hero--illustrated {
     background:
-        radial-gradient(ellipse 80% 60% at 78% 18%, rgba(56,189,248,0.22) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 80% at 18% 82%, rgba(245,158,11,0.16) 0%, transparent 60%),
-        linear-gradient(135deg, #0b1729 0%, #1e293b 55%, #0c4a6e 100%);
-    color: #fff;
+        radial-gradient(ellipse 80% 60% at 78% 18%, rgba(56,189,248,0.28) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 80% at 18% 82%, rgba(245,158,11,0.14) 0%, transparent 60%),
+        linear-gradient(135deg, #e0f2fe 0%, #f5fbff 55%, #ffffff 100%);
+    color: #0b1729;
     padding: 2.5rem 1.5rem 3rem;
     position: relative;
     overflow: hidden;
@@ -6056,11 +6273,19 @@ main > .incident-pager .pager-index { font-weight: 600; }
 .hero--illustrated::before {
     content: '';
     position: absolute; inset: 0;
-    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.07) 1px, transparent 0);
+    background-image: radial-gradient(circle at 1px 1px, rgba(15,23,42,0.08) 1px, transparent 0);
     background-size: 28px 28px;
     pointer-events: none;
     mask-image: linear-gradient(180deg, #000 30%, transparent 100%);
     -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent 100%);
+}
+/* The .hero::after fade must end above the buttons, or it washes over them;
+   in the dark theme that takes the white-text button below 4.5:1. This hero's
+   bottom padding is 2rem at its smallest (article pages, phones), so the fade
+   is cut to that rather than the padding grown to the fade, which would push
+   the article summary back down. */
+.hero--illustrated::after {
+    height: 2rem;
 }
 .hero--illustrated .hero-inner {
     max-width: 1180px;
@@ -6072,11 +6297,12 @@ main > .incident-pager .pager-index { font-weight: 600; }
     position: relative;
     z-index: 1;
 }
-/* Left, not centred. .hero inherits `text-align: center`, so on this two-column
-   hero the h1 and the paragraph centred while .cta-buttons - a flex row - began
-   at the left, putting three alignments in one block. Left is the right answer
-   here because the illustration already occupies the right column. Below 880px
-   the layout stacks and centring returns. */
+/* Left, not centred. .hero inherits `text-align: center` and .cta-buttons
+   centres its row by default, so without this the h1, the paragraph and the
+   buttons each take a different alignment in one block. Left is the right
+   answer here because the illustration already occupies the right column; the
+   button row is set to start further down. Below 880px the layout stacks and
+   centring returns. */
 .hero--illustrated .hero-text {
     text-align: left;
 }
@@ -6087,18 +6313,27 @@ main > .incident-pager .pager-index { font-weight: 600; }
     font-size: clamp(1.7rem, 3.6vw, 2.6rem);
     line-height: 1.15;
     margin: 0 0 0.75rem;
-    color: #fff;
+    color: #0b1729;
     letter-spacing: -0.015em;
 }
 .hero--illustrated p {
     font-size: clamp(0.95rem, 1.15vw, 1.05rem);
     line-height: 1.55;
-    color: #cbd5e1;
+    color: #334155;
     margin: 0 0 1.25rem;
     max-width: 58ch;
 }
-.hero--illustrated .cta-buttons { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+/* The sky-100 that hero links take on the dark variants (`.hero :is(p, li)
+   a`) would all but vanish on this pale surface. Back to the prose-link
+   colour, which the dark theme's hero link rule also uses; the underline
+   separates it from the slate text. */
+.hero--illustrated :is(p, li) a:not([class]),
+.hero--illustrated :is(p, li) a.glossary-link {
+    color: var(--secondary-color);
+}
+.hero--illustrated .cta-buttons { display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-start; }
 .hero--illustrated .btn-primary {
+    /* Same --action as every other primary CTA; dark ink on sky-400. */
     background: var(--action);
     color: var(--action-ink);
     border: 2px solid var(--action);
@@ -6109,11 +6344,11 @@ main > .incident-pager .pager-index { font-weight: 600; }
     color: var(--action-ink);
 }
 .hero--illustrated .btn-secondary {
-    background: transparent;
-    color: #fff;
-    border: 2px solid #ffffff;
+    background: #ffffff;
+    color: #0b1729;
+    border: 2px solid #0b1729;
 }
-.hero--illustrated .btn-secondary:hover { background: #fff; color: #0b1729; border-color: #fff; }
+.hero--illustrated .btn-secondary:hover { background: #0b1729; color: #ffffff; border-color: #0b1729; }
 .hero-illustration { width: 100%; position: relative; }
 .hero-illustration svg {
     width: 100%;
@@ -6124,9 +6359,12 @@ main > .incident-pager .pager-index { font-weight: 600; }
 @media (max-width: 880px) {
     .hero--illustrated { padding: 2.5rem 1rem 3rem; }
     .hero--illustrated .hero-inner { grid-template-columns: 1fr; gap: 2rem; }
-    /* Stacked: centred again, and the button row centres with it. */
+    /* Stacked: centred again, and the button row and the intro's box centre
+       with it. The intro keeps its 58ch cap, so without auto margins its box
+       stays at the left edge while its lines centre inside it. */
     .hero--illustrated .hero-text { text-align: center; }
     .hero--illustrated .cta-buttons { justify-content: center; }
+    .hero--illustrated p { margin-inline: auto; }
     .hero-illustration { max-width: 420px; margin: 0 auto; }
 }
 
@@ -6143,71 +6381,53 @@ main > .incident-pager .pager-index { font-weight: 600; }
    summary below the fold. Hide it and collapse the two-column grid so the
    title banner is one column. Scoped to main.contribute-article so hubs
    without that class are unaffected; the homepage and sessions use
-   hero--compact and no longer carry an illustration. */
+   hero--compact and no longer carry an illustration.
+
+   With the right column gone, the text takes the article's own measure, so
+   the title, intro and buttons start on the edge the summary box and prose
+   start on, at every width. Left-aligned throughout: the centring below 880px
+   exists for a stacked illustration, which these pages don't show. */
 body:has(main.contribute-article) .hero--illustrated .hero-illustration {
     display: none;
 }
 body:has(main.contribute-article) .hero--illustrated .hero-inner {
     grid-template-columns: 1fr;
+    max-width: var(--measure);
+}
+body:has(main.contribute-article) .hero--illustrated .hero-text {
+    text-align: left;
+}
+body:has(main.contribute-article) .hero--illustrated p {
+    max-width: none;
+}
+body:has(main.contribute-article) .hero--illustrated .cta-buttons {
+    justify-content: flex-start;
 }
 body:has(main.contribute-article) .hero--illustrated {
     padding-bottom: 2rem;
 }
+@media (max-width: 768px) {
+    /* .container's phone padding, so the edge still matches the article's. */
+    body:has(main.contribute-article) .hero--illustrated { padding-inline: 0.75rem; }
+}
 
-/* Light theme variants for the illustrated hero - keep brand accents
-   but lift the base so light mode reads bright on mobile. */
-[data-theme="light"] .hero--illustrated {
-    background:
-        radial-gradient(ellipse 80% 60% at 78% 18%, rgba(56,189,248,0.28) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 80% at 18% 82%, rgba(245,158,11,0.14) 0%, transparent 60%),
-        linear-gradient(135deg, #e0f2fe 0%, #f5fbff 55%, #ffffff 100%);
-    color: #0b1729;
-}
-[data-theme="light"] .hero--illustrated::before {
-    background-image: radial-gradient(circle at 1px 1px, rgba(15,23,42,0.08) 1px, transparent 0);
-}
-[data-theme="light"] .hero--illustrated h1 {
-    color: #0b1729;
-}
-[data-theme="light"] .hero--illustrated p {
-    color: #334155;
-}
-[data-theme="light"] .hero--illustrated .btn-primary {
-    /* Same --action as every other primary CTA; dark ink on sky-400. */
-    background: var(--action);
-    color: var(--action-ink);
-    border-color: var(--action);
-}
-[data-theme="light"] .hero--illustrated .btn-primary:hover {
-    background: var(--action-hover);
-    border-color: var(--action-hover);
-    color: var(--action-ink);
-}
-[data-theme="light"] .hero--illustrated .btn-secondary {
-    background: #ffffff;
-    color: #0b1729;
-    border: 2px solid #0b1729;
-}
-[data-theme="light"] .hero--illustrated .btn-secondary:hover {
-    background: #0b1729;
-    color: #ffffff;
-    border-color: #0b1729;
-}
-[data-theme="light"] .hero-illustration svg {
+/* A blue-tinted shadow on the pale hero. Scoped to this hero: the homepage
+   draws its illustration on a dark hero and keeps the base shadow. */
+.hero--illustrated .hero-illustration svg {
     filter: drop-shadow(0 18px 32px rgba(2,132,199,0.18));
 }
 
-/* Hero illustration tiles - theme-aware fills so they don't look out of place
-   in light mode. The line-icon strokes inside each tile keep their accent
-   colors from the inline SVG. */
-.hero-svg-tile {
-    fill: #1e293b;
-    stroke: rgba(255, 255, 255, 0.18);
-    stroke-width: 1;
+/* Dark theme. `[data-theme="dark"] .hero` already sets the background, the
+   text and both buttons, mostly with !important; these are the parts of the
+   pale defaults above that it does not reach. */
+[data-theme="dark"] .hero--illustrated::before {
+    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.07) 1px, transparent 0);
 }
-[data-theme="light"] .hero-svg-tile {
-    fill: #ffffff;
-    stroke: rgba(15, 23, 42, 0.12);
+[data-theme="dark"] .hero--illustrated .btn-secondary:hover {
+    border-color: #ffffff;
+}
+[data-theme="dark"] .hero--illustrated .hero-illustration svg {
+    filter: drop-shadow(0 18px 40px rgba(0,0,0,0.35));
 }
 
 /* =========================================================================
@@ -6496,7 +6716,10 @@ body:has(main.contribute-article) .hero--illustrated {
 }
 [data-theme="dark"] .signature--final { color: #94a3b8; }
 
-/* Profile-page stats chips (about-shawn-nunley.html hero). */
+/* Profile-page stats chips (about-shawn-nunley.html hero). That hero is
+   .hero--illustrated, pale in light mode, so the chips default to dark ink
+   and the dark theme gives them back the light-on-dark look. Amber-800 keeps
+   the accent hue at 4.5:1 or better on the chip. */
 .profile-stats {
     display: flex;
     flex-wrap: wrap;
@@ -6508,15 +6731,23 @@ body:has(main.contribute-article) .hero--illustrated {
     align-items: baseline;
     gap: 0.375rem;
     padding: 0.375rem 0.75rem;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(15,23,42,0.12);
     border-radius: 999px;
     font-size: var(--fs-14);
-    color: #cbd5e1;
+    color: #334155;
 }
 .profile-stat strong {
-    color: #fbbf24;
+    color: #92400e;
     font-weight: 700;
+}
+[data-theme="dark"] .profile-stat {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.15);
+    color: #cbd5e1;
+}
+[data-theme="dark"] .profile-stat strong {
+    color: #fbbf24;
 }
 
 /* Lede paragraph: emphasized intro on profile/showcase pages. */
@@ -7738,6 +7969,10 @@ h3:hover > .head-anchor,
     :root:not([data-theme]) .toc { background-color: #141e2a; border-left-color: var(--secondary-color); }
     :root:not([data-theme]) .toc h3 { color: #7dccff; }
     :root:not([data-theme]) .toc a { color: var(--secondary-color); }
+    :root:not([data-theme]) :is(.toc, .incident-panel) .page-finder input.page-finder-input,
+    :root:not([data-theme]) :is(.toc, .incident-panel) .page-finder .page-finder-step { border-color: #5b7591; }
+    :root:not([data-theme]) :is(.toc, .incident-panel) .page-finder input.page-finder-input:focus,
+    :root:not([data-theme]) :is(.toc, .incident-panel) .page-finder .page-finder-step:hover { border-color: var(--primary-color); }
     :root:not([data-theme]) .contribution-type { color: #eaf6ff; font-weight: 500; background-color: #1a2535; border-color: #2a3d52; }
     :root:not([data-theme]) .faq-item { background-color: #1a2535; border-left-color: var(--secondary-color); }
     :root:not([data-theme]) .step-box { background-color: #1a2535; border-color: #2a3d52; }
@@ -7787,6 +8022,9 @@ h3:hover > .head-anchor,
     :root:not([data-theme]) .page-meta { color: #94a3b8; border-bottom-color: #1e293b; }
     :root:not([data-theme]) .page-meta strong { color: #e2e8f0; }
     :root:not([data-theme]) .page-meta a { color: #38bdf8; }
+    :root:not([data-theme]) .hero--illustrated::before { background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.07) 1px, transparent 0); }
+    :root:not([data-theme]) .hero--illustrated .btn-secondary:hover { border-color: #ffffff; }
+    :root:not([data-theme]) .hero--illustrated .hero-illustration svg { filter: drop-shadow(0 18px 40px rgba(0,0,0,0.35)); }
     :root:not([data-theme]) table td[style*="background"] { color: #1e293b; }
     :root:not([data-theme]) table th { color: #e2e8f0; }
     :root:not([data-theme]) .pillar-card { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.10); }
@@ -7796,6 +8034,8 @@ h3:hover > .head-anchor,
     :root:not([data-theme]) .threat-tile h4 { color: #e2e8f0; }
     :root:not([data-theme]) .threat-tile p { color: #94a3b8; }
     :root:not([data-theme]) .signature--final { color: #94a3b8; }
+    :root:not([data-theme]) .profile-stat { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); color: #cbd5e1; }
+    :root:not([data-theme]) .profile-stat strong { color: #fbbf24; }
     :root:not([data-theme]) .lede { color: #e2e8f0; }
     :root:not([data-theme]) .contribute-article section > h2::before { background: linear-gradient(90deg, #38bdf8, transparent); }
     :root:not([data-theme]) .pull-quote { background: linear-gradient(135deg, rgba(56,189,248,0.10) 0%, transparent 100%); border-left-color: #38bdf8; color: #e2e8f0; }

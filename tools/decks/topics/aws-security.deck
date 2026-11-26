@@ -1,0 +1,428 @@
+title: AWS Security
+page: aws-security.html
+as-of: 2026-11-25
+promise: AWS owns the physical layer and the hypervisor; you own the configuration, the identity, the data and almost every misconfiguration the attacker exploits.
+
+== The 30-second version
+layout: text
+section: top
+The platform is mature and its failure modes are well known: IAM too broad, S3 buckets too public, IMDS too easy to abuse, CloudTrail missing in some region. Under shared responsibility, you own almost every misconfiguration an attacker exploits.
+notes:
+The page notes that most people who search for cloud security mean AWS security, because AWS is the cloud they run. The platform is mature, the primitives are well documented, and the failure modes are well known: IAM that is too broad, S3 buckets that are too public, IMDS that is too easy to abuse, and CloudTrail that is missing in some region.
+
+If you remember one thing, the page says, remember that the shared responsibility model moves the line. AWS owns the physical layer and the hypervisor. You own the configuration, the identity, the data, and almost every misconfiguration the attacker exploits. Build the muscle first, then let the certifications and the CSPM follow.
+
+This deck follows the page: the Well-Architected Security Pillar, the service catalog, a reference landing zone, the top 10 misconfigurations, the attack paths AWS specifically enables, and how native tools compare with third-party ones.
+
+== Same disciplines, different controls
+layout: compare
+section: why-aws
+col: What breaches AWS environments | Public S3 | IMDSv1 abuse | Wildcard Resource: *
+col: What breaches Azure environments | Over-privileged service principals | Public storage accounts | Exposed managed identities
+The disciplines rhyme across providers, but the controls don't translate one-to-one. AWS and Azure environments are breached through different misconfigurations.
+notes:
+Cloud security exists as a category because the disciplines (identity, network, data, detection and response) rhyme across providers. The controls do not translate one-to-one. An IAM policy in AWS is a different shape from an Azure RBAC role assignment, which is a different shape from a GCP IAM binding. A GuardDuty finding triggers a different response runbook than a Defender for Cloud alert.
+
+The misconfigurations differ too. Public S3, IMDSv1 abuse and wildcard Resource: * breach AWS environments. Over-privileged service principals, public storage accounts and exposed managed identities breach Azure environments.
+
+The page's opinions are vendor-neutral but not provider-neutral. It credits AWS for IAM expressiveness, service breadth, the partner ecosystem and deep documentation. It criticizes defaults that favor functionality over safety, naming that drifts over time, and IAM that is uniquely capable of producing surprising privilege-escalation paths.
+
+== Shared responsibility: the line moves by service
+layout: table
+section: shared-responsibility
+row: Service | What you own
+row: EC2 | A lot: OS, patches, agent posture, security groups
+row: RDS | Less: no OS, but network, IAM and encryption
+row: Lambda | Only the code, the IAM role and a few runtime knobs
+row: S3 | Only the configuration and the data
+AWS owns security of the cloud; you own security in the cloud. On S3, the configuration and the data account for most S3 breaches.
+notes:
+AWS owns security of the cloud: the hardware, the hypervisor, the physical data center, the network backbone, and the parts of managed services you cannot see. You own security in the cloud: your identities, your network configuration, your OS and application patching where applicable, your data and its encryption, and the configuration of every service you turn on.
+
+The line shifts by service, as the table shows. On S3 you own only the configuration and the data, but those two account for most S3 breaches.
+
+The page draws two practical implications. First, every audit conversation begins with you handing the auditor AWS's SOC 2, ISO 27001 and PCI DSS reports, downloaded from AWS Artifact, to cover AWS's half. Then you produce your own evidence for your half: CloudTrail, Config, Security Hub findings and IAM exports. Second, almost every cloud breach you've read about happened on the customer's side of the line. AWS having FedRAMP High doesn't make your S3 bucket private.
+
+== The Security Pillar's seven design principles
+layout: checklist
+section: well-architected
+check: Implement a strong identity foundation
+check: Maintain traceability
+check: Apply security at all layers
+check: Automate security best practices
+check: Protect data in transit and at rest
+check: Keep people away from data
+check: Prepare for security events
+The page calls them mostly common sense, and consistently the right answer when teams disagree.
+notes:
+The AWS Well-Architected Framework codifies what AWS thinks good looks like, and its Security Pillar lays out seven design principles.
+
+None of them are surprising. Their value is that they are documented, prioritized and periodically revised by AWS. So when an engineering team and a security team disagree on direction, asking what the Well-Architected Security Pillar says is a productive question.
+
+The next two slides show what each principle means in practice on AWS.
+
+== Principles 1 and 2 in practice
+layout: compare
+section: well-architected
+col: Identity foundation | Identity Center, or your IdP federated through it | No long-lived IAM users for humans | Least privilege via policies, boundaries, SCPs | Access Analyzer for unintended external access
+col: Traceability | CloudTrail in all regions, org trail to log archive | VPC Flow Logs, ALB and CloudFront logs | Data events for sensitive S3 buckets | Security Hub, then a SIEM
+Identity is the only principle that touches every other pillar. The first 24 hours of an incident run on forensic-quality logs, or on nothing.
+notes:
+A strong identity foundation means centralizing identity through IAM Identity Center, or your identity provider federated through it. Eliminate long-lived IAM users for humans. Enforce least privilege through IAM policies, permission boundaries and Service Control Policies, and use IAM Access Analyzer to surface unintended external access. The page says the identity foundation is the only one that touches every other pillar.
+
+Traceability means CloudTrail turned on in all regions, with an organization trail centralized to a log-archive account. Enable VPC Flow Logs, ALB and CloudFront access logs, and CloudTrail data events for sensitive S3 buckets. Aggregate to Security Hub and ship to a SIEM.
+
+The page's point about logs is blunt: the first 24 hours of an incident is forensic-quality logs, or it's nothing.
+
+== Principles 3 to 7 in practice
+layout: table
+section: well-architected
+row: Principle | In practice
+row: Security at all layers | SCPs, VPC edge, host, workload and data controls
+row: Automate | Findings route to EventBridge; preventive controls ship as code
+row: Protect data | KMS by default, TLS 1.2+, Block Public Access, Macie
+row: Keep people away from data | Query interfaces, redacted exports, Session Manager
+row: Prepare for events | IR runbook, game-days, a pre-staged forensics account
+Each layer assumes the one above will fail. Manual security at scale is no security.
+notes:
+Defense in depth puts SCPs at the org perimeter, network controls at the VPC edge, host controls inside the VPC, application controls in the workload, and data controls under the workload. Single-layer security is single-point-of-failure security.
+
+Automation means detective controls such as Security Hub, Config rules and GuardDuty findings should auto-route to EventBridge, into either ticketing or auto-remediation Lambdas. Preventive controls such as SCPs, permission boundaries and Config conformance packs should ship as code.
+
+For data, encrypt by default through KMS-managed keys, and reach for customer-managed keys where compliance, key rotation or cross-account access policy demands it. Use TLS 1.2+ at every public edge through ACM-issued certificates, S3 Block Public Access at the account level, and Macie for sensitive-data discovery. The page says the encryption is easy and the key-management story is the work.
+
+Humans should not have direct production-data access. Build query interfaces, redacted exports and break-glass workflows that produce audit logs, and use Session Manager rather than SSH bastions for any necessary host access.
+
+To prepare, have an IR runbook and run game-days against it, because the runbook you've never executed will not work the first time. Pre-stage IR tooling in a forensics account with EBS-snapshot copy permissions. Practice the chain: detection in GuardDuty or Security Hub, triage in Detective, evidence collection via API, and containment via SCPs or quarantine VPCs.
+
+== Detection services
+layout: table
+section: services
+row: Service | What it does
+row: GuardDuty | Managed threat detection; the first detective control to turn on
+row: Security Hub CSPM | Findings aggregator and CSPM, running CIS, PCI and NIST standards
+row: Security Hub | Correlated exposure findings with potential attack paths
+row: Detective | Investigation graph for an incident's timeline
+row: Inspector | CVE-based scanning for EC2, ECR images and Lambda
+row: Macie | Per-GB S3 sensitive-data discovery; target the scans
+Security Hub CSPM is the service AWS called Security Hub until it split the name in two. The new Security Hub needs it for posture findings.
+notes:
+The page tours the catalog by function rather than by console category, saying what each service does, when it earns its keep and where it falls short.
+
+GuardDuty reads CloudTrail, VPC Flow Logs, DNS logs, EKS audit logs, S3 events, RDS login activity, EC2 runtime with the agent, and Lambda runtime. The page calls it the first detective control to turn on in every account: findings are high signal and the noise is manageable. Turn it on org-wide with the delegated-admin pattern.
+
+Security Hub CSPM pulls from GuardDuty, Inspector, Macie, IAM Access Analyzer, Config and dozens of partners, runs CIS, PCI, NIST and AWS Foundational Security Best Practices standards, and pushes to EventBridge for routing. It is a single pane of glass for AWS-native findings, and not a substitute for a third-party CNAPP if you are multi-cloud.
+
+The separate Security Hub, generally available since December 2025, correlates Security Hub CSPM, GuardDuty, Inspector and Macie findings into exposure findings, each with a potential attack path and blast radius diagram. It needs Security Hub CSPM enabled to see posture findings, AWS recommends running both, and it covers AWS only.
+
+Detective earns its keep during an incident; spend less time in it day to day. Inspector is a good baseline, though the page says a third-party scanner tends to outperform it on container depth. Macie's per-GB pricing makes scanning everything expensive, so target the data classifications you care about.
+
+== CloudTrail and AWS Config
+layout: compare
+section: services
+col: CloudTrail | The audit log of the AWS control plane | Management events free; data events paid | Org trail to a log-archive account | Most cloud breach investigations begin and end here
+col: AWS Config | Resource-configuration history and rule evaluation | The substrate most Security Hub CSPM controls depend on | On org-wide, aggregated to a central account | Cost grows with resources and rules
+The page calls an org trail to a log-archive account the only correct CloudTrail configuration.
+notes:
+CloudTrail is the audit log of the AWS control plane. Management events are free. Data events for S3, Lambda and DynamoDB are paid. The page says an org trail to a log-archive account is the only correct configuration, and that most cloud breach investigations begin and end in CloudTrail.
+
+AWS Config records resource-configuration history and evaluates rules, with managed and custom rules and conformance packs for frameworks. Most Security Hub CSPM controls depend on it. Turn it on org-wide and aggregate to a central account. Its cost grows with resource count and rule count, so review it periodically.
+
+== Identity services
+layout: table
+section: services
+row: Service | What it does
+row: IAM | Per-account users, roles and policies; uniquely expressive
+row: IAM Identity Center | Workforce identity with short-lived role sessions
+row: IAM Access Analyzer | Free; finds external, public and unused access
+row: IAM Roles Anywhere | X.509 certificates for workloads outside AWS
+row: Cognito | Customer identity for B2C apps, not workforce
+row: RAM | Shares resources across accounts; audit the sharing
+IAM is uniquely capable of producing surprising privilege-escalation paths, and almost every AWS breach involves an IAM misuse. Use Identity Center for all human access.
+notes:
+IAM is the per-account identity service: users, groups, roles, policies, permission boundaries and condition keys. The page calls it uniquely expressive and uniquely capable of producing surprising privilege-escalation paths.
+
+IAM Identity Center, formerly AWS SSO, federates your identity provider (Okta, Entra ID, Google Workspace or its own directory) into AWS Organizations and brokers short-lived role sessions across accounts. The page calls it the right answer for all human access in 2026.
+
+IAM Access Analyzer is free. It surfaces S3 buckets, KMS keys, IAM roles, Lambda functions, SQS queues and Secrets Manager secrets shared with external accounts or the public, plus unused access findings and policy validation. Turn it on org-wide and review the public and external findings weekly.
+
+IAM Roles Anywhere lets workloads on-prem, in other clouds or in SaaS authenticate with X.509 certificates and assume IAM roles. It replaces hard-coded AWS access keys on non-AWS hosts.
+
+Cognito is fine for B2C apps, but not for workforce identity or fine-grained authorization. Resource Access Manager shares resources such as VPC subnets and Transit Gateway attachments within an Organization. The page calls it underused, and warns that over-sharing is a real risk.
+
+== Data services
+layout: table
+section: services
+row: Service | What it does
+row: KMS | The crypto API; most teams under-invest in key policy
+row: CloudHSM | FIPS 140-2 Level 3 hardware for specific regulations
+row: Secrets Manager | Auto-rotated secrets, instead of env-var secrets
+row: ACM | Free, auto-renewed public TLS certificates; Private CA
+row: S3 Block Public Access | On at the account level, on day one
+row: S3 Object Lock | WORM protection for ransomware-resistant backups
+The page calls account-level Block Public Access the most impactful single click in AWS security.
+notes:
+KMS offers AWS-managed keys, free and per service, customer-managed keys at $1/month plus API calls, and external or XKS keys. The key policy is the access-control surface most teams under-invest in. Rotate yearly, restrict kms:Decrypt with condition keys, and alarm on key deletion.
+
+CloudHSM is needed for very specific regulatory requirements, such as some payment-card flows. For almost all customers KMS is the right answer, and the page says not to over-engineer here.
+
+Secrets Manager gives centralized storage with automatic rotation, KMS-backed encryption and IAM-controlled access. Use it instead of environment-variable secrets in Lambda or container task definitions, with Parameter Store for non-secret config.
+
+ACM issues free public certificates for ALB, NLB, CloudFront, API Gateway and other endpoints. Treat the private CA hierarchy with the gravity of any root of trust.
+
+S3 Block Public Access overrides any public ACL or bucket policy. Turn it on at the account level on day one, then carve out the vanishingly rare buckets that need public access through OAC and CloudFront. S3 Object Lock, in Compliance or Governance mode, pairs with versioning and replication to a separate account for backups.
+
+== Network services
+layout: table
+section: services
+row: Service | What it does
+row: Security Groups and NACLs | SGs as the primary control; NACLs for explicit denies
+row: AWS WAF | Managed rule groups for ALB, CloudFront, API Gateway
+row: Shield | Standard free for L3/L4 DDoS; Advanced $3K/month adds L7
+row: PrivateLink | VPC endpoints keep the control plane off the internet
+row: Network Firewall | Suricata-compatible rules at VPC egress, per-GB pricing
+row: DNS Firewall | Blocks known-bad domains; cheap and high-signal
+0.0.0.0/0 on SSH or RDP is a finding, not a configuration.
+notes:
+The VPC is the network primitive: design it once and change it reluctantly, because every workload depends on it. Security Groups are stateful, instance-level and allow-only. NACLs are stateless, subnet-level, and allow and deny. Use Security Groups as the primary control and reach for NACLs only when you need an explicit deny at the subnet boundary.
+
+AWS WAF covers ALB, CloudFront, API Gateway, App Runner and Cognito user pools with AWS-managed and Marketplace rule groups. The page calls it a good baseline, and says that for high-volume apps or sophisticated bot management, Cloudflare and Akamai are typically deeper.
+
+Shield Standard is free and automatic for all AWS customers. Advanced adds L7 protection, the DDoS Response Team and cost-protection credits, and the page says it is worth the spend only for high-profile or revenue-critical public surfaces.
+
+PrivateLink and VPC endpoints keep the control plane off the internet; the page calls them cheap and high-impact. Network Firewall earns its keep for egress filtering, IDS and IPS on north-south traffic, and TLS-SNI blocklisting, but per-GB pricing means thinking hard about scope. Route 53 Resolver DNS Firewall catches malware C2, accidental exfiltration to file-share domains, and the long tail of traffic you should not be sending.
+
+VPC Lattice is worth piloting for service-mesh use cases that don't need a full service mesh. The page calls Network Firewall and Cloud WAN enterprise patterns that small shops over-buy.
+
+== Governance and incident response
+layout: table
+section: services
+row: Service | What it does
+row: Organizations and SCPs | Org-perimeter limits over member-account IAM
+row: Control Tower | Default starting point for new deployments in 2026
+row: AWS Artifact | AWS's compliance reports for the provider half
+row: Audit Manager | Framework-mapped evidence for AWS-centric programs
+row: Incident Manager | Closed to new customers since 7 November 2025
+row: IR runbook library | AWS playbooks on GitHub to fork and game-day
+The page calls SCPs the strongest preventive control in AWS; use them sparingly and explicitly.
+notes:
+Organizations is the account-grouping layer. SCPs are the org-perimeter preventive control: they constrain what IAM principals in member accounts can do, no matter what their IAM policies say.
+
+Control Tower deploys Organizations, OUs, Identity Center, log-archive and audit accounts, an org-wide CloudTrail, a Config aggregator, and a starter set of preventive and detective guardrails.
+
+AWS Artifact is the self-serve portal for AWS's compliance reports, such as SOC, ISO 27001, PCI DSS and FedRAMP. It is the first stop in every auditor conversation. Audit Manager pulls evidence on a schedule and maps it to frameworks; it pairs poorly with multi-cloud GRC, where you would want a dedicated platform.
+
+During an incident, Detective is the next page after a GuardDuty finding triggers a ticket, and Security Hub is the findings aggregator and triage console. Pre-build your insights and saved searches before you need them. Systems Manager Incident Manager applies only to accounts that already have it enabled. AWS's customer IR playbook framework has prebuilt runbooks for credential exposure, IAM compromise and S3 exposure, among others.
+
+== A multi-account landing zone
+layout: figure
+section: landing-zone
+figure: aws-accounts
+Past three accounts, the page's starting shape is a landing zone built on Organizations, Control Tower and Identity Center.
+notes:
+The figure shows the account roles in a landing zone: management, log archive, audit, identity, network, workload and sandbox. As the caption says, nothing but the organization runs in the management account.
+
+The page calls this the pattern that almost every well-run AWS estate converges on, regardless of whether they started there. The landing zones page covers the building blocks in depth.
+
+== What each account does
+layout: table
+section: landing-zone
+row: Account | Role
+row: Management | Organizations, SCPs, billing; nothing else runs here
+row: Log archive | Org trail, Config, access logs; object-locked, versioned
+row: Audit / security tooling | Delegated admin for the security services
+row: Identity Center | Federation to the corporate IdP; permission sets
+row: Network / shared services | Transit Gateway, Network Firewall, private DNS
+row: Workload | One per team or application, per environment
+Sandbox accounts are disposable, time-boxed and auto-cleaned, which keeps engineers out of production accounts. Control Tower deploys most of this in an afternoon.
+notes:
+The management account is the root of the AWS Organization. Its root account is hardened, and humans don't log in to it day to day.
+
+The log archive account receives the org-wide CloudTrail, the Config aggregator, ALB, CloudFront and VPC Flow logs, and S3 access logs. Limited principals can read it and almost none can write.
+
+The audit or security tooling account holds the delegated admins, third-party CNAPP read-only roles and the SIEM ingestion role. The security team operates from here. Identity Center assignments roll out across all accounts from the identity account.
+
+The network account also holds Route 53 private hosted zones and AD Connector or Managed Microsoft AD. Workload accounts connect through RAM-shared subnets or their own VPC peered through Transit Gateway; SCPs prevent destructive actions, and CloudTrail and Config send to log archive. Sandbox accounts get generous SCPs that deny only the truly destructive.
+
+The AWS Landing Zone Accelerator is the CDK and CloudFormation alternative for environments that need bespoke control sets Control Tower can't express.
+
+== Top 10 misconfigurations: the first five
+layout: table
+section: misconfigurations
+row: Misconfiguration | Mitigation
+row: Public S3 buckets | Account-level Block Public Access, Access Analyzer, SCPs
+row: IMDSv1 still enabled | Enforce IMDSv2: account setting, launch templates, Config rule
+row: No MFA on the root account | Hardware MFA, vaulted password, root-login alerts
+row: Wildcard IAM policies | Permission boundaries, policy validation, reviews
+row: Public RDS snapshots | SCP deny, Config rule, Access Analyzer scans
+Drawn from the CIS AWS Foundations Benchmark, AWS Foundational Security Best Practices and public breach post-mortems, roughly in order of how often each shows up in incidents.
+notes:
+Public S3 buckets are still the canonical AWS breach. The fix is a single click; the audit ritual is to verify it's clicked.
+
+IMDSv1 is fetchable via blind SSRF, and SSRFs in cloud workloads are a top finding. IMDSv2 requires a PUT to get a session token before the GET.
+
+Root has unrestricted access, and MFA is the only credential-theft protection. Root MFA is CIS check 1.4, and the page says it should never fail.
+
+Wildcard policies use Action: * or Resource: *, and the page flags them especially in custom policies, though AWS managed policies are not automatically narrow: AdministratorAccess is Action: * on Resource: *. Action: * on a role used by Lambda is a privilege escalation away from total account compromise. Run periodic least-privilege reviews from CloudTrail-derived access reports.
+
+An RDS snapshot shared publicly exposes the entire database. Mitigate with an SCP denying rds:ModifyDBSnapshotAttribute with public, a Config rule, and a weekly scan through IAM Access Analyzer's RDS coverage.
+
+== Top 10 misconfigurations: the last five
+layout: table
+section: misconfigurations
+row: Misconfiguration | Mitigation
+row: Access keys in public repositories | Eliminate long-lived keys; secret scanning
+row: SSH or RDP open to 0.0.0.0/0 | Session Manager, or a fixed source range
+row: Default VPC in production | Delete it in every region of every account
+row: CloudTrail not in all regions | Org trail on all regions, log-file validation
+row: Root used for daily operations | Identity Center for humans; alarm on every root sign-in
+All ten are single lines in a Security Hub or CSPM dashboard. They keep showing up because defaults favor functionality, org-level controls are opt-in, and turnover leaves new accounts without central guardrails.
+notes:
+Long-lived IAM user keys committed to GitHub get scraped within minutes, and AWS's own scanners catch many, but not all. Eliminate long-lived keys: Identity Center for humans, IAM roles for workloads, Roles Anywhere for non-AWS workloads. Add GitHub secret scanning, and GitGuardian or TruffleHog in CI.
+
+Open SSH and RDP draw endless scanning. Better still, the page says, don't SSH at all.
+
+The default VPC has overly permissive defaults, an internet gateway and a default security group allowing internal traffic. Deleting it forces teams to think about networking when they create one.
+
+CloudTrail also needs management events enabled. Attackers pivot to disabled regions. The mitigation is an org-wide trail covering all regions, including future ones, delivering to the log-archive account with log-file validation.
+
+Daily use of root means there's no IAM model.
+
+All ten are trivially detectable, and they keep showing up anyway, because the defaults favor functionality, the org-level controls are opt-in, and turnover means new accounts get spun up without the central guardrails until somebody notices.
+
+== IMDS abuse via SSRF
+layout: compare
+section: attack-paths
+col: IMDSv1 | An SSRF reaches the Instance Metadata Service | It reads the instance role's temporary credentials | Works from workloads on EC2, ECS or EKS
+col: IMDSv2 | Requires a session token via PUT first | Most SSRF primitives can't make that PUT
+Capital One (2019) ran this exact chain: an SSRF through a misconfigured WAF read IMDSv1 credentials and exfiltrated 100M+ customer records from S3. Enforce IMDSv2 everywhere.
+notes:
+The page's attack paths are the ones AWS specifically enables. They are not novel, and many derive from generic SSRF, supply-chain or credential-theft chains, but the AWS-specific mechanic is the part worth knowing.
+
+A server-side request forgery in a workload running on EC2, ECS or EKS pivots to the Instance Metadata Service and reads the instance role's temporary credentials. IMDSv2 mitigates this by requiring a session token via PUT, which most SSRF primitives can't make. So enforce IMDSv2 everywhere.
+
+The real-world example is the Capital One breach in 2019, which ran this exact chain: an SSRF through a misconfigured WAF read IMDSv1 credentials and exfiltrated 100M+ customer records from S3.
+
+== Attack paths through IAM
+layout: table
+section: attack-paths
+row: Path | Mitigation
+row: Privilege escalation chains | Permission boundaries, unused-access findings, reviews
+row: AssumeRole pivoting across accounts | Review external-trust policies Access Analyzer finds
+row: iam:PassRole abuse | Constrain with iam:PassedToService and resource ARNs
+Permissions like iam:CreateAccessKey on another user, or iam:PassRole plus lambda:CreateFunction, let an attacker with limited access escalate. Tools like Pacu and PMapper enumerate these chains.
+notes:
+Permissions like iam:CreateAccessKey on another user, iam:AttachRolePolicy on a role you can assume, iam:PassRole plus lambda:CreateFunction, and a long list of others let an attacker with limited initial access escalate.
+
+AssumeRole pivoting works when a trust policy allows a too-broad source, such as arn:aws:iam::*:root, or doesn't constrain sts:ExternalId for vendor cross-account roles. Then accounts you don't control can assume the role.
+
+With iam:PassRole, an attacker who can pass a more-privileged role to a service such as Lambda, EC2, ECS, Glue or SageMaker escalates by creating a resource that runs as that role.
+
+== Attack paths through secrets, snapshots, SSM and logs
+layout: table
+section: attack-paths
+row: Path | Mitigation
+row: Lambda env-var secrets | Secrets Manager or Parameter Store, fetched at runtime
+row: EBS direct API exfil | SCP restriction, alerts on the API calls
+row: SSM RunCommand abuse | Tight SSM permissions, alerts, SSM logs to the SIEM
+row: CloudTrail tampering | Org trail in a separate account, validation, Object Lock, alerts
+EBS direct API reads don't trigger common detections. An attacker with ssm:SendCommand runs commands as root without opening an SSH port.
+notes:
+Secrets in Lambda environment variables are readable by anyone with lambda:GetFunctionConfiguration, a much broader permission than expected. Fetch them at runtime instead, and restrict the function's KMS key policy.
+
+The EBS direct APIs, ListSnapshotBlocks and GetSnapshotBlock, let a sufficiently privileged principal read snapshot data without ever attaching a volume, and the calls don't trigger common detections. Restrict them via SCP, alert on the API calls, and review snapshot-sharing policies.
+
+An attacker with ssm:SendCommand on EC2 instances executes commands as root without ever opening an SSH port, and the forensic trail is in SSM rather than syslog.
+
+A compromised admin can stop logging, delete trails or modify retention. The mitigations are an org trail in a separate log-archive account, log-file validation, S3 Object Lock on the trail bucket, and alerting on trail-modification API calls.
+
+== Threat detection across three clouds
+layout: table
+section: comparisons
+row: Dimension | GuardDuty | Defender for Cloud | Security Command Center
+row: Posture | Separate: Security Hub CSPM | Bundled: Defender CSPM | Bundled: SCC Premium
+row: Attack paths | Security Hub, AWS only | In Defender CSPM | SCC Premium simulations
+row: Multi-cloud | AWS only | Multi-cloud; AWS and GCP supported | Enterprise tier, shutting down 21 May 2027
+row: When it wins | Single-cloud AWS shops disciplined about tuning | Microsoft-heavy enterprises | GCP-first shops
+The page calls its comparison tables deliberately opinionated: calibrate them against your own environment.
+notes:
+The page says the right tool is the one that fits your shape, and that it is rarely AWS-only or third-party-only.
+
+This table compares the native threat detection services. On pricing, GuardDuty charges per GB of analyzed logs plus per million events, Defender for Cloud per resource per month in plan tiers, and Security Command Center's Premium tier per asset. GuardDuty covers CloudTrail, VPC Flow, DNS, EKS, S3, RDS, Lambda and EC2 runtime. Defender for Cloud covers VMs, containers, storage, databases, App Service, key vault, DNS, APIs and AI. Security Command Center covers VMs, containers, IAM and storage, and the page calls it weaker on network.
+
+The page also compares AWS WAF with Cloudflare and Akamai. AWS WAF adds little latency if the origin is AWS, and wins for AWS-only public surfaces and cost-sensitive teams. And it compares Inspector with two third-party scanners, where Inspector wins for cost-sensitive AWS-only shops.
+
+== Native or third-party?
+layout: table
+section: native-vs-third-party
+row: Capability | Native usually wins | Third-party usually wins
+row: Attack-path graph | Security Hub, AWS only | CNAPP graph, across clouds
+row: Framework mappings | Security Hub CSPM, Config packs | CNAPP, deeper mappings
+row: GRC platform | Audit Manager, AWS-only programs | Vanta, Drata, OneTrust, multi-cloud GRC
+row: Secrets | Secrets Manager, AWS workloads | Vault, Doppler, 1Password, hybrid
+row: WAF | AWS WAF, AWS-only surfaces | Cloudflare or Akamai, perf and bots
+row: DDoS | Shield Standard, free | Shield Advanced or third-party, high-risk
+Start native, and add a third-party tool when you outgrow native or go multi-cloud.
+notes:
+Every AWS security program faces this question. For a single-cloud AWS environment with a small team, the page's native stack is Security Hub, Security Hub CSPM, GuardDuty, Inspector and Macie. For multi-cloud, Kubernetes or container depth, and SIEM, the page's table lists only third-party tools.
+
+The bias, in the page's words, should be to start native, especially for detective controls in a single-cloud AWS environment, and earn the right to add a third-party tool when you have outgrown what native provides or gone multi-cloud.
+
+The cost of operating an over-stack of tools is real: license, integration, maintenance and operator fatigue. The page says having everything but using none of it well is consistently worse than having less and using it well.
+
+== The certification ladder
+layout: table
+section: certifications
+row: Certification | Exam | What it gives you
+row: Cloud Practitioner | CLF-C02 | Vocabulary; skip after a year in AWS
+row: Solutions Architect Associate | SAA-C03 | Intuition the security exam assumes
+row: Security Specialty | SCS-C03 | The deep end; most cloud security engineer job descriptions list it
+row: Solutions Architect Professional | SAP-C02 | Optional; multi-account, enterprise patterns
+row: Advanced Networking Specialty | ANS-C01 | For whoever owns the network plane
+Certifications organize your study and show baseline literacy, but won't get you a job by themselves. Pair them with a home lab: the exam tests recognition, and the job tests execution.
+notes:
+The page lays out a pragmatic ladder for a security engineer.
+
+Cloud Practitioner is foundational vocabulary. Skip it if you've worked in AWS for a year, though it is useful for non-engineering stakeholders who need to talk to the security team. Solutions Architect Associate covers networking, storage, compute and IAM at the associate level; the page says the security exam will frustrate you without it.
+
+Security Specialty covers IAM, KMS, detective controls, infrastructure security, and identity, data and IR. It is the certification most cloud-security-engineer job descriptions list, and the page says it moves the dial on hiring conversations.
+
+Solutions Architect Professional is optional but valuable for staff and principal roles that design landing zones, migration strategies and cross-account network architectures. Advanced Networking suits engineers who own Transit Gateway, Direct Connect, Cloud WAN, IPAM and hybrid DNS.
+
+For labs, the page names CloudGoat, flAWS, AWS Skill Builder and a personal sandbox account where you can break things.
+
+== Is AWS more secure than Azure or GCP?
+layout: question
+section: faq
+All three meet the major frameworks and run mature security programs. Where do the real differences lie, and what decides the outcome?
+notes:
+This is a question from the page's FAQ. Ask it and let the room answer before moving on.
+
+== No cloud is categorically more secure at the platform level
+layout: answer
+section: faq
+The differences are in defaults, service granularity and ecosystem. Security outcomes are determined by the operator, not the provider. Pick the cloud your team can run safely.
+notes:
+No cloud is categorically more secure than another at the platform level. All three meet the major frameworks, such as FedRAMP High, ISO 27001, PCI DSS and HIPAA, and run mature security programs.
+
+The differences are in defaults, service granularity and ecosystem. For AWS, the page points to the size of its service surface, which brings both more capability and more sharp edges, a mature partner ecosystem, and IAM that is uniquely powerful and uniquely easy to misuse.
+
+Security outcomes are determined by the operator, not the provider. Pick the cloud your team can run safely.
+
+== Do I need a CSPM if I already have Security Hub?
+layout: question
+section: faq
+AWS now has two services here, Security Hub CSPM and the separate Security Hub. Think about how many clouds you run, and how much time you have to tune.
+notes:
+This is the second FAQ question. Again, ask it before showing the answer.
+
+== Native is fine for single-cloud, disciplined teams
+layout: answer
+section: faq
+If you are single-cloud AWS and disciplined, Security Hub CSPM plus Security Hub is fine. If you run multi-cloud, you want a third-party CNAPP, with attack paths that cross cloud boundaries.
+notes:
+Security Hub CSPM, the service previously called Security Hub, is a credible CSPM for single-cloud AWS shops that have time to tune it. The separate Security Hub, generally available since December 2025, correlates findings into exposure findings with a potential attack path and blast radius diagram, so the native stack now draws attack paths within AWS.
+
+A third-party CNAPP earns its license cost with multi-cloud coverage, agentless workload scanning, attack paths that cross cloud boundaries, Kubernetes and container depth, identity-graph correlation across clouds, and a more polished operator UX.
+
+So if you are single-cloud AWS and disciplined, Security Hub CSPM plus Security Hub is fine. Multi-cloud, you want the third-party tool.

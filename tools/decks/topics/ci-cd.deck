@@ -1,0 +1,439 @@
+title: CI/CD for Cloud Deployments
+page: ci-cd.html
+as-of: 2026-11-25
+promise: A CI/CD pipeline turns a developer's commit into running cloud infrastructure, automatically and repeatably, with a security boundary at every step.
+
+== The 30-second version
+layout: text
+section: top
+A CI/CD pipeline turns a commit into running cloud infrastructure, automatically and repeatably, with a security boundary at every step. CI builds and tests the change. CD ships it to a cloud account.
+notes:
+CI, continuous integration, builds and tests the change. CD, continuous delivery or deployment, ships it to a cloud account.
+
+The modern shape: a git push triggers a pipeline runner such as GitHub Actions, GitLab CI, Jenkins, CodePipeline, Cloud Build or Azure DevOps. The runner builds an artifact, runs tests and security scans, then assumes a short-lived cloud role through OIDC federation and applies the change.
+
+There are no long-lived access keys anywhere. Every step is in version control, and every step is auditable. The pipeline is the only identity allowed to change production.
+
+== CI, continuous delivery and continuous deployment
+layout: compare
+section: what-is
+col: Continuous integration | Frequent merges to a shared branch | Build and test on every merge
+col: Continuous delivery | Every passing build shipped to staging | A human releases to production
+col: Continuous deployment | Every passing build released to production | Checks and progressive rollout are the safety net
+The shape: commit, build, test, scan, deploy, automated end to end with short-lived, tightly scoped cloud credentials.
+notes:
+Strip the marketing off and CI/CD is two related practices, glued together by an automated pipeline.
+
+Continuous integration means merging code changes into a shared branch frequently, many times per day per developer, with an automated build and test on every merge. Problems surface in minutes rather than at the end of a multi-week integration phase, which is what makes "main is always green" a realistic goal.
+
+Continuous delivery extends the pipeline so every passing build is packaged into a deployable artifact and shipped to a staging environment. A human still clicks "release to production." Continuous deployment goes one step further and releases every passing build to production. In practice the acronym "CD" stretches over both.
+
+None of this is cloud-specific in principle. It became essential for cloud because cloud infrastructure is itself code (every account, every network, every IAM role), and the pipeline is the only sustainable way to keep that code in sync with reality across dozens of environments.
+
+== Deploying from a laptop or from a pipeline
+layout: compare
+section: why
+col: Team A, a laptop | Long-lived access key with broad permissions | Terraform state on someone's hard drive | A leaked key usually reaches most of the account
+col: Team B, a pipeline | OIDC session that lasts 15 minutes | Plan reviewed in a pull request, remote state with locking | Rolling back is reverting a commit
+The pipeline puts three security principles into practice at once: least privilege, separation of duties and auditability.
+notes:
+Two teams run the same workload in the cloud. Team A deploys from a developer laptop holding a long-lived access key. When the original engineer goes on vacation, nobody knows what version is in prod or how to roll it back. When a credential leaks to GitHub, the blast radius is everything that engineer had access to, usually most of the account.
+
+Team B deploys from a pipeline that authenticates through OIDC for a 15-minute session and applies a Terraform plan reviewed in a pull request. Every deploy is in git history. When a developer's laptop is compromised, the attacker gets nothing useful for production, because the developer cannot deploy directly.
+
+Least privilege: the pipeline's role has exactly the permissions one workload's deploy needs, and exists only for the seconds it runs. Separation of duties: humans review code, the pipeline executes it, and no human has standing write access to production. Auditability: every production change has a commit, a reviewer and a pipeline run id.
+
+It pays back hard on day 200, when an org has 50 workloads in 50 accounts: every deploy follows the same shape, and one change to the template improves all 50.
+
+== Anatomy of a pipeline: stages 1 to 4
+layout: table
+section: anatomy
+row: Stage | What happens
+row: 1. Source and trigger | A git event starts the run; the commit SHA is the unit of work
+row: 2. Build | Package the deploy artifact, pin every dependency version, cache aggressively
+row: 3. Test | Fast feedback first; a flaky test fails the build
+row: 4. Scan | SAST, SCA, secret, container and IaC scanning, plus an SBOM
+Every credible cloud-deploy pipeline has the same eight stages. The runner differs; the shape doesn't.
+notes:
+The trigger is a git event: a push, a merge to main, a tag or a manual dispatch. Every later stage refers back to the commit SHA.
+
+The build compiles source and packages the deploy artifact, such as a container image, a zip, a Terraform plan or a Helm chart.
+
+Tests run unit, integration and contract tests, with fast feedback first and slower end-to-end tests last. Fail closed: a flaky test means the build fails, not that the test gets ignored.
+
+The scan stage runs SAST on source, SCA on dependencies, secret scanning on the diff, container scanning on the image and IaC scanning on the Terraform, Bicep or CloudFormation, and generates an SBOM.
+
+== Anatomy of a pipeline: stages 5 to 8
+layout: table
+section: anatomy
+row: Stage | What happens
+row: 5. Sign and attest | Sign with Cosign or Sigstore; attach SLSA provenance
+row: 6. Authenticate to cloud | OIDC exchange for short-lived credentials: one repo, one branch, one role
+row: 7. Deploy | Apply the change, with canary or blue/green rollout where possible
+row: 8. Verify and observe | Smoke tests, watch for a defined window, auto-rollback on regression
+Small projects can collapse stages 3, 4 and 5 into one job. Make a missing stage a deliberate choice, because the gaps are where breaches live.
+notes:
+The artifact is signed with Cosign or Sigstore, and SLSA provenance attestations let the deploy target verify what built it.
+
+Authentication is an OIDC token exchange for short-lived credentials, scoped to one repo, one branch and one role. No long-lived access keys are stored in CI.
+
+Deploy is Terraform apply, helm upgrade, gcloud run deploy, az deployment, kubectl apply, or an ECS, Lambda or Functions update, with progressive rollout such as canary or blue/green where possible.
+
+Verify runs smoke tests against the deployed environment and watches error rates, latency and security findings for a defined window, rolling back automatically on regression.
+
+A pipeline missing any of these stages isn't necessarily wrong, but it should be a deliberate choice rather than an omission.
+
+== OIDC instead of a key in CI
+layout: figure
+section: oidc
+figure: oidc-exchange
+If you take one thing away: do not store long-lived cloud access keys in your CI system. Use OIDC federation instead.
+notes:
+The runner presents a short-lived token that names the repo, ref and run. The cloud checks the subject and returns credentials that expire.
+
+The pattern works the same way on every cloud. The CI runner is configured as an OIDC identity provider, and every workflow run gets a unique, short-lived signed JWT describing the repo, branch, workflow, run and actor. The cloud side trusts that issuer for specific subject claims; AWS IAM, Azure Entra and Google Cloud all support this out of the box. When the pipeline deploys, it presents its token, the cloud verifies the issuer's signature and the subject, and returns credentials lasting 15 minutes to 1 hour, scoped to a specific role. Then they expire.
+
+So there is nothing in CI to rotate and nothing long-lived to leak, and every cloud API call carries the OIDC subject in CloudTrail, the Azure activity log or Cloud Audit Logs.
+
+Long-lived access keys in CI are now considered a legacy pattern. The Travis CI (2022) and CircleCI (2023) leaks both exposed them.
+
+== The subject claim is the security boundary
+layout: table
+section: oidc
+row: Trust policy subject | Who can assume the role
+row: repo:org/repo:ref:refs/heads/main | The main branch; not a fork or feature branch
+row: repo:org/repo:* | Every workflow run in the repo, including pull_request_target jobs that fork PRs can trigger
+row: Wildcard in the repo name | Every repo in the org
+row: Wildcard in the owner | Repositories you don't control
+Scope to the main branch at minimum, and to environment claims if your CI supports them. Never accept a wildcard subject.
+notes:
+When you configure OIDC on the cloud side, the subject claim is what stands between your production role and any random pull request.
+
+Scoped to repo:myorg/myrepo:ref:refs/heads/main, the trust stops a workflow from a fork or feature branch assuming the production role. Scope to ref:refs/heads/main at minimum, and to specific environment: claims if your CI supports them.
+
+Never accept a wildcard subject. repo:org/repo:* leaves the role open to every workflow run in your repo, including pull_request_target jobs that fork PRs can trigger. A wildcard in the repo name opens it to every repo in the org, and one in the owner opens it to repositories you don't control.
+
+== Other pipeline secrets, in order of preference
+layout: table
+section: pipeline-secrets
+row: Preference | Option
+row: First | OIDC or workload identity straight to the destination
+row: Second | Fetch from a vault at job start, using the pipeline's OIDC identity
+row: Third | The CI's own secret store, at the narrowest scope it supports
+row: Never | A static value in plaintext anywhere
+Most pipelines also need SaaS tokens, signing keys, database credentials and publish tokens. Prefer the option that leaves no static secret in CI at all.
+notes:
+OIDC handles authenticating the pipeline to the cloud, but most real pipelines also need third-party API tokens, signing keys, database credentials for migrations, webhook secrets and npm or PyPI publish tokens.
+
+First choice: federate directly. Most cloud APIs and a growing number of SaaS providers, such as npm, PyPI and Docker Hub through trusted publishing, accept OIDC tokens. Second: authenticate to Vault, AWS Secrets Manager, Azure Key Vault or GCP Secret Manager with the pipeline's OIDC identity, hold the secret in memory for the job and never persist it. The secret rotates in the vault, and the next run picks up the new value. In Azure DevOps, a variable group linked to Key Vault reads its values from Key Vault at runtime; with a managed-identity service connection, no static secret exists in Azure DevOps.
+
+Third, when neither of those is possible: the CI provider's store, environment-scoped rather than repo-wide, with required approval on the environment. GitHub environment secrets belong to a named environment that can require reviewers, restrict deployment branches and add a wait timer. GitLab protected variables reach only jobs on protected branches and tags.
+
+Never plaintext: workflow files, comments, debug logs and Slack DMs to the on-call engineer are how every credential-leak postmortem begins.
+
+== Self-hosted runner hygiene
+layout: checklist
+section: pipeline-secrets
+check: Ephemeral runners only: one job per VM, destroyed after
+check: No repo secrets or production OIDC for a fork's pull_request workflow
+check: pull_request_target only with extreme care, never to run untrusted code
+check: Allow your registry, package mirrors and cloud APIs; deny other egress
+Self-hosted runners are the most-abused secret-exposure surface in CI.
+notes:
+The compromise pattern is consistent. A runner persists between jobs, a malicious PR runs cat ~/.aws/credentials or scans environment variables, exfiltrates whatever the previous job left behind, and the attacker reuses it indefinitely.
+
+Ephemeral runners break that: one job per VM, destroyed afterwards. Actions Runner Controller on Kubernetes, Philips' AWS runner module and the GitLab Kubernetes executor all do this.
+
+Block fork PRs from privileged jobs. Use pull_request_target only with extreme care, and never to run untrusted code.
+
+The runner should not reach arbitrary internet destinations during a build. Allowlist your registry, package mirrors and cloud APIs and deny the rest; StepSecurity Harden-Runner makes this enforceable on GitHub-hosted runners.
+
+== Secret-scanning gates
+layout: table
+section: pipeline-secrets
+row: Gate | What it does
+row: Pre-commit | TruffleHog, Gitleaks or detect-secrets on the developer's machine
+row: Push protection | Server-side block at git push, on GitHub or GitLab
+row: CI scan | The same tool as a required check that blocks merge
+row: Historical sweep | Quarterly TruffleHog scan of full git history in every repo
+row: Auto-revoke | Some providers revoke a leaked token found in a public repo
+Scanners are the safety net, not the strategy. If they catch things regularly, the upstream needs fixing.
+notes:
+Pre-commit and CI scanners catch the slip-ups the workflow should have prevented.
+
+A pre-commit hook is the cheapest place to catch a secret; it runs on the developer's machine before commit. Push protection blocks the push server-side; GitHub push protection and GitLab Secret Detection with pre-receive enforcement both do this, and the page says to enable GitHub's org-wide. Run the same tool as a required CI check on every PR.
+
+The historical sweep covers every repo, private ones included, because old secrets in old commits are still findable.
+
+Some providers, among them GitHub Advanced Security, AWS, Stripe and Slack, will auto-revoke a leaked token they detect in a public repo. Know what is automatic and what requires you to act.
+
+== AWS, Azure and GCP side by side
+layout: table
+section: comparison
+row: Building block | AWS | Azure | GCP
+row: Native CI/CD | CodePipeline, CodeBuild, CodeDeploy | Azure DevOps Pipelines | Cloud Build, Cloud Deploy
+row: OIDC federation | IAM OIDC provider, role trust | Entra ID workload identity federation | WIF pool and provider
+row: Progressive delivery | CodeDeploy canary, linear, all-at-once | Pipelines strategies, Container Apps revisions | Cloud Deploy rollouts, Cloud Run traffic splits
+row: Secret store | Secrets Manager | Key Vault | Secret Manager
+Most teams run a third-party CI runner for build and test, and the cloud's native primitives to deploy.
+notes:
+Each cloud ships a native CI/CD toolchain, but most teams use a hybrid: a third-party runner such as GitHub Actions or GitLab for build and test, and the cloud's native primitives for deploy and runtime. The capabilities map nearly one-to-one.
+
+This is an excerpt of the page's table. The page's version also covers source hosting, artifact registries, container deploy targets, native and vendor-neutral IaC, and GitOps options. Terraform or OpenTofu and Pulumi work on all three.
+
+Anyone who has built a CI/CD pipeline on one cloud has 80% of the conceptual model needed to build one on another. The remaining 20% is the IAM, Entra or Workload Identity specifics and each platform's deploy primitives.
+
+== AWS: OIDC and the deploy role
+layout: checklist
+section: aws
+check: One deploy role per environment; the prod role trusts only main
+check: A permission boundary, so the deploy role cannot escalate
+check: CodeDeploy canary or linear rollouts on Lambda and ECS, with alarm rollback
+check: Amazon Inspector continuous scanning on every ECR push
+check: Terraform state in a versioned S3 bucket with use_lockfile = true
+Create an IAM OIDC provider for GitHub's token issuer and a role whose trust requires your repo and branch. The workflow assumes it with no access keys.
+notes:
+AWS gives you two real choices: build the pipeline entirely inside AWS, or run CI in GitHub Actions or GitLab and call out to AWS for the deploy. The second is more common in practice, because most teams already live in GitHub.
+
+For the OIDC setup, create an IAM OIDC identity provider for token.actions.githubusercontent.com, and a role whose trust policy requires the subject to match your repo and branch, for example repo:myorg/myrepo:ref:refs/heads/main. In the workflow, aws-actions/configure-aws-credentials takes role-to-assume and no access key id or secret access key.
+
+Production, staging and sandbox each get a role. The permission boundary lets the role deploy your workload while blocking escalation: it cannot create new IAM users, change its own trust policy or disable CloudTrail. The Terraform state bucket is restricted to the deploy role, and Terraform 1.11 deprecated DynamoDB lock tables.
+
+The in-AWS path, CodePipeline orchestrating, CodeBuild building and CodeDeploy rolling out, is heavier to set up than GitHub Actions with OIDC, but keeps the whole pipeline inside the AWS account boundary, which is useful for FedRAMP and regulated workloads.
+
+== Azure: workload identity federation
+layout: checklist
+section: azure
+check: CI outside Azure: a service principal with federated credentials
+check: CI inside Azure: prefer a managed identity, which needs no federation
+check: Contributor on the workload's resource group, not the subscription
+check: Pipelines environments with a named approver for production
+check: Container Apps revisions with traffic splits for cutovers
+Add a federated identity credential to an Entra ID app registration. Azure/login then takes client-id, tenant-id and subscription-id, with no client-secret.
+notes:
+Azure customers split roughly between Azure DevOps Pipelines and GitHub Actions. Both authenticate to Azure the same way, through workload identity federation.
+
+Create an app registration in Entra ID and add a federated identity credential that trusts your CI's OIDC issuer: GitHub's token issuer for GitHub Actions, or the Azure DevOps issuer URL. Assign the app the minimum RBAC role on the target subscription or resource group.
+
+For a self-hosted runner on an Azure VM, prefer a managed identity, which needs no federation. Scope the deploy identity to the workload's resource group rather than the whole subscription. Production deploys in Azure Pipelines environments require a named approver, enforced by the pipeline. Container Apps keeps multiple revisions live with traffic split between them, for blue/green-style cutovers.
+
+For IaC, Bicep is the modern path, ARM templates work but are verbose, and Terraform with the AzureRM provider is the vendor-neutral option most multi-cloud orgs use.
+
+The configuration lives in Entra rather than IAM, but the security shape matches OIDC on AWS: short-lived tokens, no client secrets, scoped to a repo and branch.
+
+== GCP: Workload Identity Federation
+layout: checklist
+section: gcp
+check: Never download a service account key; enforce it with Org Policy
+check: Binary Authorization admits only images your pipeline signed
+check: Cloud Run revisions: send 1% of traffic, then ramp up
+check: Cloud Deploy promotes dev, staging, prod with approval gates
+check: Artifact Registry scanning on every push, into Security Command Center
+Cloud Build runs builds as a service account, so fully-in-GCP pipelines need no federation. GitHub Actions uses Workload Identity Federation instead of JSON keys.
+notes:
+Google ships Cloud Build for CI, Cloud Deploy for continuous delivery to GKE and Cloud Run, and Artifact Registry for artifacts. Cloud Build runs each build as a service account, and Google recommends specifying your own.
+
+For GitHub Actions, create a workload identity pool and a provider for GitHub's token issuer, with attribute mappings that pull the GitHub subject into a Google identity. Let the pool subject impersonate the service account, scoped to your repo. In the workflow, google-github-actions/auth takes workload_identity_provider and service_account.
+
+Service account keys are effectively long-lived secrets, so use only WIF or attached service accounts; the Org Policy iam.disableServiceAccountKeyCreation enforces this org-wide. Binary Authorization's attestor-based admission rejects unsigned images at deploy time on GKE and Cloud Run. Rolling back a Cloud Run revision is one gcloud run services update-traffic.
+
+For a workload that lives entirely on GCP with containerized deploys, the page calls Cloud Build, Cloud Deploy and Artifact Registry the path of least resistance.
+
+== Deployment strategies
+layout: table
+section: strategies
+row: Strategy | How it works | If it goes wrong
+row: All-at-once | Replace every instance simultaneously | Outage during the swap
+row: Rolling | Replace instances one batch at a time | Slow rollback, back through the same process
+row: Blue/green | Deploy to the idle environment, smoke-test, flip all traffic | Instant rollback: flip back to blue
+row: Canary | Send 1%, ramp up while watching metrics | Automatic rollback on metric regression
+Pick the simplest strategy that meets the workload's blast radius. A static site can do all-at-once. A payments service should not.
+notes:
+The cloud makes better strategies cheap: elastic capacity, traffic-shifting load balancers and managed control planes.
+
+All-at-once is fast and simple and needs no extra capacity. It is defensible only for stateless workloads with short startup time, in non-prod, or behind a feature flag.
+
+Rolling replaces instances in batches, for example 10%, 25%, 50%, then 100%, with no extra capacity and no outage, but rollback is slow. It is the default for Kubernetes deployments.
+
+Blue/green doubles infrastructure during the deploy window, and is the best fit for stateful workloads where partial rollouts are risky.
+
+Canary runs the new version alongside the old, from 1% to 5%, 25% and 100% over minutes or hours, and rolls back on metric regression. It needs reliable signals, because a flaky SLO means false rollbacks. The page calls it the safest strategy when you have the observability to support it.
+
+Functions use version aliases with traffic weights. ECS, Fargate, Cloud Run and Container Apps split traffic by revision. Kubernetes rolls by default and does canary through Argo Rollouts, Flagger or service-mesh weights.
+
+== Securing the pipeline itself
+layout: checklist
+section: security
+check: OIDC for cloud auth; no long-lived keys stored in CI
+check: Branch protection on the branch the deploy role trusts
+check: Actions and runners pinned by commit SHA, not tag
+check: CODEOWNERS on .github/workflows/, with security-team review
+check: Ephemeral runners, isolated from environments they don't deploy to
+check: Secrets scoped to environments that require approval
+check: Artifacts signed, and verified by the deploy target
+The pipeline's credentials are the keys to production. Treat it like a privileged production system, because it is one.
+notes:
+The page calls the pipeline the soft underbelly of cloud security: its source artifacts are what runs in prod, and its build environment is where supply-chain attacks land.
+
+The deploy role trusts the main branch, so if anyone can push to main, the trust is meaningless; require pull requests, code review and passing checks. Tags are mutable, so an action pinned to a version tag can be replaced under your feet; a commit SHA cannot, and Dependabot updates the pin atomically. Workflow files are code that runs with deploy credentials.
+
+SolarWinds-style build-pipeline attacks rely on long-lived shared runners. The SVR breached SolarWinds' build system and injected the SUNBURST backdoor into signed Orion updates that up to 18,000 customers downloaded, by SolarWinds' count.
+
+Two more items: generate an SBOM and SLSA provenance for every build, so that when a CVE drops, "which prod systems are affected" is a query, not a meeting. And send pipeline logs to the same SIEM as CloudTrail, Azure activity and Cloud Audit Logs.
+
+== The developer workstation is part of the supply chain
+layout: text
+section: workstation
+Editor extensions, packages a local build installs and AI coding agents run with the developer's own permissions. They can reach the source, SSH keys, cloud CLI sessions and the tokens that push to the branch your deploy role trusts.
+notes:
+The pipeline builds whatever reaches it, and most of that is written on a developer's laptop. That machine runs editor extensions, the packages a local build installs, and AI coding agents with shell access.
+
+They all run with the developer's own permissions. VS Code's documentation states that the extension host has the same permissions as VS Code itself.
+
+The next slides cover an incident from October 2026.
+
+== Cursor's extension marketplace, October 2026
+layout: timeline
+section: workstation
+event: Collect | Host details; names, not values, of up to 40 variables like KEY or TOKEN
+event: Key | Attacker's SSH key appended to authorized_keys; tried to enable SSH
+event: Tunnel | Tried an ssh -N -R reverse tunnel, retrying 60 seconds after exit
+event: Persist | A LaunchAgent on macOS, a scheduled task on Windows
+event: Send | Host details sent to the attacker after a delay
+On October 29, 2026, Cursor's marketplace served tampered builds of Anthropic's Claude Code extension, versions 2.1.312 and 2.1.313. Anthropic did not build them. The injected loader ran first; the extension kept working.
+notes:
+From about 2:27 a.m. to 1:35 p.m. Pacific, the builds for macOS and Windows were on Cursor's marketplace. Microsoft Threat Intelligence confirmed they were never on the Visual Studio Marketplace or the npm package. Cursor's marketplace proxies the Open VSX registry, but neither company has said the builds came through Open VSX, or how they got in. Anthropic told Microsoft its systems were not compromised. Cursor removed the builds, shut the marketplace down, audited access and found no other extension tampered with, then rotated its keys and rebuilt it.
+
+The loader collected the names of environment variables containing strings such as KEY, TOKEN, SECRET, PASS, AWS or GCP; Microsoft notes only the names were sent. Microsoft found it downloaded no separate executable and used built-in tools such as ssh, PowerShell, schtasks and systemsetup. The code also has a Linux path, a crontab @reboot entry, though Cursor lists only macOS and Windows builds as affected.
+
+Cursor says the tunnel step would fail outside highly unusual circumstances: bugs broke it unless Cursor ran with administrator privileges, and enabling the SSH server needs administrator rights the extension lacked on most hosts. Where it failed, the attacker could not log in through the tunnel. Cursor says the extension still added the key, installed persistence and sent the host details. Uninstalling it removes none of that, because those files live outside the extension's directory.
+
+Cursor tells affected teams to rotate the credentials and sessions reachable from the machine, working from a trusted system, because the limited environment-variable collection does not rule out later access over the backdoor.
+
+== A pattern aimed at developer machines
+layout: table
+section: workstation
+row: Incident | Route to the developer
+row: Amazon Q, July 2025 | Mis-scoped token let an attacker commit malicious code
+row: GlassWorm, October 2025 | Some leaked Open VSX tokens published malicious extensions
+row: Nx / s1ngularity | Ran local AI CLIs, prompts off, to hunt secrets
+row: Shai-Hulud | Swept the machine with TruffleHog
+row: Mini Shai-Hulud, CHAINDROP | Hooks: opening an infected repo could rerun the payload
+row: CircleCI | Malware on one engineer's laptop
+Several session members argued for a wider pattern; these incidents fit that reading.
+notes:
+The October 30, 2026 Friday session took the Cursor incident as its first topic. The room debated whether it was a one-off or part of a wider supply-chain problem aimed at developer workstations, and several members argued for treating it as the second, with standing controls.
+
+In July 2025, an inappropriately scoped GitHub token in a build configuration let an attacker commit malicious code to the Amazon Q Developer extension's repository. It shipped automatically in version 1.84.0 and failed to run because of a syntax error. In October 2025 the Eclipse Foundation, which runs Open VSX, revoked publishing tokens developers had leaked in public repositories, some of which had been used to publish malicious extensions in a campaign Koi Security named GlassWorm.
+
+The Nx / s1ngularity payload ran AI command-line tools on the laptop with their permission prompts turned off. Mini Shai-Hulud and CHAINDROP planted hooks in VS Code and Claude Code configuration.
+
+== Controls for editors and packages
+layout: table
+section: workstation
+row: Control | Against these builds
+row: Install cooldown | Waiting 12 hours after they appeared would have skipped them
+row: Extension allowlist | Real ID passed; exact-version pins would have refused them
+row: AppLocker | Windows; blocks standard users' dropped scripts, not the loader
+row: Detection | Editor writing authorized_keys or persistence, or opening ssh -R
+row: Dev containers | Key and persistence would land in a rebuildable container
+row: Inventory | Finds affected machines quickly, only if it already exists
+A cooldown misses a version that stays up past its window.
+notes:
+Microsoft's write-up recommends a cooldown. The builds were available for about 11 hours. Neither notice says when they were first published, which is when Cursor's team-level install cooldown counts from; it defaults to 0, off. pnpm's minimumReleaseAge defaults to 1440 minutes, and Dependabot applies a three-day cooldown to version updates by default, exempting security updates. The trojanized Nx packages were live for roughly four hours. The cost is slower uptake of fixes.
+
+VS Code and Cursor share the extensions.allowed setting, and both accept exact versions. VS Code accepts no version ranges, so pinning means approving every update by hand.
+
+AppLocker's default script rules block .bat and .cmd files outside the Windows and Program Files folders for standard users, but let administrators run any script, and by default skip a scheduled task running as SYSTEM. The loader ran inside the editor, which any policy must allow. Microsoft describes AppLocker as defense in depth, not a defensible Windows security feature, and recommends App Control for Business where you can deploy it.
+
+In a dev container most extensions run inside the container, and a payload like this one in such an extension would write its key and persistence into a container you can rebuild instead of onto the laptop. Anything shared into it, such as Git credentials or a mounted home directory, is still exposed. VS Code advises prebuilding images with pinned tools and rebuilding them on a schedule in CI.
+
+== Infrastructure-as-code in the pipeline
+layout: checklist
+section: iac
+check: Format and validate: terraform fmt -check, terraform validate
+check: Policy scan that blocks merges violating guardrails
+check: terraform plan posted as a pull request comment
+check: Apply on merge to main, through the OIDC deploy role
+check: Scheduled plan-only runs to detect drift
+The same review, scan and deploy controls that protect your app should protect the network, IAM and data stores it runs on.
+notes:
+Format and validate are trivially cheap and catch typos before review. The policy scan uses Checkov, Trivy, Open Policy Agent with Conftest, or your CSPM or CNAPP's IaC scanner, and blocks merges that violate guardrails such as public buckets, unencrypted disks and IAM wildcards.
+
+Posting the plan on the pull request lets reviewers see exactly what will change. On merge, the pipeline assumes the deploy role through OIDC, runs terraform apply and writes state to the remote backend, which only the deploy role can reach.
+
+Drift detection alerts when someone clicked something in the console. The page calls drift the canary for broken IaC discipline.
+
+Terraform or OpenTofu and Pulumi are the vendor-neutral choices, and each cloud's native IaC is a credible single-cloud alternative; pick what your team already operates. For Kubernetes, GitOps controllers such as Argo CD and Flux go further: the pipeline updates a Git repo, the in-cluster controller pulls and reconciles, and the cluster trusts only the repo and the controller's identity, not the CI runner.
+
+== Bootstrapping path
+layout: checklist
+section: bootstrap
+check: Pick the CI runner, mostly by where your team already lives
+check: Set up OIDC federation before your first deploy
+check: Deploy one trivial resource to validate the wiring
+check: Add secret, IaC and container scans that block merge, then tests
+check: Split prod from non-prod: roles, trust policies, state backends
+check: Rolling or canary deploys with an automated rollback signal
+check: Pipeline observability, including the DORA metrics
+For a small team: a couple of weeks to a minimally-credible production pipeline, a quarter or two to one you'd scale to ten more workloads.
+notes:
+This is the page's order of operations for a team standing up CI/CD from scratch.
+
+The page calls GitHub Actions the safe default, for its broad ecosystem, OIDC support on all three clouds and generous free tier. Azure DevOps, GitLab CI, CircleCI and Buildkite all work.
+
+Configure the cloud-side identity provider and a narrow deploy role first, and verify the trust with a no-op assume-role from a workflow. Never ship the first version with long-lived keys "just to get it working"; those keys live forever afterward.
+
+The first pipeline deploys a single S3 bucket, resource group or Cloud Run service, to validate the wiring end to end before there is anything to break. Tests mean unit tests on the CI side, smoke tests in CD, and end-to-end tests on the deployed environment.
+
+Production trust is scoped to the main branch only; non-prod can be looser. The rollback signal can be an error rate threshold, a healthcheck failure or an alarm trip. Observability means failure notifications, the pipeline run audit log in your SIEM, and deploy frequency, lead time, change failure rate and MTTR.
+
+== Common pitfalls
+layout: list
+section: pitfalls
+item: Long-lived cloud keys "just for now"
+item: One pipeline role for staging and production
+item: Over-permissioned deploy roles with *:* on the account
+item: No verification stage after the apply
+item: Mutable artifact tags such as image:latest
+item: Untrusted third-party actions pulled in by tag
+item: Console writes to production "for an emergency"
+The page lists two more: skipping drift detection, and persistent self-hosted runners holding deploy credentials.
+notes:
+Long-lived keys live forever, so configure OIDC before the first deploy. When one role deploys staging and production, a compromised staging deploy can write to prod: use one role per environment, with trust scoped per branch. A deploy role with *:* "to be safe" can create IAM users, disable logging and exfiltrate the account; permission boundaries and explicit denies should make that impossible.
+
+If nothing checks that the service serves traffic, "deploy succeeded" means only that the apply finished; add smoke tests and auto-rollback. Deploying image:latest is non-reproducible, so deploy a specific SHA or version. A popular action pulled in by tag can be hijacked: pin by commit SHA and review each new action's source. A console write drifts IaC from reality; break-glass paths should be rare, audited and followed by a reconciliation commit.
+
+Without scheduled plan-only runs, drift accumulates silently until untangling it is a multi-week project. A persistent self-hosted runner with deploy credentials is one compromised dependency away from being a production attack vector.
+
+== Do I still need a secret store with OIDC?
+layout: question
+section: faq
+OIDC takes the cloud credentials out of CI. Think about what else your workloads use at runtime.
+notes:
+This is a question from the page's FAQ. Ask it and let the room answer before moving on.
+
+== Yes: workloads still need other secrets
+layout: answer
+section: faq
+Third-party API keys, database passwords and signing keys live in Secrets Manager, Key Vault or Secret Manager, and the workload fetches them at runtime. CI only has the cloud role needed to reference a secret, never the secret itself.
+notes:
+Yes. OIDC removes cloud credentials from CI, but workloads still need third-party API keys, database passwords and signing keys.
+
+Those live in Secrets Manager, Key Vault or Secret Manager and are fetched by the workload at runtime rather than stored in the pipeline. CI only ever has the cloud role needed to reference the secret, never the secret itself.
+
+== How does a pipeline relate to zero trust?
+layout: question
+section: faq
+Take three zero-trust ideas: verify explicitly, least privilege and assume breach. Where does each one show up in a pipeline?
+notes:
+This is the second FAQ question. Ask it before showing the answer.
+
+== It puts zero trust into practice at the deploy layer
+layout: answer
+section: faq
+Verify explicitly is OIDC federation: a fresh authentication on every deploy. Least privilege is per-environment deploy roles with permission boundaries. Assume breach is auditability: every change traces to a commit, a reviewer and a run id.
+notes:
+The page says the pipeline operationalizes zero trust at the deploy layer.
+
+Verify explicitly is OIDC federation: every deploy is a fresh authentication with a fresh subject claim. Least privilege is per-environment deploy roles with permission boundaries. Assume breach is auditability: every change traces to a commit, a reviewer and a run id, so a compromise has a finite, observable blast radius.

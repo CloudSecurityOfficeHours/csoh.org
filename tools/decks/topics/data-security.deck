@@ -1,0 +1,426 @@
+title: Data Security, KMS & Secrets
+page: data-security.html
+as-of: 2026-11-25
+promise: In cloud data security, cryptography is solved and key management is where every cloud breach involving "encrypted" data fails.
+
+== The 30-second version
+layout: text
+section: top
+Cloud data security is two disciplines: cryptography, which is solved, and key management, where every cloud breach involving "encrypted" data fails. The failures look like a permissive KMS key policy, a secret committed to git, or permanent service account credentials.
+notes:
+Cloud data security is two disciplines stitched together. Cryptography is the math: AES-GCM, RSA, ECDSA, the curves, the modes, the algorithms. Key management is the operational layer: who holds the keys, how they rotate, how they are audited, and what happens when one is compromised.
+
+The page calls the first one solved, because the providers ship the same NIST-approved primitives. The second is where every cloud breach involving "encrypted" data fails: a KMS key with a permissive policy, a secret committed to git, a database connection string in an environment variable, a service account with permanent credentials.
+
+The modern stack the page describes is customer-managed keys in a cloud KMS, envelope encryption for everything that scales, an HSM only when a regulator or contract names it, a secrets manager with rotation and dynamic credentials, TLS everywhere with mTLS for service-to-service, and a small set of confidential-computing workloads where the provider must never see plaintext. The work is making all of that legible to an auditor and resilient to the human mistakes that produce most incidents.
+
+== Classification comes first
+layout: table
+section: classification
+row: Tier | Examples | Handling
+row: Public | Marketing pages, open-source code, published research | Integrity, not confidentiality
+row: Internal | Internal documents, employee directories | Default encryption, SSO access, standard logging
+row: Confidential | Customer data, source code, financial records, employee PII | Customer-managed keys, logged access, egress monitoring, DLP
+row: Restricted | Cardholder data, PHI, authentication secrets, signing keys | Tokenized or vaulted where possible, HSM-backed keys, field-level encryption
+Classify by data owner and storage location, not by record. Tag the resource, carry the tag through IaC, and let policy key off it.
+notes:
+Every other control on the page is downstream of one question: what is this data, and how bad is it if the wrong person sees it? An org that has never classified its data ends up either over-protecting everything, which is expensive, slow and so painful that engineers route around the controls, or under-protecting everything, which is cheap right up until the incident. The page calls classification the cheapest upstream investment in a data-security program.
+
+This is the four-tier scheme the page says most enterprises converge on after a few iterations. Disclosure of internal data is embarrassing but not damaging. Disclosure of confidential data damages the business or a customer. Disclosure of restricted data is regulator-reportable, contractually breach-triggering or career-ending.
+
+The tiers decide which KMS key family encrypts the data, which secrets manager holds the credentials, whether DLP rules apply, which network paths the data can traverse, where backups land, and whether confidential computing is on the table.
+
+In practice, classify by data owner and storage location: a bucket holds restricted data, a table contains confidential records, a Kafka topic carries internal events. Tools like Macie, Purview Information Protection and Cloud DLP can auto-discover and label data at scale, but the human-curated owner-mapping is still the spine.
+
+== DSPM: the data you forgot you had
+layout: compare
+section: dspm
+col: vs classification | Classification is the policy and owner-mapping | DSPM finds and labels data continuously | DSPM adds the access and exposure graph
+col: vs CSPM | CSPM asks whether a bucket is public | DSPM asks whether it holds regulated data, and who can read it
+col: vs DLP | DLP is inline enforcement on data in motion | DSPM is posture on data at rest | Complements, not substitutes
+DSPM became a category because of shadow data: copies, exports, backups, dev clones and abandoned stores no one classified because no one remembered creating them.
+notes:
+Classification tells you what a data store should be. DSPM tells you what your data is, everywhere it has sprawled, and the page says that gap is where most modern data breaches live.
+
+Data Security Posture Management continuously discovers and classifies sensitive data across your clouds: object storage, managed databases, warehouses like Snowflake and BigQuery, and increasingly SaaS. It then maps who and what can reach that data and flags risky exposures, such as a public bucket with PII, a dev clone of the production database, a snapshot shared to another account, or data landing in a region that violates residency rules. Because it is data-centric, DSPM is increasingly bundled into CNAPP platforms rather than sold purely standalone.
+
+A carefully locked-down production database means little if a two-year-old snapshot sits in an unmonitored account with a permissive policy. DSPM's core value is finding that data before someone else does.
+
+The landscape has standalone tools such as Cyera, Sentra, Symmetry and Varonis, and DSPM built into the CNAPP suites, such as Wiz, Orca and Palo Alto's Cortex Cloud, which absorbed Dig Security (disclosure: the site's author works at Wiz). Amazon Macie, Microsoft Purview and Google Cloud Sensitive Data Protection do the discovery and classification half well within a single cloud, but the page says they generally lack the cross-cloud access graph and exposure prioritization the dedicated tools lead with.
+
+== Who holds the key
+layout: figure
+section: at-rest
+figure: key-custody
+caption: Customer-managed is the default for confidential data. BYOK and HYOK wait for a named requirement.
+All three major clouds encrypt managed storage by default. That protects against disk theft, not against an IAM principal who can read the bucket.
+notes:
+All three major clouds encrypt managed storage at rest by default, with provider-owned keys, using AES-256: S3, DynamoDB, Azure Blob, Azure Disks, Azure SQL, GCS, Persistent Disks, BigQuery and Spanner. The page calls this necessary and insufficient. "Encrypted at rest" in the marketing sense is not what an auditor or regulator means by the same phrase.
+
+The figure runs from the default to a key that never enters the cloud. Provider-managed keys carry no operational overhead and suit public and internal data, but they cannot satisfy a regulator who asks whether you can revoke the provider's ability to decrypt. Customer-managed keys are created inside the cloud KMS, and you own the policy, the rotation schedule, the audit logs and the ability to revoke. That is the right default for confidential data, at a minor cost per key and per call, and key policies must be correct or workloads break.
+
+With BYOK you generate the key material outside the cloud and import it, and the provider's KMS still operates the crypto. With HYOK, or external keys, the key never enters the cloud and the cloud KMS calls out to your key manager for every operation. If that key manager is unavailable, so is the data.
+
+The page's default for most companies: customer-managed keys for everything containing confidential or restricted data, provider-managed for the rest, and BYOK or HYOK only when a named requirement forces it.
+
+== Storage settings to enforce
+layout: checklist
+section: at-rest
+check: SSE-KMS with a dedicated CMK per workload for confidential data
+check: Encrypt-by-default enforced through SCP, Azure Policy or Org Policy
+check: Default disk encryption on; unencrypted volumes fail policy
+check: Database encryption and key choice settled at provisioning
+check: Snapshots on the same CMK, or one with explicit cross-account access
+notes:
+For S3, Blob and GCS, the options are SSE-S3 with a provider key, SSE-KMS with a CMK, and SSE-C, a rare customer-supplied key per request. For confidential data, the page says to use SSE-KMS with a dedicated CMK per workload rather than the default account-level key, and to enforce bucket encryption by default through SCP, Azure Policy or Org Policy so a developer cannot create an unencrypted bucket.
+
+Disk encryption is account-default toggleable on all three clouds. Enable the default, and make volumes created without encryption fail policy.
+
+Databases differ. RDS can only encrypt an instance at creation, and an unencrypted one is retrofitted by restoring from an encrypted snapshot copy or through a blue/green deployment. Cloud SQL always encrypts at rest, but the choice of CMEK is fixed at creation. Azure SQL Database enables TDE by default and can turn it on for an existing database in place. Get it right at provisioning.
+
+Backups and snapshots are easy to forget. A CMK-encrypted database with a default-key-encrypted snapshot is one snapshot copy away from being decryptable by a different key authority.
+
+== TLS everywhere, mTLS between services
+layout: checklist
+section: in-transit
+check: TLS 1.2+ on every external endpoint and internal hop
+check: Prefer TLS 1.3 where it works; TLS 1.0 and 1.1 off by policy
+check: mTLS between services, through a service mesh or SPIFFE / SPIRE
+check: HSTS on every public site, then submit to the preload list
+check: HTTP to HTTPS redirects at the edge, not the application
+check: TLS enforced on database connections at the parameter-group level
+check: Certificate expiry monitored as a first-class metric
+notes:
+The page sets TLS 1.2+ on every external endpoint and every internal service-to-service hop as the minimum bar in 2026. Anything less is a finding in every framework and a real-world risk on any shared network.
+
+Server-only TLS verifies the server to the client. Mutual TLS verifies both sides. The argument for it is that any plaintext-trusted internal network is a flat network: a compromised workload can talk to every other service, and mTLS forces the attacker to also steal a valid client certificate. The page's way to do mTLS at scale in 2026 is a service mesh such as Istio, Linkerd or Consul Connect, or a cloud-native equivalent such as Cloud Service Mesh or AWS VPC Lattice, which handles certificate issuance and rotation so applications don't manage certificates themselves. For non-mesh workloads, SPIFFE and SPIRE provide workload identity and short-lived certificates for any compute.
+
+For certificates, ACM, Azure Key Vault Certificates and Google Cloud Certificate Manager cover managed endpoints, cert-manager handles the lifecycle in Kubernetes, and the page calls Let's Encrypt the right answer for most public-facing services that don't need EV or OV validation.
+
+Then the boring parts. Redirect at the edge. RDS, Aurora, Cloud SQL and Azure SQL all support TLS, but it is not always on by default, so enforce it at the parameter-group level. Check the assumption for any replication path that crosses a region or VPC boundary. And monitor expiry: the residual risk is internal services using uploaded certificates nobody renewed.
+
+== CA trust: as safe as the weakest CA
+layout: table
+section: ca-trust
+row: Problem | What the page says
+row: Fraudulent certificates | A stolen CA key, or domain validation fooled by a BGP hijack
+row: Owner controls | CAA records name allowed CAs; CT logs reveal unexpected certificates
+row: Revocation | Often does not reach the client; Chrome generally relies on CRLSets
+row: Short lifetimes | Public TLS: at most 200 days from March 15, 2026; 47 from 2029
+Any trusted CA allowed to issue TLS certificates can issue one for any domain, unless its certificate restricts names.
+notes:
+A TLS client accepts a certificate when it chains, through intermediates, to a root in the client's trust store. Any CA chaining to one of those roots, and allowed to issue TLS certificates, can issue one the client accepts for any domain.
+
+A certificate for your domain issued to someone else lets them run a man-in-the-middle attack. They can get one by stealing or recovering a CA's private key, or by fooling the CA's domain validation: an attacker who hijacks the BGP route to the domain's addresses can answer the CA's challenge in its place. Princeton researchers demonstrated this against major CAs in 2018. The Baseline Requirements now require multi-perspective issuance corroboration for most validation methods, which the requirements say can improve protection against equally-specific prefix BGP hijacks. Two controls sit with the domain owner. A CAA record names the CAs allowed to issue for your domain, though it does nothing against someone who already holds a CA's key. Certificate Transparency logs let you watch for certificates for your domains that you did not expect.
+
+Revocation through CRLs or OCSP often does not reach the client. Chrome does not generally make online OCSP or CRL checks, and Let's Encrypt turned off its OCSP service on August 6, 2025, citing privacy.
+
+Short lifetimes limit how long a mis-issued or compromised certificate stays useful, whether or not revocation reaches the client. The 200, 100 and 47 day limits come from ballot SC-081. Let's Encrypt made six-day certificates generally available on January 15, 2026. Lifetimes like these depend on automated issuance and renewal, for example through ACME.
+
+== The eMudhra key compromise, October 2026
+layout: timeline
+section: ca-trust
+event: Oct 17 | A researcher reports eight eMudhra intermediate CA keys can be recovered
+event: Oct 17 | Firefox and Chrome block the intermediates
+event: Oct 18 | eMudhra revokes the intermediates
+event: Oct 20 | Mozilla removes trust in eMudhra's G3 ECC root
+event: Oct 26 and 27 | Microsoft removes six G3 roots and a cross-sign from Windows and Edge
+event: Nov 4 | Chrome to distrust G1 certificates whose earliest SCT is after November 16
+Mozilla recovered the keys within two hours of the report: each P-384 private key was an integer below 256.
+notes:
+On October 17 a researcher reported to the Apple, Chrome, Microsoft and Mozilla root programs, and to eMudhra, that the private keys of eight intermediate CAs in the emSign G3 hierarchy could be recovered. Six were TLS intermediates trusted by all four programs, and two were code-signing intermediates trusted by Microsoft. Less than two hours after the report reached Mozilla, Mozilla recovered the keys independently: each key was an integer below 256 instead of a random 384-bit value, and Mozilla reported that local AI agents managed it on the first attempt. Anyone holding the keys could issue certificates for any domain. eMudhra's preliminary account points to a key wrap and unwrap step in an April 30, 2025 key ceremony, and it says the exact root cause is not yet confirmed.
+
+Mozilla blocked the intermediates through OneCRL and Chrome through a CRLSet. On October 20, after learning that several people had recovered the keys, Mozilla removed trust in the G3 ECC root to protect clients that do not use revocation information. Removing a root affects every certificate that chains to it, and eMudhra estimated about 30,000 certificates had to move to another chain.
+
+The intermediates also existed as cross-certificates under Sectigo's AAA Certificate Services root, which Microsoft and Apple still trusted. Sectigo revoked them on October 19, which protects only clients that check revocation. Google says no TLS certificates chaining to the six TLS intermediates were logged to CT before it blocked them, so none could have been used against a client that enforces CT, as Chrome does by default. On November 4 Chrome extended the response to eMudhra's G1 root, from Chrome 153.
+
+== Trust stores: what to do in your own environment
+layout: checklist
+section: ca-trust
+check: List every trust store your workloads use, and who can add a root
+check: Update CA bundles on the same schedule as security patches
+check: Automate issuance and renewal for every certificate you own
+check: Publish CAA records; monitor Certificate Transparency logs
+check: After a distrust, confirm removal in each application's own trust store
+check: Rebuild images and Go binaries; replace running nodes and instances
+check: Decide now how to withdraw trust on devices you cannot update
+notes:
+Browsers, language runtimes and container images can each carry their own trust store, and a single host can hold several. Chrome uses its own root store on every platform except iOS, Firefox uses Mozilla's, Node.js ships a snapshot of Mozilla's store fixed at release time, Python's certifi bundles Mozilla's list, and Java runtimes ship their own keystore. A container image keeps the CA bundle it was built with. Microsoft's eMudhra guidance named Java keystores, Python certificate bundles and container images as trust stores that operating system updates leave unchanged.
+
+For cloud customers, the remaining eMudhra work was in those stores. AWS removed the roots from its shared trust store on October 21 and listed per-service fixes in bulletin 2026-150-AWS, from CloudFront's edge CA bundle to Lambda runtimes, Amazon Linux, Bottlerocket and Corretto, and noted that new Windows AMIs do not change EC2 instances already running. Google Cloud listed more than 20 affected products. The gRPC packages for Python, Ruby and PHP before 1.84.1 load their own trust store, and Go toolchains from 1.26.10 and 1.27.3 reject the eight intermediates whatever the trust store contains, so Go programs need rebuilding. On Azure, Microsoft told customers to move AKS Linux node pools to node image 2026.10.23 or later.
+
+The checklist is the page's own. With issuance and renewal automated, a shorter lifetime only means renewing more often. For devices you cannot update, decide before an incident how you would withdraw trust in a CA, or how you would replace the device.
+
+== Envelope encryption: how every cloud KMS works
+layout: compare
+section: kms
+col: How it works | KMS returns a new DEK, plaintext and wrapped | Encrypt locally, then wipe the plaintext DEK | Store the wrapped DEK with the data | To decrypt, KMS unwraps the DEK
+col: What it buys | One KMS call per object | KEK rotation without re-encrypting data | Disable the KEK and every DEK is undecryptable | A stolen DEK opens only its own data
+Each object or session gets a data key, wrapped by a key encryption key that never leaves the HSM.
+notes:
+Every cloud KMS works the same way under the hood, and the page calls the pattern the foundation for understanding everything else on it.
+
+The naive approach, asking the KMS to encrypt every byte, breaks at scale: every megabyte means a round trip, the KMS becomes a bottleneck, and the cost is untenable. Instead, the application asks KMS for a new data key. KMS generates a random 256-bit AES key, encrypts it with the long-lived key encryption key inside the HSM, and returns both the plaintext DEK and the encrypted DEK. The application encrypts the data locally, for example with AES-256-GCM, then wipes the plaintext DEK from memory. To decrypt, it sends the encrypted DEK to KMS, gets the plaintext DEK back, decrypts the data and wipes the DEK again.
+
+The encrypted DEK is a few hundred bytes and travels with the data. Encrypting a 10 GB object means one KMS call and one local AES operation. Rotating the KEK doesn't re-encrypt the data, and old ciphertext stays valid because the KMS keeps the old KEK version. Disabling or scheduling deletion of the KEK renders every encrypted DEK undecryptable, so there is no need to crawl billions of objects to delete them. A leaked DEK decrypts only the data it was minted for.
+
+== Key hierarchies and key policies
+layout: layers
+section: kms
+layer: Root key | Held in an HSM, touched extremely rarely
+layer: Account and region KEKs | One per account, per region
+layer: Workload KEKs | One per service or data classification
+layer: DEKs | Per object or per session, ephemeral
+In AWS KMS the key policy is the primary access control and IAM is secondary. Keep key policies tight, and never use a wildcard principal unless you mean it.
+notes:
+Mature programs don't have a single KEK; they have a tree. The root key is held in an HSM and used only to wrap account and region master keys. Those master KEKs wrap workload-level KEKs. Workload KEKs, one per service or per data classification, carry different access policies, and their rotation cadences can differ. DEKs are generated per object or per session.
+
+In practice on cloud, the root lives in the cloud KMS or an HSM, and you get one or two layers above the DEKs: an account-level CMK and a workload-level CMK. Layering lets you rotate a workload key without touching the account key, and revoke access to one workload key without affecting others.
+
+The page calls key policies a subtle and frequently misconfigured detail. In AWS KMS, a user with full IAM permissions on KMS does not automatically have permission to use a specific key. The key policy must also grant it, or delegate to IAM with a statement whose principal is the account. That is intentional: it prevents an account-wide IAM compromise from automatically giving the attacker key access. Azure Key Vault and GCP Cloud KMS use a single RBAC or IAM model on the key resource, and the same principle applies: keep the key policy tight and audit who is on it.
+
+== CMK, BYOK and HYOK
+layout: table
+section: byok
+row: Model | Key generated | Key lives | When to use
+row: Provider-managed | Provider HSM | Provider HSM | Default; public and internal data
+row: CMK | Provider HSM | Provider HSM, your policy | Default for confidential data; right for most
+row: BYOK | Your HSM | Provider HSM, imported | A regulator asks where entropy came from
+row: HYOK | Your HSM | Your HSM, never in the cloud | Provider must never have unilateral plaintext access
+notes:
+The page says the terminology is confusing because vendors use the same acronyms with different meanings, so it gives a practical taxonomy. In the first three models the provider's KMS performs the crypto. With HYOK, the provider calls the customer's external HSM for every operation.
+
+The page says CMK satisfies "do you control the keys?" in every audit context that matters, costs cents per key per month, and imposes no latency or availability penalty. It adds that the cloud's HSMs are FIPS-validated and operationally hardened in ways most on-prem HSM deployments aren't.
+
+BYOK is a real, named requirement in a small number of regulatory contexts, such as some financial-services and government regimes that audit key generation entropy. Procurement teams also ask for it frequently without a clear understanding of what they are buying, and the page says pushing back is reasonable. If you must do it, generate the key on an on-prem HSM, import it through the documented BYOK flow, keep the original somewhere safe in case you need to re-import, and rotate on a defined cadence.
+
+HYOK answers the requirement to revoke the provider's access instantly by pulling the key out of its environment. The page calls that requirement rare and consequential: every cryptographic operation depends on the external key manager being reachable, so the data is unavailable any time the key manager is. The implementations are AWS KMS External Key Store, Azure Key Vault Managed HSM with HYOK, and Google Cloud External Key Manager.
+
+== HSMs and FIPS 140 levels
+layout: table
+section: hsm
+row: FIPS 140 level | What it means
+row: Level 1 | Approved algorithms, no physical protection
+row: Level 2 | Tamper-evident packaging: you can tell it was opened
+row: Level 3 | Tamper-resistant; the common bar for cloud HSM services
+row: Level 4 | Tamper detection and response over the whole enclosure; rare
+Use the cloud KMS for almost everything. Step up to a dedicated HSM when a regulator names one, an application needs PKCS#11 or KSP/CNG, or you are migrating an HSM-rooted PKI.
+notes:
+An HSM is a dedicated cryptographic appliance that stores keys and performs operations without exposing key material to general-purpose compute. AWS KMS backs every key with multi-tenant HSMs, and Azure Key Vault and Cloud KMS do the same for their HSM-protected key types. Dedicated HSM services give you a single-tenant boundary.
+
+AWS CloudHSM provides single-tenant FIPS 140-2 Level 3 HSMs. Azure Key Vault Managed HSM provides single-tenant FIPS 140-3 Level 3 HSMs, and the page calls it the 2026 default for regulated Azure workloads needing a dedicated HSM. Google Cloud HSM is FIPS 140-2 Level 3 and built into Cloud KMS: you choose the HSM protection level when you create the key, that level is multi-tenant, and Single-tenant Cloud HSM is the dedicated option. Azure Dedicated HSM puts full Thales Luna HSMs in a VNet, and it is less common now that Managed HSM exists.
+
+FIPS 140 level numbers don't compose simply; they describe distinct properties. A software cryptographic library can be Level 1. Level 3 means the device actively responds to tampering by zeroizing keys or locking down. Level 4 adds protection against voltage and temperature outside the normal range. FIPS 140-3 supersedes 140-2, and new validations are 140-3. Most cloud HSM services validate at Level 3, which is what regulated industries typically require.
+
+The page's last word on it: don't pay for a dedicated HSM because someone said HSM in a meeting.
+
+== Secrets managers: store and rotate, or mint
+layout: table
+section: secrets
+row: Capability | AWS, Azure and GCP managers | HashiCorp Vault
+row: Automatic rotation | Native for some databases on AWS and Azure; custom functions otherwise | Native for many engines
+row: Dynamic secrets | Limited on AWS; none on Azure or GCP | Yes, the headline feature
+row: Audit log | CloudTrail, Key Vault logs, Cloud Audit Logs | Vault audit devices
+row: Multi-cloud | No | Yes, the headline reason to choose Vault
+Secrets managers prevent two failures: secrets committed to source control, and secrets that never rotate. Vault mints a fresh credential per request and revokes it when its TTL expires.
+notes:
+Encryption protects data; secrets management protects the credentials that grant access to data. Every cloud has a managed secrets service. HashiCorp Vault is the source-available, multi-cloud heavyweight, BSL-licensed since 2023, with OpenBao as the open-source fork.
+
+The page's example of the first failure is the Microsoft SAS leak: a full-control storage token in a URL on a public GitHub repository exposed 38TB of internal data for three years.
+
+The cloud-native managers store and rotate static secrets: they hold a value, return it on request and rotate it on a schedule. AWS rotation is limited to that, not on-demand minting. Vault's headline capability is dynamic secrets. When a workload requests a database credential, Vault creates the user in the database, returns the credential with a TTL, and revokes it when the TTL expires. There is no current password to rotate; every request gets a fresh, unique credential.
+
+The page says dynamic secrets eliminate the risk of a secret sitting in memory long enough to be exfiltrated, for whole categories of workload. The clouds have partial equivalents in IAM roles for EC2, Managed Identities and Workload Identity, but those don't extend to the database, the message broker, the CA or the partner API. Vault's value proposition is the same dynamic-secrets mechanics across all of them.
+
+== Make the secrets manager the easy path
+layout: checklist
+section: secrets
+check: Authenticate with workload identity, never a static credential
+check: Fetch at runtime through an SDK or sidecar, not env vars
+check: Cache with a bounded TTL, typically 5 to 15 minutes
+check: Give developers a local-dev path so nothing gets hardcoded
+check: Federate CI/CD to the cloud with OIDC; scan for leaked secrets
+check: Treat Terraform state files as secrets
+Secrets managers fail when developers route around them. Secrets leak from the workflows that consume them, not from the vaults that store them.
+notes:
+The page calls ergonomics the often-decisive factor. Workload identity is the prerequisite: the application authenticates to the secrets manager with its IAM role, managed identity or workload identity. If your app needs a username and password to fetch its other secrets, you've recursed the problem.
+
+Secrets are retrieved at runtime and held in memory, never written to disk or to the environment, through tools such as the AWS Secrets Manager Agent, the Azure Key Vault SDK or Vault Agent sidecars. Hitting the secrets manager on every request is slow and expensive, so cache for a defined TTL and refresh on a miss or a rotation event. Without a sane local-dev story, such as LocalStack, a dev tenant or a stub, developers hardcode a value just for testing and forget it.
+
+The page names four surfaces where secrets are consumed. On workstations, cloud CLI logins and wrappers such as aws-vault, op run, doppler run and infisical run aim to kill the .env file. In CI/CD, OIDC federation means no static keys in CI, with secret-scanning gates such as TruffleHog, Gitleaks and GitHub push protection as the safety net. In Terraform and OpenTofu, use dynamic provider credentials and secret data sources; encrypted state backends are mandatory. In Kubernetes, KMS-backed etcd encryption is the baseline. Across all four, workload identity is how the consumer authenticates to the vault, and the page says federated identity at every retrieval is the only pattern that scales.
+
+== Rotation means different things
+layout: table
+section: rotation
+row: Key type | What rotation does | Cadence
+row: KEK | Creates a new key version; data is not re-encrypted | Annual; automatic rotation offered for symmetric CMKs on all three clouds
+row: DEK | A new DEK for the next write | Per object or per session
+row: Secret | The credential value changes; every consumer needs it | Restricted 30-90 days; confidential 90; internal when needed
+Eliminating long-lived static credentials returns the most for the effort: a credential that lives for 15 minutes doesn't need a rotation policy.
+notes:
+The page warns that "rotate your keys" hides different mechanics, and treating them alike leads to over-rotating, with operational pain and outages, or under-rotating, where the auditor finds the 4-year-old static key.
+
+When a cloud KMS rotates a customer-managed symmetric key, it creates a new key version. The old version stays, because it is needed to decrypt old data, and new encrypt operations use the new one. Eventually, on the next backup cycle or write, the data is rewritten under a new DEK wrapped with the current version. Turn automatic annual rotation on and largely forget about it. Asymmetric signing keys typically don't auto-rotate, because rotating them means re-issuing every signed artifact, so handle them manually with a planned cadence and overlap. DEKs are ephemeral by design, and there is no separate operation to perform.
+
+Secret rotation changes the credential. In brokered rotation, a secrets manager rotates the value in both the consumer and the database, as AWS Secrets Manager's RDS rotation does. Two-secret overlap, AWSPENDING and AWSCURRENT, is required when the producer can't update atomically.
+
+For restricted data, static service-account keys are eliminated entirely. Certificates rotate at the issuer's cadence: 90 days for Let's Encrypt's default certificates until February 2027, then 64 days, and 45 days from February 2028, and 13 months for private certificates issued through ACM. Replace long-lived credentials with workload identity, such as IRSA, Managed Identity, Workload Identity Federation or SPIFFE, and short-lived OIDC tokens.
+
+== Post-quantum: harvest now, decrypt later
+layout: checklist
+section: pqc
+check: Inventory your cryptography in a cryptographic bill of materials
+check: Turn on hybrid PQC key exchange where the platform offers it
+check: Put algorithm choices in config, not code
+check: Prioritize by data shelf-life: long-confidentiality data first
+Data captured today can be stored until a quantum computer opens it. NIST finalized its first post-quantum standards in August 2024; the near-term work is crypto-agility.
+notes:
+RSA and elliptic-curve cryptography, which underpin almost every TLS handshake, signed artifact and wrapped key today, are breakable by a sufficiently large quantum computer running Shor's algorithm. No such machine exists yet, and credible estimates put one years out. The page calls it a 2026 problem anyway because of harvest now, decrypt later: anything whose confidentiality has to survive a decade or more, such as health records, government data, long-lived secrets, source code and PII, is effectively at risk now.
+
+The standards are FIPS 203, ML-KEM, for key establishment, and FIPS 204, ML-DSA, and FIPS 205, SLH-DSA, for signatures. They take over the roles RSA and ECC fill today, though not as drop-in replacements: NIST expects some protocols to need significant changes. Symmetric crypto such as AES-256 is already considered quantum-resistant, so the migration is about public-key crypto, not your KMS envelope encryption's AES core.
+
+AWS, Google and Cloudflare have already shipped the key-exchange half in hybrid mode, a classical curve plus ML-KEM, so you are never worse off than today. The page says that on AWS, GCP or Cloudflare-fronted TLS, turning it on is often a client or config flag with no downside. Signatures are the slower, harder half, because long-lived signed artifacts have to stay verifiable for years. NSA's CNSA 2.0 timeline pushes software and firmware signing first and general adoption by the early 2030s; NIST plans to deprecate RSA-2048 and ECC-256 around 2030 and disallow them by 2035.
+
+Migrating cryptography has historically taken large organizations a decade. The aim is that when your dependencies ship PQC support, flipping to it is a config change, not a re-platforming.
+
+== Tokenize, encrypt or hash
+layout: table
+section: tokenization
+row: Technique | Reversible? | Reduces audit scope? | Use when
+row: Encryption | Yes, with the key | No | The application needs the original value
+row: Tokenization | Yes, by vault lookup | Yes | PCI scope reduction, GDPR pseudonymization, sharing with third parties
+row: Hashing | No | Yes | Passwords, deduplication keys, anonymous IDs
+For passwords, use a slow KDF: Argon2id, scrypt or bcrypt. Never raw SHA-256, MD5 or any unsalted hash.
+notes:
+The page says choosing wrong is a common way to end up protecting data in a way that doesn't help. Encryption doesn't reduce audit scope, because the encrypted data is still the data.
+
+Tokenization is the PCI scope-reduction lever. Storing the card number encrypted in the production database puts every system that touches that database in PCI DSS scope. Instead, store it only in a dedicated tokenization vault, typically a third-party service such as Stripe, Adyen, Braintree, Skyflow or VGS, and let every other system hold an opaque token. Scope shrinks to the vault and the small set of systems that detokenize, which the page calls an order of magnitude cost reduction in audit, pen-test and controls work. Tokenization is also the cleanest implementation of GDPR pseudonymization under Article 4(5).
+
+Hashing is for cases where you never need the original. Raw SHA-256 can be brute-forced billions of times per second on a GPU. The OWASP 2024 recommendation is Argon2id with at least 19 MiB memory, 2 iterations and 1 parallelism; with bcrypt, a cost factor of 12 or more.
+
+Format-preserving encryption keeps the ciphertext the same length and character set as the plaintext, for legacy systems that can't accept variable-length blobs. NIST has found FF3 weak and its 2025 draft revision drops it, so use FF1, and only when format preservation is required.
+
+== DLP: sensitive data where it shouldn't be
+layout: compare
+section: dlp
+col: Cloud-native | Macie: sensitive data discovery in S3 | Purview: M365, Azure storage and on-prem | Sensitive Data Protection: inspection and de-identification
+col: Third-party | Nightfall: SaaS data leaks | Cyberhaven: data lineage | Netskope, Zscaler, Skyhigh: CASB and SSE egress | Varonis, BigID: enterprise-scale discovery
+Cloud-native services emphasize discovery; third-party tools emphasize egress monitoring. Mature programs run both. Start in monitor mode, and block only the highest-confidence rules after tuning.
+notes:
+DLP is the discipline of finding sensitive data where it shouldn't be: card numbers in a Slack channel, social security numbers in a misclassified bucket, source code on a personal Gmail.
+
+Amazon Macie has built-in identifiers for PII, PCI, PHI and credentials and sends findings to Security Hub and EventBridge; the page says pricing has historically been the limiting factor at scale. Microsoft Purview Information Protection and Purview DLP cover M365, Azure storage and on-prem, with policies that block sharing and copying, a strong fit for heavy M365 and Azure shops. GCP Sensitive Data Protection, formerly Cloud DLP, inspects any data you send it and has de-identification primitives built in: tokenization, masking, FPE and k-anonymity.
+
+On the third-party side, Nightfall focuses on SaaS data leaks in tools such as Slack, GitHub and Jira. Cyberhaven tracks where data flows rather than relying on classification patterns, which suits IP-theft and insider-risk programs. Netskope, Zscaler and Skyhigh Security are CASB and SSE platforms with DLP modules. Varonis and BigID do discovery and classification at enterprise scale, deeper than Macie or Purview on legacy and on-prem stores.
+
+DLP is high-noise by nature. A program that doesn't tune aggressively becomes ignored through alert fatigue, or hated for false blocks. Classify the findings by signal-to-noise ratio before moving rule families into blocking mode.
+
+== Confidential computing: protecting data in use
+layout: compare
+section: confidential
+col: Hardware | Intel TDX and AMD SEV-SNP: whole VMs | Intel SGX: application-level enclaves | ARM CCA: emerging
+col: When it matters | The provider must not read data, even in theory | Multi-party computation | High-value secrets in use | Attestation requirements
+While the CPU works on data, it is plaintext in memory. Hardware TEEs keep memory encrypted even from the host OS, the hypervisor and provider staff. Most workloads don't need it.
+notes:
+Encryption at rest and in transit protect data while it is stored and moving, not while it is processed. Confidential computing closes that third gap with hardware Trusted Execution Environments.
+
+Intel SGX gives application-level enclaves with a small TCB and strong isolation, but requires porting; it is deprecated for client CPUs and available on select Xeon Scalable. Intel TDX runs a whole VM in a trust domain the hypervisor cannot read, and the page calls it the 2026 mainstream Intel approach. AMD SEV-SNP is VM-level memory encryption with integrity protection, broadly deployed in cloud. ARM CCA is emerging.
+
+AWS Nitro Enclaves are a different model: isolated CPU and memory carved out of a parent EC2 instance, with no networking and no persistent storage, and attestation through the Nitro hypervisor. They are popular for signing services, decryption gated by KMS key policies that check the enclave's attestation, private LLM inference and multi-party computation. Azure offers Confidential VMs and Confidential Containers; Google offers Confidential VMs and Confidential GKE Nodes, which the page calls the easiest entry path on GCP.
+
+The named use cases: a regulatory or contractual requirement that the provider not be able to read data even in theory, as in sovereign workloads and certain financial-services and healthcare deployments; two distrustful parties computing on combined data; signing services or LLM inference on proprietary models; and proof that code runs on given hardware in a given configuration. The page calls it overkill for most workloads. Its costs are instance-type restrictions, slightly higher pricing and attestation overhead. Without a named requirement, default to good IAM, good KMS and good network controls.
+
+== What “encrypt the database” means
+layout: table
+section: database
+row: Control | Protects against | Trade-off
+row: TDE | A stolen disk or exfiltrated backup file | Anyone who can log in sees plaintext
+row: Column-level | DBA access, limited-scope stolen credentials, backup theft | Searching encrypted columns needs special handling
+row: Application-level | The database engine ever having plaintext | No indexes, search or aggregation without specialized infrastructure
+TDE everywhere is the floor. Use column-level encryption for restricted data, and application-level for the rare case where the engine must never see plaintext.
+notes:
+The page says "encrypt the database" hides several distinct controls at different layers, and knowing which one you have determines what threat it mitigates.
+
+TDE encrypts files on disk as the engine writes them and is transparent to the application, which sees plaintext. RDS, Azure SQL and Cloud SQL all do it by default, with provider-managed or customer-managed keys. It is what "encrypted database" means in most marketing copy: necessary, and not sufficient for sensitive data.
+
+Column-level or field-level encryption encrypts specific columns, such as the SSN, the credit card or the medical record number, with the key held outside the database. The application encrypts before insert and decrypts after read. It forces a choice. Randomized encryption produces different ciphertext each time and leaks nothing, but an equality WHERE clause stops working. Deterministic encryption allows equality lookups but leaks frequency information. The page's example: a patient's last name probably needs randomized encryption, with a separate keyed hash for lookups, while a country code probably tolerates deterministic.
+
+Application-level encryption treats the database as a blob store. It gives maximum control and maximum complexity: indexing, full-text search and aggregations on encrypted fields need searchable encryption, ORE schemes or homomorphic encryption, all with real performance costs.
+
+== Four maturity stages
+layout: table
+section: maturity
+row: Stage | What it looks like
+row: 1: Defaults on | Provider encryption, TLS on public endpoints, no formal classification
+row: 2: Customer-managed | Classification tagged, CMKs rotating annually, secrets centralized, no static IAM keys in production
+row: 3: Engineered | Per-workload CMKs, dynamic secrets, mTLS, DLP discovery, signed artifacts
+row: 4: Strategic | Confidential computing, HYOK, field-level encryption, tokenization, quarterly key drills
+Jumping to Stage 4 before Stage 2 is paying for nation-state-resistant cryptography while still committing API keys to git.
+notes:
+The page stages a cloud data-security program in four steps.
+
+Stage 1: provider-managed encryption at rest, TLS on public endpoints, secrets split between environment variables and Parameter Store or Key Vault, no formal classification, KMS used for things that need it without a written policy, and manual key rotation when it happens.
+
+Stage 2: a published classification scheme tagged on resources, confidential and restricted data on customer-managed keys with automatic annual rotation, secrets centralized with rotation enabled for databases, no static IAM access keys in production, TLS 1.2+ enforced by policy, and etcd encryption on Kubernetes.
+
+Stage 3: a key hierarchy with per-workload CMKs, dynamic database secrets through Vault or an equivalent, mTLS through a service mesh, External Secrets Operator or an equivalent in every cluster, DLP discovery on data lakes, CSPM rules against untagged or improperly classified resources, and SBOM and signed artifacts in the deploy pipeline.
+
+Stage 4: confidential computing for the named workloads, HYOK for the specific regulatory case, field-level encryption for restricted columns, a tokenization vault reducing PCI scope, hardware-attested LLM inference, key compromise drills run quarterly, and data security informing product, such as tenant-managed keys as a feature and data residency as a SKU.
+
+The page says the skip-stage cost is real here.
+
+== Common pitfalls
+layout: list
+section: pitfalls
+item: Secrets in environment variables committed to git
+item: IAM-only key policies on KMS keys
+item: An encrypted bucket with public read
+item: No rotation policy because automatic rotation is on
+item: One KMS key for everything
+item: Backups on a different key authority than the primary
+item: Static service account keys with no expiry
+Three more: kind: Secret treated as encrypted, TDE as the audit answer, unrenewed internal certificates.
+notes:
+These are the pitfalls the page lists. Secrets in environment variables committed to git are the most common cloud-breach precursor, and a leaked AWS key gets weaponized in minutes. The answer is pre-commit scanning such as Gitleaks or TruffleHog, a secrets manager and workload identity, and every secret that touched a public repo gets rotated immediately.
+
+An AWS KMS key with only the default key policy grants the whole account root and admin IAM access, so a compromised developer with admin IAM means compromised keys. Tighten key policies to specific principals. S3 encryption does not stop a public-read bucket policy from serving plaintext to the internet: "encrypted" and "private" are independent properties, and both must be enforced. Automatic KEK rotation doesn't rotate database passwords, API keys, certificates or service account keys, so inventory every secret category and define a cadence for each.
+
+A single account-level CMK for every workload is one access-policy mistake away from a blast-radius incident, and per-workload CMKs cost cents per month. When the production database uses your CMK and its cross-region snapshot uses the default key, the audit log says "encrypted" but you can't revoke the snapshot, so check every replica, snapshot and backup. A 4-year-old service account JSON file in CI is a finding waiting to happen; eliminate it with Workload Identity Federation, OIDC or IRSA.
+
+TDE protects against disk theft, not credential compromise: if the auditor asks whether a rogue DBA can read the data, the answer is column-level encryption or tokenization. Treating kind: Secret as encrypted is one of the closing questions. Expired internal certificates cause outages and self-signed ones prevent meaningful trust verification, so run a proper internal CA, with cert-manager or an equivalent handling the lifecycle.
+
+== Are Kubernetes secrets encrypted?
+layout: question
+section: faq | k8s-secrets
+A manifest declares kind: Secret. Consider what that object holds by default, and who can read it.
+notes:
+This question is from the page's FAQ, with its Kubernetes secrets section behind it. Ask it and let the room answer before moving on.
+
+== By default, no: base64 is not encryption
+layout: answer
+section: faq | k8s-secrets
+A Secret is base64-encoded, so anyone with etcd access or the right RBAC sees plaintext. Encrypt etcd with a KMS provider, then pull secrets from an external manager through ESO, the CSI driver or SOPS.
+notes:
+By default, no. A trivial base64 decode recovers the plaintext. etcd encryption at rest, with a KMS provider for AWS KMS, Azure Key Vault or GCP KMS, protects against etcd snapshot exfiltration and attackers who reach the underlying storage, but not against an attacker with API access, because the API server will decrypt and serve.
+
+External Secrets Operator, the de-facto standard, pulls secrets from an external manager into Secret objects and refreshes them on a schedule, so the source of truth stays in the secrets manager. The Secrets Store CSI Driver mounts secrets as volumes, and by default they never become Secret objects, though the optional sync-as-Secret feature, which env vars need, writes them to etcd. SOPS encrypts values inside files so they are safe to commit, and pairs with Flux and Argo CD. Sealed Secrets is cluster-bound, and its controller is a single point of failure for decryption.
+
+The page's picks: ESO or the CSI driver for a production cluster whose secrets live in a cloud secrets manager; SOPS for multi-cluster GitOps, or Sealed Secrets for a single cluster; Vault with ESO or CSI for one multi-cloud secrets layer. Any of them without etcd encryption is incomplete, so turn that on first. Treat the in-cluster Secret object as a delivery mechanism, not as the source of truth.
+
+== Do I need an HSM, or is the cloud KMS enough?
+layout: question
+section: faq
+A requirement asks for FIPS 140-3 Level 3. Consider what the shared cloud KMS already provides, and what a dedicated HSM adds.
+notes:
+The last question is also from the page's FAQ. Ask it before showing the answer.
+
+== Usually the cloud KMS is enough
+layout: answer
+section: faq
+For the vast majority of workloads, the cloud KMS is enough. FIPS 140-3 Level 3 alone does not call for a dedicated HSM on AWS or Azure. Step up for single-tenant key isolation or legacy PKCS#11, JCE or KSP/CNG access.
+notes:
+For the vast majority of workloads, the cloud's default KMS is enough. AWS KMS protects every key with FIPS 140-3 Level 3 validated HSMs. Keys in Azure Key Vault Standard, and Cloud KMS keys at the SOFTWARE protection level, the default when you create a key yourself, are software-protected and validated to FIPS 140 Level 1. For HSM-protected keys without a dedicated HSM, create HSM key types in Key Vault Premium, or choose the Cloud KMS HSM protection level.
+
+Step up to CloudHSM, Azure Key Vault Managed HSM or Google Single-tenant Cloud HSM when you need single-tenant key isolation. A legacy application that needs PKCS#11, JCE or KSP/CNG access points to AWS CloudHSM or Azure Cloud HSM, which expose those interfaces; Managed HSM uses the same API as Key Vault.
+
+A FIPS 140-3 Level 3 requirement alone does not call for a dedicated HSM on AWS or Azure: outside the China Regions, AWS KMS already uses HSMs validated at that level, and so does Key Vault Premium's current HSM platform. Dedicated HSMs cost meaningfully more and have lower availability guarantees than shared KMS, so pay for one only when the requirement is named.

@@ -74,7 +74,12 @@ credit: <source and licence>
 The limits keep slides readable but do not guarantee that a slide fits.
 `--build` is the layout check. It refuses an outline with any style or guide
 finding. The renderer estimates every element's height and refuses a slide
-whose content would end below the bottom limit, then reopens the saved file
+whose content would end below the bottom limit. A heading or cover title
+gets the lines Google Slides wraps it to, measured in Space Grotesk Bold with
+its kerning (`heading_rows` in `tools/breach_deck_render.py`), when that is
+more than the character count gives, so a heading within 46 characters that
+Slides still wraps pushes the slide down a line rather than printing its
+second line over the text below. The renderer then reopens the saved file
 and verifies the slide count and size, font sizes, footers and speaker notes,
 that no shape ends below the limit, and that no slide holds an en or em dash.
 A deck that fails either step has no .pptx left in `tools/decks/build/`.
@@ -309,7 +314,14 @@ Speaker notes run to the next "== " line. Every slide has them.
   A table column is first widened to hold its widest word. And it names a
   timeline label that wraps past three lines (the when) or eight (the
   what); timeline lines are counted from measured glyph widths, so a label
-  that wraps in Google Slides has its lines reserved.
+  that wraps in Google Slides has its lines reserved. Slide headings and the
+  cover title are counted the same way, in Space Grotesk Bold alone with its
+  kerning, the way Google Slides sets them, and get the more of that and the
+  character count's lines; Slides wraps a heading line that reaches its
+  box's width, and the count holds a line fitting only when it leaves 0.4 pt
+  free (`HEADING_WRAP_SLACK_PT`). A heading that takes two lines moves the
+  slide down, so the `LayoutError` for a full slide can come from the
+  heading; shorten it.
 - `--stamp` removes every deck line and writes one after the last `pm-link`
   line of each mapped page, planning every page before writing any.
   `--record` refuses an outline with any finding `--check` reports, and
@@ -355,3 +367,249 @@ python3 tools/sync_breach_deck_index.py --self-test  # planted controls
 outline, no breach page or no card on the timeline. The generated text sits in
 headings, links and `no-glossary` spans, so `crosslink_pages.py` never edits
 it; the self-test asserts that against the real glossary.
+
+# Topic decks
+
+Each teaching page carded on `topics.html` can have a slide deck, written as a
+plain-text outline in `tools/decks/topics/`, built into a .pptx, published to
+Google Slides and linked from one line under the page's `page-meta` line. The
+page set is every root-level card on `topics.html` less `EXCLUDED` in
+`tools/build_topic_decks.py` (`glossary.html`, `faq.html` and
+`vendor-landscape.html`), so a new topic card shows up in `--status` without a
+code change.
+
+The topic tool is the breach tool's machinery run with a different
+`DeckKind`: the parser, style limits, mapping, stamping, staleness and build
+loop live once in `tools/build_breach_decks.py`, and every function that reads
+a kind-specific value takes a `kind`. `tools/topic_deck_render.py` draws every
+layout but `figure` and `code` through `tools/breach_deck_render.py`, and adds
+the `figure` layout, the `code` layout (drawn with the how-to renderer's code
+box), the cover art and the topic wording of the generated slides.
+
+```bash
+python3 tools/build_topic_decks.py --self-test    # run the built-in cases
+python3 tools/build_topic_decks.py --check        # CI gate
+python3 tools/build_topic_decks.py --extract SLUG [--sections ID,ID]   # the page as text, for drafting and review
+python3 tools/build_topic_decks.py --build SLUG [SLUG ...]   # render outlines to tools/decks/topics/build/
+python3 tools/build_topic_decks.py --self-test-render        # run the renderer cases
+python3 tools/build_topic_decks.py --stale [--published-only]  # decks whose outline or cited sections changed
+python3 tools/build_topic_decks.py --status       # outline and publish state, and the pages with no deck by design
+python3 tools/build_topic_decks.py --stamp        # rewrite topic page deck lines from the mapping
+python3 tools/build_topic_decks.py --record SLUG PRES_ID
+```
+
+`--self-test` and `--check` use the standard library only, so CI runs them
+without python-pptx, Pillow or Playwright. `--build` needs python-pptx and
+Pillow, plus Playwright with Chromium to render the page's diagrams;
+`--self-test-render` needs the same. `--check` exits 1 when there are no
+outlines.
+
+## Reading a page: `--extract`
+
+`--extract SLUG` prints the page's `<main>` as text: the page title as
+`# <h1> {#top}`, then each h2 as `## <text> {#id}` and each h3 as `### <text>`,
+paragraphs as single lines, list items as `- ` lines, table rows as
+`| a | b |`, a link's URL in parentheses after its text except for glossary
+links, each `<pre>` where it sits between two lines of three backticks, line
+for line as a reader sees it (entities decoded, indentation kept, trailing
+spaces dropped), and each diagram where it sits as
+`[figure #id] <title>: <description> (caption: <caption>)`. The table of
+contents, the page finder, the `page-meta` line and the deck line are left
+out, and so are the labels inside an SVG. With `--sections a,b` it prints the
+heading list and then only those sections. Drafters and reviewers read this,
+never the page's HTML or images.
+
+## Topic outline format
+
+What differs from the breach format:
+
+```text
+title: <deck title>
+page: <slug>.html
+as-of: YYYY-MM-DD
+promise: <one sentence>
+
+== <slide heading>
+layout: figure
+section: supply-chain
+figure: cluster-supply-chain
+At most 25 words of prose on a figure slide.
+notes:
+Speaker notes, on every slide.
+```
+
+- `page:` names a page from the topic page set.
+- Every slide carries `section: <id>` or `section: <id> | <id>`: one or two
+  ids, so the gate and the review stay scoped to the part of the page the
+  slide draws on. Three or more is a parse error naming the line. An id is
+  the `id` of the `<section>` that wraps an h2 in `<main>`. An h2 with no such
+  section gets a slug of its text (`Where next` is `where-next`). The text
+  above the first h2 is section `top`. The ids are the `{#id}` marks in the
+  extract.
+- Control lines are `layout`, `section`, `figure`, `caption`, `source` and
+  `credit`; there is no `stage`, `stages` or `phase`.
+- Layouts: `text`, `stats`, `checklist`, `list`, `links`, `layers`,
+  `timeline`, `compare`, `table`, `bars`, `matrix`, `question`, `answer`,
+  `figure` and `code`, with the breach layouts' typed lines. There is no
+  `stage`, `stage-group`, `flow` or `background`.
+- A `list` slide takes 2 to 7 `item:` lines and draws each with a dot where a
+  `checklist` draws a tick box, so pitfalls and anti-patterns do not read as
+  things to do. Like `check:` lines, items are typed fields, not prose.
+- A `figure` slide has one `figure: <id>` line naming one of the page's
+  diagrams, which must sit in a section the slide cites; its id is the
+  `[figure #id]` in the extract (the figure's own `id`, or its SVG
+  `<title>`'s id where the figure has none). The builder places the page's
+  `<figcaption>` under the picture. Each figure appears at most once per
+  deck, and a deck whose page has a diagram has at least one `figure`
+  slide.
+- A `figure` slide may carry one `caption: <text>` line, and the builder
+  then prints that text under the picture instead of the whole caption.
+  Use it to drop a sentence that points at the page ("the cards above",
+  "the next section"), which points at nothing on a slide. The text is one
+  or more whole sentences of the figure's caption (the `(caption: ...)` in
+  the extract), each word for word and in the page's order; a sentence ends
+  at `.`, `?` or `!` followed by a space or the end, and runs of whitespace
+  count as one space. `caption: none` prints no caption, for a caption
+  whose every sentence points at the page. `--check` reports any other
+  text, naming the `caption:` line; an empty `caption:` line, or one on
+  another layout, is a parse error. Breach outlines take no `caption:` line.
+- A `code` slide shows an excerpt of one of the page's code blocks, written
+  as a how-to outline writes one: a fence line of three backticks (a
+  language after them is allowed and ignored), the excerpt, then a line that
+  is exactly three backticks. Write the prose above the fence and `notes:`
+  below it:
+
+  ````text
+  == Pin the CLI and the providers
+  layout: code
+  section: anatomy
+  The terraform block pins versions and says where state lives.
+  ```hcl
+  terraform {
+    required_version = ">= 1.6.0"
+  ```
+  notes:
+  Speaker notes.
+  ````
+
+  The excerpt is whole, consecutive lines of one `<pre>` in a section the
+  slide cites: copy them from between the backtick lines in the extract,
+  indentation included. `--check` reports an excerpt that joins two blocks,
+  skips or shortens a line, or holds a line the page does not, and names the
+  section when the lines are a block in a section the slide does not cite;
+  each such finding names the fence's line. Trailing spaces do not count.
+  No other layout takes a fence, a slide has at most one, and a fence that
+  is empty, never closed or inside the notes is a parse error. Breach
+  outlines still have no code fences.
+- Every number, technique ID and link in a slide's text and notes appears in
+  the sections it cites. The title and promise, which the cover shows, are
+  held to the whole page.
+- On a page that carries "(disclosure: the site's author works at Wiz)", the
+  first slide that shows Wiz carries the disclosure on the slide, where the
+  audience sees it. A `figure` slide shows its picture's text and the caption
+  it prints too, and a `code` slide its code, so a diagram or an excerpt that
+  names Wiz makes its slide one that shows Wiz. The notes never count for
+  this: they are not shown, and the PDF leaves them out. A title or promise
+  that names Wiz carries it in the title or the promise. Separately, notes
+  that name Wiz before any slide shows it carry the disclosure too, for the
+  presenter who reads them out.
+- Limits: 15 to 30 slides counting the generated cover, how-to-use and
+  closing slides; at most 40 words of prose per slide (25 on a `figure`
+  slide), 14 per typed field, 12 in a heading and 300 in the notes; at most
+  12 code rows on a `code` slide, counted as the how-to decks count them (a
+  line longer than 84 columns wraps at spaces and counts the rows it takes);
+  no U+2013 or U+2014 and no spaced hyphen used as a dash. `--check`'s dash
+  rule does not read code, which is the page's as written; `--build` still
+  refuses an en or em dash on any slide.
+
+## Topic gate, staleness and the deck line
+
+- `--check` reports every finding above, naming the outline line, and
+  validates `tools/decks/topics/published.json`: every entry has exactly
+  `id`, `outline_sha256`, `page_sha256`, `cover_sha256` (the cover's art),
+  `sections` (each cited section id mapped to its hash) and `published`.
+- A section's hash covers its extract text, link URLs included, and the SVG
+  markup of its figures, so a redrawn diagram changes it while the
+  `page-meta` date, the deck line, the nav and a glossary link do not.
+  `--stale` names the cited sections that changed or are no longer on the
+  page; a change to a section no slide cites leaves the deck current, so a
+  re-review reads only the named sections. The cover's art sits outside
+  `<main>`, so it has its own hash: a redrawn hero, or on a page without one
+  a changed tile image or alt text, makes the deck stale too.
+- The deck line is `<p class="page-meta" data-topic-deck>` with the breach
+  deck line's link text, alone on its line right after the page's
+  `page-meta` line at the top of `<main>`. Under it, also alone on its line,
+  `--stamp` writes the preview: `<details class="deck-preview"
+  data-topic-deck>` holding the deck's `/embed` viewer in a `.deck-frame`.
+  It starts closed, and its iframe has no `src`, only a `data-src` naming
+  the viewer, because with scripts off a browser loads every iframe at page
+  load, closed panel and `loading="lazy"` or not. `main.js` copies
+  `data-src` into `src` when the panel opens, so nothing loads from Google
+  until a reader opens it, with scripts on or off. With scripts off,
+  `noscript.css` hides the empty frame and the panel's `<noscript>` holds a
+  `.deck-preview-link` to the same viewer. `--check` wants exactly those two
+  lines, in that order, for the mapping's id, and any other Google Slides
+  link or embed on the page is a finding. `--stamp` and `--record` write
+  both and plan every page before writing any, as the breach tool does. The
+  glossary cross-linker skips both lines.
+- `topics.html` shows the same deck on the topic's card. A card with a deck
+  is a `<div class="resource-card resource-card--topic-deck">` holding the
+  card's link (its picture, h3 and p unchanged), then two lines carrying
+  `data-topic-hub-deck`: a `.deck-actions` strip with the PDF and editable
+  copy links, and a closed `.deck-preview` written the same way as the
+  page's, so a closed card preview requests nothing either. A card whose
+  topic has no deck stays a plain `<a class="card-link">` card. `--stamp`
+  and `--record` write every card from the mapping, in the same plan as the
+  topic pages, and `--check` fails a card that disagrees with it or any
+  other Google Slides link on the page. The cross-linker skips both lines
+  here too.
+
+## Topic build
+
+`--build SLUG` writes `tools/decks/topics/build/<slug>.pptx`, refusing an
+outline with any `--check` finding, and verifies the saved file as the breach
+build does, with pictures allowed. Diagrams render with Playwright: the page
+loads from the working tree through a routed origin with `integrity`
+attributes stripped, a light colour scheme and device scale 2, and each
+figure's `<svg>` is screenshotted. The render stops when `style.css` did not
+load, and a picture of one colour is refused as blank. The hero illustration,
+which article pages hide, is shown for its screenshot on a panel the colour of
+the cover. PNGs are cached in `tools/decks/topics/build/figures/<slug>/`
+under the hash of their SVG markup, so an unchanged figure is never rendered
+again. The hero's key also covers `style.css` and the CSS that reveals it,
+because the stylesheet draws the hero as well. Delete that directory to render
+everything afresh.
+
+- A `figure` slide shows its heading, its prose, then the picture on a white
+  panel, scaled to fit with its aspect ratio kept and never past 1.5 image
+  pixels per point of its width, with its caption under it. When the
+  room left is too small, a `LayoutError` names the slide; shorten the
+  heading or the prose.
+- A `code` slide shows its heading, its prose, then the how-to decks' code
+  box (`code_box` in `tools/howto_deck_render.py`, so both families draw the
+  same box): the excerpt in Source Code Pro at 16 pt on the dark panel, with
+  a 12 pt tab on its top edge carrying what the how-to build prints for the
+  same excerpt: the block's `data-lang` uppercased, nothing for a block
+  labelled `text` or not labelled at all, or the file a heredoc writes. The
+  limits do not guarantee a fit: under a one-line heading, 12 code rows
+  leave room for about 35 words of prose, and a heading that wraps takes
+  more. So `--build` is the layout check here too: a `LayoutError` names the
+  slide whose code would end below the room it has; shorten the heading, the
+  prose or the excerpt.
+- The cover shows the page's hero illustration beside the title, or, on a
+  page without one, the image on its `topics.html` card.
+- Every picture carries alt text: the SVG's `<title>` for a figure, the
+  hero's label, or the card image's `alt`.
+- Verification also checks that the cover carries the art, each `figure`
+  slide its one picture and the caption it prints, and no other slide a
+  picture, and that every picture has the expected alt text, its image's
+  aspect ratio, enough pixels, no crop and more than one colour. It checks
+  that each `code` slide carries one code box holding its excerpt line for
+  line, at exactly the how-to code sizes, with the expected tab or none, and
+  that no other slide carries a code box.
+
+Publishing follows the breach steps, to the "CSOH topic decks" Drive folder:
+build, upload privately, check every picture in Google's render, fact-review
+the slides against the sections they cite, get the owner's approval, then on
+the owner's go share it publicly, run `--record SLUG PRES_ID`, run `--check`
+and commit. Topic decks are CC BY-NC 4.0 and the pages stay CC BY-NC-ND 4.0.

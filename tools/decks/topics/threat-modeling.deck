@@ -1,0 +1,450 @@
+title: Cloud Threat Modeling
+page: threat-modeling.html
+as-of: 2026-11-25
+promise: Threat modeling is reasoning out loud, in writing, about what can go wrong with a system before an attacker does it for you.
+
+== The 30-second version
+layout: text
+section: top
+Threat modeling is reasoning out loud, in writing, about what can go wrong with a system before an attacker does it for you. It is not a checklist, a tool or a compliance artifact, though all three exist around it.
+notes:
+Threat modeling is the practice of reasoning out loud, in writing, about what can go wrong with a system before an attacker does it for you. It is not a checklist, not a tool and not a compliance artifact, though all three exist around it. The classic framing is Adam Shostack's four questions: What are we building? What can go wrong? What are we going to do about it? Did we do a good job?
+
+The practitioner's stack the page describes: STRIDE as the day-to-day categorization, PASTA for high-stakes, risk-quantified modeling, LINDDUN for privacy, attack trees for goal-oriented analysis, and MITRE ATT&CK Cloud as the threat library.
+
+Cloud changes the model too: identities are everywhere, the control plane is the attack surface, shared responsibility shrinks scope, multi-tenancy is an assumption, and default stances differ per cloud.
+
+== What threat modeling is, and is not
+layout: table
+section: what-it-is
+A structured way to reason about what can go wrong with a system, producing a written artifact: threats, ranked, with mitigations and owners. It is most valuable during design.
+row: It is not | Why
+row: A checklist | A checklist that replaces the modeling bakes in someone else's threat assumptions
+row: A tool | The work itself is human reasoning over a system diagram
+row: A compliance artifact | Done only for the auditor, it produces compliance theater
+row: A one-time event | A model from two years ago describes a system that no longer exists
+notes:
+Threat modeling produces a written artifact, a list of threats, ranked, with mitigations and owners, that future versions of you, your team and the auditor can read. It is most valuable during design, when the cost of changing an architectural decision is still close to zero.
+
+Checklists answer "did you do X?" Threat modeling asks which Xs you should worry about, given what you are building. A checklist that came out of a threat model is a useful artifact. A checklist that replaces the modeling is dangerous, because it bakes in someone else's threat assumptions.
+
+Threat Dragon, Microsoft TMT, IriusRisk and a dozen others can support the work, but the work is human reasoning over a system diagram. The page says a team without tooling that runs a 30-minute STRIDE session every two weeks will out-deliver a team with a $50,000 platform that never books the meeting.
+
+SOC 2, ISO 27001, PCI DSS, FedRAMP and most modern frameworks now reference threat modeling explicitly. Doing it only for the auditor produces a 200-page document everyone signs once, nobody updates, and which fails its first contact with a real attacker. Do it because it makes your system safer; the audit evidence follows.
+
+Systems evolve, trust boundaries shift, and new third-party integrations introduce new edges. The discipline is in re-running the model at every meaningful design change.
+
+== Shostack's four questions
+layout: table
+section: four-questions
+Almost every methodology since maps to one of the four. The fourth is the one most teams skip.
+row: Question | What the work is
+row: 1. What are we building? | Draw the data-flow diagram and mark the trust boundaries
+row: 2. What can go wrong? | Enumerate threats with a categorization: breadth first, then ranking
+row: 3. What are we going to do about it? | Mitigate, transfer, accept or avoid; mitigations get owners and target dates
+row: 4. Did we do a good job? | Validate: shipped mitigations, peer review, pentests, red-team exercises
+notes:
+Adam Shostack, author of Threat Modeling: Designing for Security, which the page calls the field's defining textbook, reduced the practice to four questions.
+
+First, draw the system: a data-flow diagram with components, data stores, external entities and the interactions between them. Mark the trust boundaries, the dashed lines where data crosses from one zone of trust to another. Vague diagrams produce vague models.
+
+Second, apply a categorization such as STRIDE, PASTA, LINDDUN, attack trees or a custom library, walking the diagram element by element or interaction by interaction. Don't filter for plausibility yet: the goal is breadth, then ranking.
+
+Third, decide for each threat: mitigate by adding a control, transfer it through insurance, a contract or a third party, accept it as a risk decision with an owner, or avoid it by not building the thing.
+
+Fourth, validate. Did the mitigations ship? Did peer reviewers find threats you missed? Did pentests or red-team exercises confirm you ranked the right threats? This question turns threat modeling into an evolving discipline rather than a one-shot ritual.
+
+Skip question one and you find threats in an imaginary architecture. Skip question three and you have cataloged risks rather than reduced them. Skip question four and you never know whether you got better.
+
+== STRIDE: six threat categories
+layout: table
+section: stride
+Microsoft's mnemonic: a team can produce a useful threat list in 30 minutes with STRIDE and a diagram.
+row: Threat | Violates | Cloud example
+row: Spoofing | Authentication | Stolen IAM role credentials
+row: Tampering | Integrity | IaC plan tampering between plan and apply
+row: Repudiation | Non-repudiation | CloudTrail disabled in one region
+row: Information disclosure | Confidentiality | Public S3 bucket
+row: Denial of service | Availability | Cloud-bill DoS via misconfigured auto-scaling
+row: Elevation of privilege | Authorization | iam:PassRole abuse
+notes:
+STRIDE is Microsoft's six-category mnemonic for the kinds of threats systems face. Each letter maps to the security property the threat violates. The page calls it the most-taught, most-used and most-tractable categorization scheme.
+
+The page's table gives more cloud examples for each letter: a forged JWT, IMDSv1 SSRF impersonating the workload identity, an OIDC trust policy that trusts any GitHub repo, secrets in env vars exposed via SSRF, a container image swapped before pull, a shared IAM user accessed by several humans, a KMS key used without logging, a blob storage SAS URL leaking customer data, exhausted API quotas, and AssumeRoleWithWebIdentity to a more-privileged role.
+
+The mnemonic is a generative tool, not a comprehensive ontology. STRIDE doesn't explicitly cover privacy, which is LINDDUN's job, supply chain, which is a category in its own right, or business-logic abuse. Use STRIDE as the starting categorization and add domain-specific lenses where the system warrants it.
+
+== Per-element or per-interaction
+layout: compare
+section: stride-variants
+col: STRIDE-per-element | Each element gets the categories for its type | Mechanical, fast and predictable | Tends to under-find at boundaries
+col: STRIDE-per-interaction | Full STRIDE on every arrow crossing a trust boundary | More threats, more time, more practitioner skill | Surfaces the cross-boundary problems
+The pragmatic default: per-element for fast, repeatable team sessions; per-interaction for new architectures, regulated workloads, or anything where the cost of a missed threat is high.
+notes:
+There are two ways to apply STRIDE against a data-flow diagram, and they produce different threat lists at different costs.
+
+Per-element walks each element on the diagram, whether external entity, process, data store or data flow, and applies the categories that can affect that element type. Microsoft's chart says external entities can be spoofed and can repudiate; processes can suffer every STRIDE class; data stores can be tampered with, leak information and suffer DoS, but are not generally spoofed; data flows can be tampered with, leak information and suffer DoS. The mechanical traversal is fast and predictable, but it tends to under-find at boundaries.
+
+Per-interaction takes every arrow that crosses a trust boundary and applies the full STRIDE set. It produces more threats and surfaces the cross-boundary problems STRIDE was originally designed to catch; the page says the trust-boundary crossing is where most cloud threats live. It costs more time and demands more practitioner skill to keep the list useful.
+
+Many mature teams run per-element on a quarterly cadence, and per-interaction once at design and after any major architectural change.
+
+== PASTA in seven stages
+layout: list
+section: pasta
+A risk-centric methodology from Tony UcedaVélez and Marco Morana. Days of work, not minutes; for most workloads, STRIDE is enough.
+item: 1. Business objectives: purpose, constraints, risk tolerance
+item: 2. Technical scope: boundaries, dependencies, cloud services in scope
+item: 3. Decompose: data flows, trust boundaries, identity model
+item: 4. Threat analysis, often with STRIDE, CAPEC or ATT&CK as input
+item: 5. Vulnerability analysis: map threats to existing weaknesses
+item: 6. Attack modeling: attack trees and simulated kill chains
+item: 7. Risk and impact: scored risks, treatment plan, residual risk register
+notes:
+Where STRIDE answers "what kinds of threats apply here", PASTA answers a bigger question: given the business objectives, the technology stack and credible attacker capabilities, what is the prioritized risk picture, and how should we treat it? It produces a heavier artifact for higher-stakes systems.
+
+The seven stages run from business objectives and technical scope, through decomposing the application into data flows, trust boundaries, an identity model and data classification, to threat analysis, vulnerability analysis against known CVEs, misconfigurations, design flaws and control gaps, and attack modeling. The last stage scores risks by likelihood times impact, or quantifies them via FAIR, and produces a treatment plan and a residual risk register.
+
+The page says PASTA's reputation as heavyweight is partly fair. The payoff is a defensible risk artifact that a CISO can take to a board, a regulator can read, and an internal audit team can re-perform against. PASTA earns its keep on regulated, mission-critical or revenue-bearing systems where the stakes justify the cost.
+
+== LINDDUN for privacy
+layout: list
+section: linddun
+The privacy counterpart to STRIDE, from KU Leuven. Run it alongside STRIDE on any system that processes personal data at scale.
+item: Linkability: two anonymized events that together identify a user
+item: Identifiability: a hashed email reversible via rainbow tables or a join
+item: Non-repudiation: log retention beyond the privacy promise ties data to identity
+item: Detectability: a record's presence inferable without reading it
+item: Disclosure of information: personal data reaching unauthorized parties
+item: Unawareness: users not informed how their data is processed
+item: Non-compliance: processing that violates a regulatory obligation
+notes:
+LINDDUN categorizes privacy threats, the harms that arise from how a system handles personal data, which security-focused methodologies tend to miss. With GDPR in the EU, CCPA and CPRA in California, LGPD in Brazil, PIPL in China and a growing list of other regimes, the page says its relevance has expanded sharply.
+
+The categories partially overlap with STRIDE, since disclosure of information appears in both, but they address different audiences: STRIDE for the security team, LINDDUN for the privacy office and the data-protection officer.
+
+The page calls a combined STRIDE and LINDDUN session a strong default for any consumer-facing or healthcare workload.
+
+== Attack tree: exfiltrate customer PII
+layout: compare
+section: attack-trees
+col: OR: valid database credentials | Steal app-tier IAM role credentials | Leaked secret in source repo | Phish a database administrator
+col: OR: abuse the cloud API | Compromise a principal with rds:* permissions | Confused deputy via a backup-restore role | Cross-account chain to a snapshot-export role
+col: OR: compromise the app tier | Unpatched dependency | Container escape from a co-tenant workload | Supply-chain compromise of a dependency
+The root is the attacker's goal. An attacker needs only one leaf; the defender needs all the leaves' parent OR branches cut.
+notes:
+Attack trees are Bruce Schneier's contribution: a goal-oriented enumeration of how an attacker could achieve an objective. The root of the tree is the attacker's goal, the branches are sub-goals, and the leaves are concrete actions an attacker would take. AND nodes require all their children; OR nodes require any one.
+
+Where STRIDE walks the defender's view of the system, asking what can go wrong at each element, attack trees walk the attacker's view: given a goal, what paths lead to it? The two are complementary. Many practitioners use STRIDE to generate threat candidates and then build attack trees for the highest-priority ones.
+
+This is the page's worked sketch for the goal of exfiltrating customer PII from the database. The attacker can obtain valid credentials, for example by stealing the application tier's role credentials through SSRF; abuse the cloud API to read the database directly; or compromise the application tier and exfiltrate through legitimate data flows.
+
+Writing it down maps each leaf to a specific mitigation, or to the absence of one. An attacker only needs one leaf to succeed, while the defender needs all the leaves' parent OR branches cut, and the tree makes that asymmetry concrete in a way STRIDE alone doesn't.
+
+== Kill chains and threat libraries
+layout: table
+section: kill-chains
+Kill chains give the typical sequence an attacker follows, connecting design threats to detection and response.
+row: Model or library | What it gives you
+row: Lockheed Martin kill chain | Teaching scaffold; cloud breaches frequently skip stages
+row: ATT&CK Cloud Matrix | Tactics and techniques from real-world adversary behavior
+row: CAPEC | Attack patterns, more design-oriented than ATT&CK
+row: MITRE D3FEND | Countermeasures mapped to ATT&CK techniques
+row: Domain extensions | ATT&CK for Containers, ATT&CK for ICS, MITRE ATLAS for ML
+notes:
+The Lockheed Martin Cyber Kill Chain is the original seven-stage model, from reconnaissance through weaponization, delivery, exploitation, installation and command and control to actions on objectives. It is useful as a teaching scaffold, but criticized in cloud contexts because cloud breaches frequently skip stages: a leaked access key collapses several stages into one API call.
+
+MITRE ATT&CK is a comprehensive threat library of tactics, the why, techniques, the how, and sub-techniques, the specifics, built from real-world adversary behavior. The Cloud Matrix is the cloud-specific lens, with sub-matrices for IaaS, SaaS, Office Suite and Identity Provider. Most modern threat modeling references ATT&CK techniques by ID, such as T1078, T1098 and T1136, so designers, detection engineers and red teams share vocabulary.
+
+CAPEC is MITRE's catalog of attack patterns, more design-oriented than the operations-oriented ATT&CK. D3FEND is the defender-side counterpart: use it to validate that you have at least one detective or preventive control per high-priority technique. ATT&CK for Containers, ATT&CK for ICS and MITRE ATLAS are domain-specific extensions. The OWASP Top 10, API Top 10 and LLM Top 10 are focused, well-known starting points for app, API and AI workloads.
+
+The page closes this section with a reminder: a flipchart, a marker and the four questions outperform most tooling.
+
+== Tools: pick one your team will act on
+layout: table
+section: tools-os | tools-commercial
+Threat Dragon and TMT produce categorically correct but generic lists, so you add the cloud threats yourself. Commercial platforms add cloud-aware threat libraries.
+row: Tool | Approach
+row: OWASP Threat Dragon | Open source, STRIDE-per-element, git-friendly JSON
+row: Microsoft Threat Modeling Tool | Free, Windows-only; threat generation by STRIDE-per-interaction rules
+row: IriusRisk | Questionnaire-driven; library mapped to CAPEC and ATT&CK
+row: ThreatModeler | Visual modeling with AWS, Azure and GCP stencils
+row: AWS Threat Composer | Open source, published by AWS
+notes:
+OWASP Threat Dragon is open source and cross-platform, web or desktop, with diagrams stored as JSON so threat models can live next to the code. The page calls it free, vendor-neutral, scriptable and good enough for the 80% case. Its limitation for cloud is that it has no cloud-service-aware threat library, so you bring the cloud knowledge yourself.
+
+Microsoft TMT is free and Windows-only, with an excellent stencil library, automatic threat generation and good reporting. Its stencils are Azure-flavored: you can use it for AWS or GCP, but you'll fight it.
+
+Both tools produce threat lists that are categorically correct but generic. A cloud-aware practitioner has to enrich the output with the IMDS, IAM, OIDC, KMS and shared-responsibility-edge threats the generic library doesn't surface.
+
+The commercial layer adds cloud-aware threat libraries, CI/CD and ticketing integration, and team collaboration. IriusRisk integrates with Jira, GitHub and GitLab and suits organizations that want repeatable models across many teams. ThreatModeler ties threat generation to the components used. SecuriCAD, from foreseeti, now part of Google, simulates probabilistic attacker paths, closer to attack-graph analysis than STRIDE enumeration. Newer entrants such as Devici add AI-assisted generation and diagram-from-IaC import. Azure offers built-in TMT templates; GCP has guidance but no first-party tool.
+
+The criterion that matters is which tool produces threat lists your team will act on. A deep library nobody trusts produces dust-collecting models; a simpler tool the team has adopted produces shipped mitigations.
+
+== When to threat-model
+layout: figure
+section: sdlc
+figure: sdlc-moments
+caption: These are the four moments to ask them.
+The cheapest moment to find an architectural threat is at the whiteboard. The most expensive is after the architecture is implemented.
+notes:
+The figure shows the moments to threat-model: design, pre-implementation, pre-production, and after an incident. The caption ties it back to the four questions: these are the four moments to ask them.
+
+Design review is the original target. Threat model before the architecture decision record is approved; most threats found here cost minutes to fix, such as changing a trust boundary, choosing a different service or scoping a role differently.
+
+Pre-implementation review comes when the team has a detailed design but no code yet, and re-confirms that the model matches what is being built. Pre-production review validates the implementation against the design-time model and catches the gap between what we said we'd build and what we built. After any meaningful security event, re-threat-model the affected component with the new attacker behavior as input.
+
+The section adds a fifth placement, a periodic refresh: quarterly for high-criticality systems, annually for the rest. Threat modeling at any single stage helps; threat modeling across all five is how mature programs operate.
+
+== The agile threat model
+layout: checklist
+section: agile
+The antidote to the 200-page artifact that is produced once and never updated. Re-run it whenever the trust boundary changes.
+check: 30 minutes at a whiteboard: engineer, security partner, product or ops
+check: Draw the data-flow diagram
+check: Walk STRIDE per element
+check: Write threats on sticky notes
+check: End with mitigations, each with an owner and a target date
+check: Commit the diagram and threat list to the repo
+notes:
+The classic failure mode is the 200-page artifact: produced once, reviewed once, never updated, and quietly irrelevant by the time the system has shipped.
+
+The agile session is 30 minutes on a whiteboard with the engineer who knows the system, a security partner, and a product or ops person who knows the data sensitivity. Draw the diagram, walk STRIDE per element, write threats on sticky notes, and end with mitigations that each have an owner and a target date. The diagram and threat list committed to the repo are the artifact.
+
+Re-run the session whenever the trust boundary changes: a new identity type, a new third-party integration, a new data classification, a new region. Re-run it for new features whose blast radius the team isn't sure about, and skip the formality when the change is cosmetic. The discipline is in doing it often, not in doing it exhaustively.
+
+The Threat Modeling Manifesto codifies the spirit: people and collaboration over processes, methodologies and tools; a journey of understanding over a security or privacy snapshot; a tool to expose dangers over a means to compliance.
+
+== What changes in the cloud
+layout: table
+section: cloud-different
+The methodology survives the move to cloud unchanged. The threats it surfaces shift.
+row: Shift | What it means for the model
+row: Identities everywhere | Spoofing and Elevation of Privilege dominate
+row: Control plane is attack surface | API actions such as AssumeRole are threat surfaces
+row: Shared responsibility | Mark the threats the provider owns, and yours
+row: Multi-tenancy assumptions | State the tenancy guarantees you rely on
+row: Default stances differ | Call out which cloud defaults the design depends on
+row: Change rate and ephemerality | Pair the model with CSPM or CNAPP runtime sensing
+notes:
+Every workload has an identity, every human has several, and every service-to-service call carries one. The page calls identity the new perimeter: most cloud threats involve an identity primitive somewhere.
+
+The cloud API is itself an attack surface. A traditional model worried about network-layer threats to a service; a cloud model also worries about API-layer threats to the control plane that manages it. CreateAccessKey, AssumeRole and PutBucketPolicy are first-class threat surfaces.
+
+Some threats are already mitigated by the provider: physical access, hypervisor escape (mostly), and DDoS scrubbing for managed front doors. Mark those out of scope explicitly, and mark what is still yours.
+
+Every managed service is multi-tenant under the hood. State the guarantees you rely on, such as per-account isolation, per-VPC isolation and KMS key-policy enforcement, and what would break if the provider's isolation surprised you. The page calls that extremely rare in practice but not zero, and points to ChaosDB and the LeakyLooker cross-tenant flaws in Looker Studio.
+
+AWS defaults to deny on IAM and permit on networking within a VPC, Azure has a more permissive RBAC inheritance model, and GCP defaults to organization-inherited deny. Threats obvious on one cloud are surprises on another.
+
+Cloud workloads are ephemeral and identities are created and destroyed in API calls, so a model that is correct at design time but stale at runtime is a hazard. Pair the model with runtime sensing, CSPM or CNAPP, so the design intent and the operational state stay aligned.
+
+== Worked example: 3-tier app on AWS
+layout: table
+section: worked-3tier
+Route 53, ALB, EC2 Auto Scaling running Java, RDS PostgreSQL. A STRIDE-per-interaction pass produces roughly 20 threats; here are five.
+row: Threat | STRIDE | Mitigation
+row: DNS hijack via registrar account takeover | S | Registrar MFA, DNSSEC, NS-record monitoring
+row: SSRF retrieves IMDS credentials | I | IMDSv2 required, hop-limit 1
+row: RDS snapshot copied cross-account | I | SCP denying snapshot share
+row: CloudTrail disabled by a compromised principal | R | Org trail; SCP denying trail disable
+row: Forged deploy as a release | S | OIDC federation from CI; signed artifacts
+notes:
+The architecture is Route 53, an ALB, an EC2 Auto Scaling Group running a Java application, and RDS PostgreSQL, with KMS for encryption keys and CloudTrail and VPC Flow Logs enabled. The page calls it a typical SaaS pattern that looks deceptively simple on the diagram.
+
+These are five rows from the page's table of 20, with shortened mitigations: the page adds minimal instance-profile permissions, a resource policy on snapshot sharing, an org trail with S3 and KMS lock, sigstore-signed artifacts and required reviewers.
+
+The other rows include reaching EC2 directly to bypass the ALB, a TLS downgrade, an L7 DDoS, an instance profile with overly broad RDS or S3 access, a shared database password, unencrypted traffic between app and database, unverified backups, a broad KMS key policy, a key disabled or scheduled for deletion, CloudTrail log mutation, a supply-chain compromise of a library, console break-glass without time-bound elevation, shared root credentials, a public upload bucket, and a region-wide outage of a single-region design.
+
+The page says the exercise is fast: an experienced practitioner produces this list in under two hours. The output is a concrete remediation backlog and a documented design that future reviewers and auditors can read.
+
+== LLM RAG app: three new trust boundaries
+layout: compare
+section: worked-llm
+col: Retrieved content as input | Any retrieved document becomes part of the prompt | A poisoned upload is trusted because it came from your vector store
+col: The model itself | A supply-chain dependency | Provider compromise, model-update behavior change, jailbreak technique discovery, training-data inversion
+col: Tool use as authorization | Any tool the agent can call is a privilege it has | An agent that can call refund_customer can be coerced into it
+A support chatbot with RAG over product docs and customer-uploaded knowledge bases, and tools to look up tickets, escalate and write to the CRM.
+notes:
+The second worked example is a customer-support chatbot using an LLM, with a RAG layer pulling from a vector database populated from product documentation and customer-uploaded knowledge bases. The agent has tool-use access to a few internal APIs: look up a ticket, escalate, and write a summary back to the CRM.
+
+This architecture introduces three trust boundaries that STRIDE against a classic 3-tier app doesn't see. Any document the RAG layer retrieves becomes part of the prompt, so a customer-uploaded knowledge base with embedded prompt-injection content is an input the system trusts because it came from your own vector store.
+
+The model is a supply-chain dependency. Provider compromise, behavior changes from a model update, jailbreak technique discovery and training-data inversion attacks are all categorically novel threats.
+
+Any tool the agent can call is a privilege the agent has, and crafted input can coerce it into calling one. The page calls tool-use authorization a design problem most systems aren't built to handle. The AI/ML Security page has the full treatment.
+
+== LLM RAG app: threats and mitigations
+layout: table
+section: worked-llm
+The same STRIDE walk surfaces these, but a practitioner who hasn't seen agentic systems before will miss tool abuse entirely.
+row: Threat | STRIDE | Mitigation
+row: Direct prompt injection | S/E | Input and output filtering
+row: Indirect injection via retrieved content | T/E | Treat all retrieved content as untrusted
+row: Agentic tool abuse | E | Per-tool authorization; human in the loop on high-impact tools
+row: Cross-tenant data leakage | I | Tenant ID enforced in retrieval queries
+row: Output exfiltration via markdown | I | Strip image and link rendering
+notes:
+These are five of the page's ten LLM threats, with shortened mitigations. For direct injection the page also lists system-prompt isolation and untrusted-input markers; for indirect injection, provenance metadata on retrieved documents. For agentic tool abuse, per-tool authorization is separate from the agent's identity, with a human in the loop on high-impact tools. For cross-tenant leakage it adds a per-tenant index where the threat model demands one. Markdown exfiltration works by having the model render an attacker-controlled image URL with PII in the path, so strip image and link rendering from untrusted output and put a content security policy on the chat UI.
+
+The other five are vector DB poisoning, where an attacker uploads a document that biases retrieval for any future query, met with per-tenant isolation in the vector DB, ingestion review and signed ingestion sources; embedding inversion, where embeddings are reverse-engineered to reveal source text, so access-control them as PII; model supply chain, met with vetted providers, pinned model versions and integrity checks; sensitive data in prompts leaking into the provider's logs or training pipeline, met with PII redaction and zero-retention agreements; and cost or DoS through token-maximizing prompts or tool recursion, met with rate limits and caps.
+
+The page's lesson: the threat library matters. Extending ATT&CK, MITRE ATLAS and the OWASP LLM Top 10 into your team's working vocabulary takes minutes and produces better models for years.
+
+== Worked example: multi-account landing zone
+layout: table
+section: worked-landing
+These threats are frequently invisible to single-account models, and this layer decides whether per-workload models can rely on the boundaries they assume.
+row: Threat area | Example mitigation
+row: Management account compromise | Minimal occupants; org-level Access Analyzer
+row: Cross-account trust | Required external-id on cross-account roles
+row: Org-level privilege escalation | SCPs that deny dangerous actions at the OU level
+row: Log-archive integrity | S3 Object Lock in compliance mode
+row: New-account provisioning | Account-vending pipeline bakes in controls before use
+row: Backup and restore | Vault in the log-archive account, with vault lock
+notes:
+The architecture is AWS Organizations with a hub-and-spoke model: a management account, log-archive, security tooling and network accounts, and per-environment and per-team accounts. IAM Identity Center handles human access, OIDC federation handles CI/CD, and there is a central transit gateway, an org-wide CloudTrail, and SCPs and RCPs.
+
+A management account compromise has the whole organization as its blast radius: a phished root, a compromised admin, a malicious OU change or billing-account capture. Cross-account trust attacks include confused deputies where an external-id is absent, trust policies that trust any AWS principal, and AssumeRole chains that accumulate privilege. Organization-level escalation includes assuming OrganizationAccountAccessRole from the management account and iam:PassRole into a service with org-level privileges.
+
+The log archive can be undermined by a role from another account that can mutate it. A new account can briefly exist without all its SCPs, Config rules or CloudTrail, so run an account-ready check before handoff. Backup vaults in workload accounts can be wiped by the workload's compromised principal.
+
+The page also covers network plumbing, such as transit-gateway route leakage from dev to prod, and identity provider drift, such as trust relationships that survive an employee's departure. Its point: if the landing-zone threats aren't worked through, every per-workload model sits on assumptions that may not hold.
+
+== Threat libraries, then your own
+layout: checklist
+section: libraries
+A threat library is a curated list of known patterns to start from instead of inventing every threat. The build-versus-buy decision tracks the program's maturity.
+check: Start with ATT&CK Cloud, CAPEC and the OWASP Top 10 lists
+check: Add domain libraries where relevant: ATT&CK for Containers, MITRE ATLAS, NIST SP 800-82
+check: Write a pattern down the fifth time a team rediscovers it
+check: Keep it small: 30 high-value patterns, crosswalked to ATT&CK
+notes:
+Start with public libraries: ATT&CK Cloud, CAPEC, the OWASP Top 10, API Top 10 and LLM Top 10, the CIS Threat Catalog, and the NIST SP 800-30 generic threat list. The page says they cover 80% of what a small program needs, and they speak the same vocabulary as your detection engineers, red team and auditors.
+
+Add domain libraries where relevant: ATT&CK for Containers if you run Kubernetes, MITRE ATLAS if you ship ML systems, NIST SP 800-82 if you have OT.
+
+Build a custom library when patterns repeat. The fifth time a team rediscovers the same SSRF-to-IMDS threat, write it into your internal library, annotated with your default mitigations, your detection coverage and the team that owns the response. Custom libraries shorten the time to the first threat in every later session.
+
+Keep them small. A 200-entry custom library is one nobody can hold in their head. The page prefers 30 high-value patterns specific to your stack, plus the public libraries for breadth, with the custom entries crosswalked to ATT&CK so they stay readable by outsiders.
+
+== Scoring threats: pick one rubric
+layout: table
+section: scoring
+Mixing rubrics within a program makes risk-register entries incomparable. The choice matters less than the consistency.
+row: Rubric | Where it fits
+row: DREAD | Informally deprecated: subjective scores, overlapping dimensions
+row: CVSS | Known vulnerabilities; poor for design threats
+row: FAIR | Dollar-denominated risk for high-stakes decisions
+row: Likelihood × Impact | Fast ranking inside a session; where most agile models live
+row: OWASP Risk Rating | Middle ground, with sub-factors; widely used for appsec ranking
+notes:
+The page says several rubrics exist and none are universally good.
+
+DREAD, for Damage, Reproducibility, Exploitability, Affected users and Discoverability, is Microsoft's original 1-10 rubric per dimension. Different reviewers produce wildly different numbers. A small team with strong shared calibration can still use it, but most programs have moved on.
+
+CVSS is excellent for known vulnerabilities with specific exploit characteristics, and poor for design threats, which don't have a defined exploit yet. Use it for CVE prioritization in vulnerability management, not as a design-review rubric.
+
+FAIR is quantitative: loss-event frequency times loss magnitude, decomposed into estimable factors with calibrated ranges, giving dollar-denominated risk that executives can rank against other investments. The setup cost is meaningful, and it is overkill for day-to-day triage.
+
+Simple likelihood times impact uses three or five buckets per dimension, giving a 9- or 25-cell heat map: imperfect, but fast, repeatable and good enough to drive ranking. OWASP Risk Rating adds sub-factors such as skill required, opportunity and awareness, a middle ground between that and FAIR.
+
+== Threat modeling as code
+layout: table
+section: as-code
+The GitOps pattern: the model lives in the repo, PRs that change architecture must update it, and CI fails the build when it goes stale.
+row: Tool or pattern | What it does
+row: Pytm | Model in Python; generates DFDs and a STRIDE-aligned threat list
+row: Threatspec | Threat annotations in source comments; dormant since 2020
+row: Threat Dragon CLI | CI checks the model exists, parses and is up to date
+row: Threat Composer | Structured threat statements, notably good for clarity
+row: IaC to diagram to threats | First-pass DFDs from Terraform or CloudFormation
+notes:
+The same instinct that produced infrastructure as code and policy as code produces threat modeling as code: keep the model in the repo, version it, diff it on changes, and run continuous checks against it.
+
+Pytm defines actors, processes, data stores, dataflows and trust boundaries in Python, and the page calls it excellent for repos where the architecture changes faster than the documentation. Threatspec embeds threat and mitigation annotations in source code comments and aggregates them into a model, though the project has been dormant since 2020. Threat Composer is AWS-published, browser-based and file-on-disk. Its statement format reads: a threat source can, given prerequisites, take a threat action resulting in an impact to an asset, leading to an outcome. Newer commercial tools generate first-pass diagrams straight from Terraform or CloudFormation, which cuts the "I'll update the diagram next sprint" failure mode.
+
+In the GitOps pattern the model lives at /threat-model/ in the repo, CI fails the build when the model parses but is older than a set number of days against a control file, and periodic review issues open automatically. Same hygiene as policy as code, same payoff.
+
+== AI drafts, humans decide
+layout: compare
+section: ai
+col: Where AI helps | STRIDE drafts from a diagram, roughly junior-analyst quality | Completeness checks for missing categories | Mitigation suggestions | Cross-walks to ATT&CK, CAPEC and OWASP
+col: Where humans still own the work | Trust-boundary judgment | Risk acceptance | Novel threats | Auditor sign-off
+The pragmatic 2026 pattern uses AI as a first-draft generator and a completeness validator, with a human reviewer making the keep, discard and edit calls.
+notes:
+The page says LLM-assisted threat modeling moved from research to mainstream practice between 2023 and 2026.
+
+Upload a diagram and an LLM produces a STRIDE-per-element threat list within seconds, at roughly junior-analyst quality: useful as a draft, but it requires review. LLMs are good at spotting the obvious gaps a tired reviewer drops. Their mitigation suggestions are excellent for surfacing the standard playbook quickly and weaker on context-specific trade-offs. Cross-walks to ATT&CK, CAPEC and OWASP are tedious for humans and fast and accurate for LLMs. Diagram generation from prose is still rough, but improving.
+
+Humans set the trust boundaries, because the LLM doesn't know your tenancy model, your customer trust assumptions or which integrations are contractually constrained. Accepting a risk is an organizational decision with budgetary and political dimensions: AI can recommend, and only an authorized human can decide. Anything outside the LLM's training distribution gets a hallucinated answer or none at all. And the auditor needs a human signatory.
+
+Vendors including IriusRisk, ThreatModeler and Devici have shipped agent-style flows that generate first-pass models from architectural prose. The page says to treat them like AI-assisted coding: productivity multipliers when used well, automation traps when used uncritically.
+
+== Common pitfalls
+layout: list
+section: pitfalls
+Beyond the seven below, watch for undocumented provider assumptions, tool fetishism, and stopping at "what can go wrong?"
+item: Threat modeling once and never updating
+item: Modeling components instead of trust boundaries
+item: No asset valuation
+item: Threats without owners and dates
+item: Treating the model as the goal
+item: Single-methodology fundamentalism
+item: Excluding engineering
+notes:
+A model that is never updated becomes archaeology: re-run it at every meaningful design change and commit it to the repo so updates show in code review. The threats live at the boundaries, so a model that lists components without marking the dashed lines misses the highest-signal part. Without asset valuation every threat looks equally important; tag every data store and process with a sensitivity or criticality.
+
+The page says a list of threats without owners is a list of complaints. A team that produced ten high-quality models last year but shipped two mitigations from them had a bad year. STRIDE-only programs miss privacy threats, and PASTA-only programs become a check-the-stages ritual, so combine STRIDE for breadth, attack trees for the highest-priority threats, and LINDDUN for privacy-sensitive systems. A model produced by security and dropped on engineering is a culture failure.
+
+The other three: "the provider handles that" is valid only when it is documented, so put the shared-responsibility line on the diagram. Buying a $50,000 platform produces a $50,000 expense, not threat models. And teams that stop at "what can go wrong?" without rigorously answering "what are we doing about it?" produce risk registers that grow forever; the page calls the third question non-optional.
+
+== Maturity stages
+layout: timeline
+section: maturity
+event: Ad-hoc | Individual practitioners, no common methodology or template
+event: Documented | A documented methodology and template; mitigations tracked
+event: Repeatable | A defined SDLC step, trained facilitators, a custom library
+event: Integrated | Models next to code; CI surfaces stale models
+event: Continuous | Quantitative scoring feeds investment; AI in the workflow with human review
+Jumping from Stage 1 (ad-hoc) to AI-assisted continuous threat modeling without the intermediate discipline produces lists nobody owns.
+notes:
+The page describes five stages. At Stage 1, threat modeling happens occasionally, driven by individual practitioners, and output lives in scattered pages that age out. At Stage 2, a methodology, typically STRIDE-per-element, and a template exist, high-priority projects run a model at design review, and mitigations are tracked.
+
+At Stage 3, threat modeling is a defined SDLC step, trained internal facilitators are available across teams, a custom threat library has emerged, and mitigations are tracked to closure. At Stage 4, models live next to code in the repo, CI surfaces stale ones, cross-functional reviews include privacy, reliability and compliance, and ATT&CK coverage is tracked from design through detection.
+
+At Stage 5, threat modeling is a continuous practice rather than a project gate. Quantitative risk scoring, FAIR or equivalent, feeds investment decisions, AI assistance is in the workflow with human review, and models, detections, mitigations and tests share a vocabulary.
+
+Sequence matters: tooling is a force multiplier on a working program, not a substitute for one.
+
+== Who should be in the room?
+layout: question
+section: faq
+Think about who can answer each of the four questions, and how large the group can grow before it stops working.
+notes:
+This question is from the page's FAQ. Ask it and let the room answer before moving on.
+
+== The smallest group that can answer the four questions
+layout: answer
+section: faq
+At minimum: the engineer or architect who knows the system best, a security practitioner familiar with the relevant cloud, and a product or operations partner. Past 6 attendees, the signal-to-noise drops sharply.
+notes:
+The smallest group that can answer the four questions. At minimum, that is the engineer or architect who knows the system best, a security practitioner familiar with the relevant cloud, and a product or operations partner who knows the data sensitivity and SLAs.
+
+For larger or higher-risk systems, add an IAM specialist, a privacy or compliance reviewer, especially for LINDDUN, and a representative of any downstream team your trust boundary touches. Avoid making it a 12-person ceremony: past 6 attendees, the page says the signal-to-noise drops sharply.
+
+== How long should it take?
+layout: question
+section: faq
+Consider a single feature, a complete new system, and a regulated workload.
+notes:
+This is the second FAQ question. Again, ask it before showing the answer.
+
+== Minutes to days, ending in a written threat list
+layout: answer
+section: faq
+A feature takes 30-60 minutes for a STRIDE-per-element pass, plus an hour or two of write-up. A new system takes a half-day workshop and a follow-up review. PASTA on a regulated workload can run multiple days.
+notes:
+For a typical microservice or feature, a STRIDE-per-element pass on a whiteboard takes 30-60 minutes, plus another hour or two to write up the findings and mitigations. A complete new system takes a half-day workshop, then a follow-up review of the documented model. PASTA-style modeling on a regulated workload can run multiple days across stages.
+
+What matters, the page says, is that the session ends with a written list of threats, ranked, with owners and target dates for mitigations.

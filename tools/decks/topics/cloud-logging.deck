@@ -1,0 +1,295 @@
+title: Logging & Telemetry
+page: cloud-logging.html
+as-of: 2026-11-25
+promise: Turn on the control plane in every account and send it somewhere the workload cannot delete, add identity logs next, and turn on data-plane and full-fidelity network logs only for the systems you would page a human about.
+
+== The 30-second version
+layout: checklist
+section: top
+check: Control plane turned on in every account, project and subscription
+check: Sent somewhere the workload cannot delete
+check: Identity logs from the IdP next
+check: Data-plane and full-fidelity network logs only for systems you would page a human about
+Everything else is a retention and cost decision, not a security decision. A detector product does not stand in for a log.
+notes:
+This is the whole page in one slide. Turn on the control plane in every account, project and subscription, and send it somewhere the workload cannot delete. Turn on identity logs from the IdP next.
+
+Turn on data-plane and full-fidelity network logs only for the systems you would page a human about. Everything else is a retention and cost decision, not a security decision.
+
+And a detector product does not stand in for a log. The rest of the deck takes these in the page's order, then covers what not to collect, retention, and the first events worth alerting on.
+
+== Name the plane before the product
+layout: figure
+section: planes
+figure: log-planes
+People use "the logs" for five different things, so cloud logging arguments go sideways.
+notes:
+Cloud logging arguments go sideways because people use "the logs" for five different things. The page's advice is to name the plane before you name the product.
+
+The figure shows the five log planes: control plane, identity, data plane, network and workload, in the order the next slide takes them. Its caption repeats the advice to name the plane before the product, and adds that detectors that read these logs are a second opinion, not a substitute for the source.
+
+== Five planes
+layout: table
+section: planes
+row: Plane | What it tells you | Sources
+row: Control plane | Who called the cloud API, from where, and whether it succeeded | CloudTrail management events, Azure Activity Log, GCP Admin Activity
+row: Identity | Who signed in, with what factor, and which app they consented to | Entra ID, Okta, Google Workspace
+row: Data plane | What happened to the data after the API allowed it | S3 data events, GCS Data Access logs, Azure Storage diagnostics, database audit logs
+row: Network | Useful when you are reconstructing a path | VPC flow, DNS query, load balancer and firewall logs
+row: Workload | Process, file and container runtime telemetry | From an agent or the orchestrator, not app stdout
+notes:
+The control plane records who called the cloud API, from where, and whether it succeeded: AWS CloudTrail management events, Azure Activity Log, GCP Admin Activity audit logs. It is the record of the account itself changing.
+
+The identity plane records who signed in, with what factor, and which application they consented to. The IdP, whether Entra ID, Okta or Google Workspace, knows this before the cloud account does. CloudTrail records the use of a credential; the IdP records the issuance of it.
+
+The data plane records what happened to the data after the API allowed it: S3 data events, GCS Data Access logs, Azure Storage diagnostics, database audit logs. It is high volume and high value, and easy to turn on "for everything" and regret.
+
+Network logs are VPC flow logs, DNS query logs, load balancer access logs and firewall logs. They are useful when you are reconstructing a path, and expensive and low-signal as a standing detection source if you ingest every byte into a SIEM.
+
+The workload plane is process, file and container runtime telemetry from an agent or from the orchestrator. Application stdout is a different thing: a container printing "request received" is an application log. It is rarely a security log, and it is almost never the right place to look first.
+
+== Detectors are a second opinion
+layout: compare
+section: planes
+col: Detectors | GuardDuty, Defender for Cloud, Security Command Center | Read some of the logs and emit findings
+col: Source logs | Answer what else this identity did in the hour before | Keep them
+Keep only the finding and drop the underlying event, and you lose that answer.
+notes:
+GuardDuty, Defender for Cloud and Security Command Center are detectors. They read some of the logs on the previous slide and emit findings.
+
+If you only keep the finding and drop the underlying event, you cannot answer "what else did this identity do in the hour before." So keep the source log, and treat the detector as a second opinion.
+
+== Control plane, first
+layout: checklist
+section: control
+check: Covers every account in the organization
+check: Lands in a logging account the application teams cannot administer
+check: Cannot be stopped by someone who has compromised a single workload
+If you do nothing else, do this: a trail, a diagnostic setting or an audit-log sink with all three properties.
+notes:
+If you do nothing else, do this. Set up a trail, a diagnostic setting, or an audit-log sink that covers every account in the organization, lands in a logging account the application teams cannot administer, and cannot be stopped by someone who has compromised a single workload.
+
+The next slide shows what that looks like on each of the three clouds.
+
+== The control plane on each cloud
+layout: table
+section: control
+row: Cloud | What to turn on | How
+row: AWS | An organization CloudTrail | Bucket in a separate account; StopLogging and DeleteObject outside watched accounts' permissions
+row: Azure | Activity Log diagnostic settings at the subscription | Preferably collected by an Azure Policy initiative, so new subscriptions do not arrive silent
+row: GCP | Admin Activity audit logs, on by default | Exported from the organization to a sink project owners do not control
+On GCP, Data Access audit logs are not on by default. That distinction matters.
+notes:
+On AWS, the control plane is an organization CloudTrail, written to a bucket in a separate account, with the trail's own StopLogging and the bucket's DeleteObject outside the permissions of the accounts being watched.
+
+On Azure it is Activity Log diagnostic settings at the subscription, preferably collected by an Azure Policy initiative so a new subscription does not arrive silent.
+
+On GCP it is Admin Activity audit logs, which are on by default, exported from the organization to a sink the project owners do not control. Data Access audit logs are not on by default. The page says that distinction matters, and that it is a problem for a later section, not this one.
+
+== Two properties matter more than the log store's brand
+layout: checklist
+section: control
+check: The log exists before you need it
+check: Whoever can change a resource cannot erase the record of that change
+Object lock, a retention policy, or a bucket policy that denies delete from the source account is the control.
+notes:
+Two properties matter more than the brand of the log store. The log must exist before you need it, and the person who can change the resource must not be the person who can erase the record of that change.
+
+Object lock, a retention policy, or a bucket policy that denies delete from the source account is the control. A dashboard that "monitors whether logging is on" is, in the page's words, a consolation prize for not having the control.
+
+== Identity, second
+layout: text
+section: identity
+Control-plane logs show an access key was used, not a session stolen at the IdP or an OAuth app consented with mail-read. IAM abuse that never touches the cloud API is invisible to CloudTrail.
+notes:
+Control-plane logs tell you an access key was used. They do not tell you that the human behind the federated role had their session stolen at the IdP an hour earlier. Nor do they tell you that someone consented an OAuth application with mail-read and then never signed into the cloud at all.
+
+IAM abuse that never touches the cloud API is invisible to CloudTrail. The page puts identity logs second, straight after the control plane.
+
+== Collect both halves
+layout: compare
+section: identity | planes
+col: At the IdP | Interactive and non-interactive sign-ins | MFA challenges and their result, legacy-protocol authentication | New application consents and credential registration | Role or group changes
+col: On the cloud side | AssumeRole | Service-account key creation | Managed-identity assignment | Any event that mints a long-lived credential
+CloudTrail records the use of a credential; the IdP records its issuance. Either half alone is a fragment.
+notes:
+At the IdP, collect interactive and non-interactive sign-ins, MFA challenges and their result, legacy-protocol authentication, new application consents, credential registration such as a new FIDO key or a new authenticator, and role or group changes.
+
+Keep the cloud side too: AssumeRole, service-account key creation, managed-identity assignment, and any event that mints a long-lived credential.
+
+CloudTrail records the use of a credential, and the IdP records the issuance of it. The two together tell the story, and either half alone is a fragment.
+
+== Workload identity: log the trust change
+layout: text
+section: identity
+A new role trust allowing a GitHub repository, a Kubernetes service account or an external OIDC issuer is a standing authentication decision. Log it when the trust is created.
+notes:
+Workload identity belongs in the same bucket of attention even though it is not a person. A new role trust that allows a GitHub repository, a Kubernetes service account, or an external OIDC issuer is a standing authentication decision.
+
+Log the change when the trust is created. You will not get a useful "sign-in" for it later, because the workload presents a token and the cloud says yes.
+
+== Data events, on purpose
+layout: text
+section: data-network
+Data events answer "who read this object." You want that for the stores that would hurt if they left. The failure mode is turning them on organization-wide, then off everywhere once the bill arrives, including the one bucket that mattered.
+notes:
+Data events answer "who read this object." You want that answer for the buckets, tables and secrets that would hurt if they left. You do not want it for every build artifact, every temporary object and every health-check GET.
+
+The failure mode is flipping data events on at the organization and discovering the bill, then flipping them off everywhere, including the one bucket that mattered.
+
+== Pick the crown jewels by name
+layout: checklist
+section: data-network
+check: Production data stores
+check: The secrets manager
+check: The logging bucket itself
+check: Anything holding customer data or credentials
+check: Sample or exclude the rest
+Revisit the list when a new store is created. That argues for a tagging convention over a wiki page nobody updates.
+notes:
+Pick the crown jewels by name: production data stores, the secrets manager, the logging bucket itself, and anything holding customer data or credentials. Sample or exclude the rest.
+
+Revisit the list when a new store is created. The page says that is an argument for a tagging convention, for example one where data-class=restricted turns data events on, rather than a wiki page nobody updates.
+
+== Network logs: the same shape of decision
+layout: compare
+section: data-network
+col: Sensitive subnets | Flow logs in the SIEM or the detection pipeline
+col: Everything else | Flow logs sampled, in cheap object storage | For the investigation you do not know you will have
+col: DNS query logs | Worth more per byte than flow logs for command-and-callback questions, still not free | Turn on where workloads can make arbitrary outbound calls, not where egress is denied
+Full-fidelity flow logs from every interface, in a SIEM priced per gigabyte, are how a logging program gets cancelled.
+notes:
+Network logs are the same shape of decision as data events. Flow logs are how you prove a path existed, or that it did not. Full-fidelity flow logs from every interface, ingested into a SIEM priced per gigabyte, are how a logging program gets cancelled.
+
+Keep flow logs for the sensitive subnets in the SIEM or in the detection pipeline. Keep the rest, sampled, in cheap object storage for the investigation you do not know you will have.
+
+DNS query logs are worth more per byte than flow logs for command-and-callback questions, and they are still not free. Turn them on where the workloads can make arbitrary outbound calls, not on a network that already denies egress.
+
+== What not to collect
+layout: list
+section: not
+A logging program fails as often by collecting the wrong thing as by collecting nothing.
+item: Secrets, tokens and query strings in application logs
+item: Debug-level application logs as a security control
+item: Every flow record, as a detection
+item: Duplicate copies of the same event in three tools
+item: The detector's finding, and nothing else
+notes:
+The page lists five things a logging program should not collect.
+
+Application logs that print the Authorization header, the cloud metadata response, or the full URL with a signed parameter are a second copy of the credential, sitting in a system more people can read than the secret store.
+
+Debug-level application logs are huge, they rotate fast, and the security question is almost never in them.
+
+A third copy of the same event "just in case" is how retention math quietly triples. And findings without the underlying event cannot be tuned, cannot be re-investigated when the detector was wrong, and disappear when the vendor changes the rule.
+
+The next slide gives what to do instead.
+
+== What to do instead
+layout: table
+section: not
+row: Instead of | Do this
+row: Credentials in logs | Redact at the source; do not rely on the SIEM later
+row: Debug logs as a security control | For forensics, log request id, caller identity, route and status; no body
+row: Alerting on flows | Alert on the control-plane change that opened the path
+row: A third copy just in case | One durable copy in object storage, one hot copy of detection fields
+row: Keeping only findings | Keep the underlying event too
+notes:
+Redact at the source, and do not rely on the SIEM to do it later.
+
+If a service needs request logs for forensics, log the request id, the caller identity, the route and the status, and leave the body out.
+
+Use flow records to investigate. Alert on the control-plane change that opened the path, such as 0.0.0.0/0 on an admin port or a new public IP on a private subnet, not on the million flows that followed.
+
+Keep one durable copy in object storage, and one hot copy of the fields the detections need. And keep the underlying event, not only the detector's finding.
+
+== Two clocks, two prices
+layout: compare
+section: retention
+col: Hot | The window you detect in: days to a few weeks | You pay for ingest and query speed | Control plane and identity in full; a filtered slice of data and network
+col: Cold | The window you investigate and comply in | Many programs land on a year because a framework, contract or insurer asked | Object storage in the logging account
+There are two clocks, and they should not share a price. To use the cold copy, replay the slice into the hot store or query it in place.
+notes:
+There are two clocks, and the page says they should not share a price.
+
+Hot is the window you detect in: days to a few weeks, in whatever system runs the rules. You pay for ingest and for query speed. Put the control plane and the identity logs here in full, and a filtered slice of data and network logs.
+
+Cold is the window you investigate and comply in. Many programs land on a year because a framework, a contract, or an insurer asked for a year. Object storage in the logging account is the cheap place for that copy.
+
+You do not need to ask a SIEM a question about February in order to still have February. When you do need it, you replay the slice into the hot store or query it in place.
+
+== Log the logging
+layout: text
+section: retention
+An attacker who can delete the trail has deleted the evidence of deleting it, unless the storage refuses the delete. Set retention on the bucket or sink. Stopping a trail or deleting a sink belongs in the first-alert list.
+notes:
+Retention also has an integrity problem. An attacker who can delete the trail has deleted the evidence of deleting the trail, unless the trail's storage refuses the delete.
+
+Set the retention on the bucket or the sink, not as a hope inside the SIEM.
+
+And log the logging. An event that stops the trail, deletes a sink, or changes a diagnostic setting is itself a control-plane event, and it belongs in the first-alert list.
+
+== Where to start alerting
+layout: figure
+section: first-events
+figure: first-alerts
+Start with events that are rare, high impact, and hard for an attacker to avoid if they want to stay.
+notes:
+Start with events that are rare, high impact, and hard for an attacker to avoid if they want to stay. Do not start with a content pack of four hundred rules. The site's detection engineering page covers the lifecycle after you have a source; these are the sources' first questions.
+
+The figure shows six rare, high-impact events, the ones on the next slide. Its caption says to start here, and that a missing control-plane log is itself the alert.
+
+== The first events worth alerting on
+layout: list
+section: first-events
+item: The organization trail, diagnostic setting or audit sink stopped, deleted or redirected
+item: A long-lived credential created, or a new root or break-glass use
+item: A sign-in without MFA, a new factor, or a broad-scope app consent
+item: A trust policy, workload identity binding or federated issuer changed
+item: A closed network path opened, or storage made anonymous
+item: Logging bucket, secrets or production data read by an identity that rarely does
+The last one needs the data-plane log, which is why the crown-jewel list exists.
+notes:
+The first is the organization trail, diagnostic setting, or audit sink being stopped, deleted, or pointed somewhere new.
+
+The second is a long-lived credential being created: an access key, a service-account key, a client secret, or a new root or break-glass use.
+
+The third is a human signing in without MFA, registering a new factor, or consenting an application with broad scopes.
+
+The fourth is a change to a trust policy, workload identity binding, or federated issuer. Someone just decided who is allowed to become this role.
+
+The fifth is a network path opening that was closed: 0.0.0.0/0 or a public IP on a port that speaks administration, or a bucket or storage account that became anonymous.
+
+The sixth is the logging bucket, the secrets store, or a production data store being read by an identity that does not usually read it. This one needs the data-plane log, which is why the crown-jewel list exists.
+
+== Which part of the logging bill surprises people?
+layout: question
+section: retention
+Think about storing logs, ingesting them, and what a vendor quote means by "all logs."
+notes:
+Ask this and let the room answer before moving on.
+
+== Ingest, not storage
+layout: answer
+section: retention
+Storing compressed logs is close to free at the scale of a single organization trail. The number that surprises people is ingest into a tool that charges per gigabyte analyzed, dominated by data events and flow logs.
+notes:
+The page says the number that surprises people is ingest, not storage. Storage of compressed logs is close to free at the scale of a single organization trail. The number is ingest into a tool that charges per gigabyte analyzed, and data events and flow logs dominate that number.
+
+If a vendor quote assumes "all logs," ask which plane. A quote that does not separate control plane from data plane is not a quote you can compare.
+
+== What does a field-based rule do when the trail is off?
+layout: question
+section: first-events
+Picture a detection that only fires when a particular field is present in the log.
+notes:
+Ask this and let the room answer before moving on.
+
+== It stays quiet, so make the absence the alert
+layout: answer
+section: first-events
+That detection sits quiet through the week someone turned the trail off. The first events fail closed in a useful way: you already decided the control plane is non-optional, so a missing log is itself the alert.
+notes:
+A detection that only fires when a particular field is present will sit quiet through the week someone turned the trail off.
+
+Each of the first events fails closed in a useful way. If the log is missing, the absence is the alert, because you already decided the control plane is non-optional.

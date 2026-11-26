@@ -1,0 +1,400 @@
+title: Incident Response & Cloud Forensics
+page: incident-response.html
+as-of: 2026-11-25
+promise: The work that makes cloud IR survivable is done before any incident; without it, you investigate blind.
+
+== The 30-second version
+layout: text
+section: top
+Cloud IR runs the same six-phase loop you already know, but every phase changes when the workload lives behind an API in someone else's data center. The work that makes it survivable is done before any incident.
+notes:
+Cloud incident response is the same six-phase loop you already know: prepare, identify, contain, eradicate, recover, and lessons learned. What changes is that the workload lives behind an API in someone else's data center.
+
+The instance you want to image may already be gone. The credential the attacker is using leaves a perfect log if you're capturing it, and zero log if you're not. The blast radius is whatever scope an over-privileged role has, which is usually larger than anyone thinks.
+
+The work that makes IR survivable in cloud is done before any incident: an immutable cross-account log archive, a dedicated forensics account with pre-staged tooling, snapshot pipelines, SCPs that block evidence destruction, and runbooks practiced in tabletop. Without those, you investigate blind. With them, the playbook is largely automatable.
+
+== The IR lifecycle in cloud
+layout: timeline
+section: lifecycle
+event: Preparation | The 80% of the work
+event: Identification | Is it real, what is the scope, what is the worst-case blast radius
+event: Containment | Stop the bleeding without destroying evidence
+event: Eradication | Remove the attacker's persistence
+event: Recovery | Restore service safely from known-good IaC
+event: Lessons Learned | Blameless retro: most often skipped, highest long-term return
+NIST SP 800-61r2, now withdrawn, and SANS PICERL are functionally the same loop with slightly different boundaries. The phases are not strictly sequential: you loop back as scope expands.
+notes:
+Two reference lifecycles dominate: NIST SP 800-61r2 and the SANS PICERL model. They are functionally the same loop with slightly different boundaries. NIST withdrew SP 800-61r2 in April 2025; its successor, SP 800-61r3, maps incident response onto the CSF 2.0 Functions and tells organizations to use whichever life cycle model suits them best. Pick one and use its vocabulary consistently across your runbooks and your retros.
+
+Preparation is the 80% of the work: the immutable log archive, the forensics account, snapshot pipelines, runbooks, on-call rotation, the retainer contract, the tabletop calendar and a communications plan. If it is weak, every other phase is harder; if it is strong, the rest is mostly procedure.
+
+In cloud, identification is largely a question of which principal, which resources, what API activity and what data, answerable from logs if you collected them. Containment means quarantining the workload, not stopping it, and comes in a short-term and a long-term flavor. Eradication removes implanted IAM principals, modified Lambda code, malicious container images, backdoored AMIs, scheduled tasks and rogue OAuth grants. Recovery redeploys from known-good IaC, rotates keys and secrets, validates against the pre-incident baseline and monitors for re-emergence.
+
+You will loop between identification and containment as scope expands, and re-eradicate when you discover new persistence. The lifecycle is a frame, not a Gantt chart.
+
+== What cloud changes about IR
+layout: table
+section: cloud-changes
+row: Dimension | Traditional IR | Cloud IR
+row: Workload persistence | A physical host is still there next week | Instances scale in, containers restart, functions are gone
+row: Attack surface | OS-level: shell, malware, lateral movement | API-level: a stolen credential calling cloud APIs
+row: Primary evidence | Disk image, memory dump, endpoint telemetry | Audit logs, plus disk and memory when the workload is the target
+row: Containment unit | Pull the cable, isolate the host | Detach IAM, quarantine security group, kill role sessions
+row: Blast radius | Whatever is on the network segment | Whatever the compromised role can call
+notes:
+The lifecycle survives the move to cloud, but the execution looks meaningfully different. The slide shows an excerpt of the page's comparison table.
+
+Instances scale in, containers restart, and functions are gone in milliseconds, so capture evidence at the moment of detection or lose it. The primary attack surface is the API: a stolen credential calling AWS, Azure or GCP APIs from somewhere it shouldn't be. The primary evidence is CloudTrail, the Activity Log and Cloud Audit Logs, plus disk and memory when the workload is the target.
+
+Containment means detaching IAM, swapping to a quarantine security group, revoking OAuth grants and killing role sessions. The blast radius is whatever the compromised role can call, often cross-account, cross-region and cross-service.
+
+The page's table adds two more rows. Speed: spread takes minutes to seconds instead of hours to days, and automated exploitation can run thousands of API calls before a human is even paged. Shared responsibility: the provider owns the hypervisor, network and storage layer, and you escalate when an incident crosses it.
+
+== Most cloud breaches are control-plane incidents
+layout: text
+section: cloud-changes
+Someone stole a credential, from a developer laptop, a leaked git commit, a compromised CI runner or a phished session, and is making API calls. Bias the IR program toward identity, log analysis and API-call correlation.
+notes:
+The page calls this the biggest practical shift: most cloud breaches are control-plane incidents, not data-plane incidents. Someone stole a credential and is now making API calls. The shell on the box, if there's one at all, is incidental.
+
+So your IR program has to be biased toward identity, log analysis, and API-call correlation. The host-forensics muscle that on-prem IR teams grew over twenty years is necessary but no longer sufficient.
+
+== Forensic readiness comes before the incident
+layout: checklist
+section: readiness
+check: An immutable, cross-account log archive
+check: A dedicated forensics account, subscription or project
+check: Snapshot pipelines that preserve evidence in under a few minutes
+check: Policies above production that block evidence destruction
+check: A break-glass account, ready to use
+The attacker is not going to wait while you deploy a logging pipeline. Treat these as preconditions to a viable IR program, not nice-to-haves.
+notes:
+The page calls this the hardest lesson of cloud IR: almost everything that matters has to be set up before the incident.
+
+The snapshot pipeline is a script or runbook that, given a workload ID, snapshots the disk, copies the snapshot to the forensics account, captures metadata such as instance config, IAM role, network state and tags, and writes it to immutable storage, all in under a few minutes. It should be idempotent, so running it twice doesn't double the work, and tested, because runbooks that have never run for real don't run for real on the worst day.
+
+The attacker with admin in your production account should still be unable to disable the audit logs, delete the log archive bucket, modify forensics IAM trust policies or change the immutable storage configuration. SCPs on AWS, management group policies on Azure and organization policies on GCP enforce this above the production account, so production admin doesn't grant the scope to undo them. The page calls this the second-most-important control after the immutable log archive itself.
+
+The break-glass account is a separately credentialed identity, used only in emergencies, broad enough to investigate any account but narrow enough that abuse is detectable. It is MFA-required and monitored, and its use pages the security team automatically. If the attacker rotated the credentials of every other admin, you need it.
+
+== The immutable, cross-account log archive
+layout: compare
+section: readiness
+col: AWS | Organization CloudTrail to a Log Archive account | S3 Object Lock in compliance mode, MFA delete | An SCP at the org root stops production disabling the trail
+col: Azure | Activity Log and Diagnostic Settings to a separate subscription | Immutable blob storage as the long-term archive | Management locks prevent deletion
+col: GCP | Org-aggregated Cloud Audit Logs to a dedicated logging project | Retention-locked Cloud Storage as the archive | Organization policies stop production disabling audit logs
+The attacker who lands in production will try to disable logging and delete logs. The archive has to be somewhere they cannot reach.
+notes:
+This is the foundational control. On AWS, the organization trail covers all regions, with management and S3 data events at minimum, and writes to an S3 bucket in a dedicated Log Archive account. Object Lock runs in compliance mode with MFA delete, and a bucket policy denies delete from any principal except a break-glass role. Pair it with a separate Security tooling account that has read-only access for the SOC.
+
+On Azure, the Activity Log and Diagnostic Settings export to a Log Analytics workspace in a separate subscription, with immutable blob storage as the long-term archive and management locks at the subscription level. On GCP, organization-aggregated Cloud Audit Logs sink to a dedicated logging project, with retention-locked Cloud Storage as the immutable archive.
+
+How long to keep it? Long enough for the longest regulatory clock that applies to you. For most organizations that is 365 days minimum, often 7 years in financial-services contexts.
+
+== A dedicated forensics account
+layout: checklist
+section: readiness
+check: A pre-built forensics image with imaging, capture, memory and collector tools
+check: An isolated network with no route to production
+check: IR roles that assume into compromised accounts, with no trust back
+check: Its own log archive, so IR actions are auditable
+check: A small budget pool that won't trip cost alerts
+A clean environment on the same cloud as production, in a separate account boundary.
+notes:
+The forensics account, subscription or project is a clean environment on the same cloud as production, in a separate account boundary.
+
+The pre-built image carries disk-imaging utilities such as dc3dd and guymager, packet capture with tcpdump and zeek, memory tooling such as LiME and AVML, and a Velociraptor, GRR or osquery collector pre-installed. The site's osquery and Velociraptor how-to builds such a collector.
+
+The network is an isolated VPC or VNet with no route to production, and public egress only via a logged, monitored gateway. IAM trust policies let the IR team assume a read-only or evidence-capture role into compromised accounts, but there is no trust in the other direction. The account keeps a logging archive separate from production's, so the IR team's own actions are auditable. And a small budget pool means a real incident won't trip cost alerts.
+
+== Logs are not retroactive
+layout: compare
+section: logging
+col: AWS | CloudTrail org trail, all regions | VPC Flow Logs and Route 53 query logs | GuardDuty in every account and region
+col: Azure | Activity Log on every subscription | Per-service diagnostic logs, enabled explicitly | Entra ID sign-in and audit logs
+col: GCP | Cloud Audit Logs, Data Access on for sensitive services | VPC Flow Logs and Cloud DNS query logging | Org-level sinks to the logging project
+If logs weren't captured when the incident began, no clever query recovers them. Log what changes, who did it, from where, and against what data.
+notes:
+This is part of the page's minimum logging baseline for each cloud.
+
+On AWS: the org trail in all regions with management events and S3 data events at a minimum, Lambda invocation events for sensitive functions, and file integrity validation on. VPC Flow Logs on every production VPC, accept and reject. Route 53 query logs, because DNS is where exfil and C2 frequently show up. GuardDuty enabled in every account, every region, plus WAF, load balancer and CloudFront logs for internet-facing services.
+
+On Azure: the Activity Log exported to Log Analytics and immutable storage, and diagnostic logs for every relevant resource type, because defaults are not enough. Entra ID sign-in and audit logs are the cloud-identity equivalent of CloudTrail's identity events; keep them longer than the 30-day free tier. Add NSG flow logs, and Sentinel when you have the spend.
+
+On GCP: Admin Activity audit logs are always on. Data Access logs must be enabled and cost more, and the page calls them worth it for sensitive services like BigQuery, Cloud Storage, Cloud KMS and IAM. Add VPC Flow Logs on every subnet in scope and Cloud DNS query logging.
+
+The volume looks alarming on the bill the first month. The single time an incident requires you to reconstruct three months of activity for a compromised credential, the cost has paid itself off many times over.
+
+== Evidence by workload type
+layout: table
+section: evidence
+row: Workload | What to capture
+row: VM instance | Snapshot first, stop second; share it to the forensics account
+row: Kubernetes pod | Pin the image SHA, then attach a kubectl debug container
+row: Serverless function | The code, config and environment that ran; invocation logs
+row: Storage objects | Access logs or data events; hashes against a known-good baseline
+row: IAM credential | Who used it, from where, when, and what API calls
+Runbooks split by workload class because the mechanics differ.
+notes:
+For a VM, snapshot first and stop second. Stopping first risks losing in-memory state and may trigger anti-forensics in malware that watches for shutdown. Mount the copy read-only in an isolated VPC, and capture metadata alongside the disk: IAM role and policies, security groups, tags, launch template, AMI ID and user data. Cloud-side metadata is often more useful than anything on the disk. If memory matters, capture it before the snapshot.
+
+For a pod, treat the container as evidence about the deployment, not as the state itself. Without the image SHA, a pod compromised via image vulnerability is meaningless to investigate. Runtime telemetry has to have been running before the incident.
+
+Serverless evidence is mostly side-channel: the function instance is gone, so you investigate what it did. Capture the version that was running, including environment variables, which often contain secrets that need rotating, and export invocation logs before retention windows expire.
+
+For storage, turn on versioning by default for sensitive buckets. Without access logs or data events, the answer to "what did they exfiltrate?" is a guess.
+
+The credential is often the primary evidence. CloudTrail's userIdentity, the Activity Log's caller and Cloud Audit Logs' protoPayload.authenticationInfo tell you who. Anomalous geos and unexpected user agents are classic indicators. A well-indexed log corpus in your SIEM is the foundation.
+
+== Memory forensics on cloud VMs
+layout: list
+section: memory
+Useful for a narrow class of incidents: fileless attacks, in-memory implants, suspected rootkits. For most others, CloudTrail and a disk image tell you more, faster.
+item: No hypervisor-level memory acquisition for tenants
+item: Capture runs inside the guest, where malware can see you
+item: Ephemeral instances may be gone before you decide to capture
+item: Enclaves and confidential VMs change what you can reach
+item: Containment may remove the egress to ship the image
+notes:
+Memory forensics on cloud VMs is technically possible, useful for a narrow class of incidents, and constrained by cloud realities.
+
+On Linux, LiME is a kernel module that needs a kernel-version-matched build; AVML runs in userspace and works on most cloud Linux distros without recompilation. Both can be pre-staged. On Windows, MAGNET RAM Capture, FTK Imager or WinPmem, run via Session Manager, Azure Run Command or OS Login to avoid inbound SSH or RDP. Volatility 3 is the de-facto open-source analysis framework.
+
+AWS, Azure and GCP do not expose hypervisor-level memory acquisition to tenants, so you capture from inside the guest. Autoscaling, spot reclamation and an attacker's StopInstances calls erase live state. An AWS Nitro Enclave's memory cannot be read from its parent instance, even by root, so a capture of the instance misses it. Azure and GCP Confidential VMs encrypt memory against the hypervisor and host, so a capture has to run inside the guest. Plan around them rather than against them. If containment cuts egress, capture to local storage, then move the storage.
+
+For most cloud incidents, memory forensics is not the activity that repays the effort best. Save it for the cases that warrant it.
+
+== Container forensics
+layout: checklist
+section: container
+check: Capture the image SHA first; the registry tag may move
+check: Snapshot the writable layer into your forensics registry
+check: Use an ephemeral debug container for live state
+check: Pull runtime telemetry captured before the incident
+check: Read the Kubernetes audit log: exec, port-forward, cp, secret reads
+check: Snapshot the node disk if escape is suspected
+The container is short-lived, the filesystem is layered, and most of the interesting state is somewhere the container layer doesn't preserve.
+notes:
+Container forensics is its own discipline. The image SHA is the first action: without the precise digest you cannot say what code was running, and the registry tag may move under you.
+
+The container's writable layer, the diff from the read-only image, holds whatever the malware wrote at runtime. docker commit creates an image of the current state, with crictl and nerdctl equivalents for containerd and CRI-O. A kubectl debug container gives you the process list, network sockets, mounted filesystems and environment.
+
+The most valuable evidence is what was being captured continuously: Falco rules firing on syscalls, Tracee traces and eBPF-based sensors. Without these, the container's history is largely unrecoverable after the fact. The Kubernetes audit log records every exec, port-forward, cp and secret read, and is often the attacker's clearest trail. For a suspected escape, capture the node's disk snapshot as if it were a VM compromise.
+
+== Isolate the workload; don't shut it down
+layout: compare
+section: isolation
+col: Network | AWS: swap in a quarantine security group | Azure: a quarantine NSG on the NIC | GCP: a quarantine network tag and firewall rule
+col: IAM | Explicit deny on all but the IR team's calls | Revoke active role sessions | Disable federated users at the IdP, revoke refresh tokens
+The goal is a workload alive enough to capture from and dead enough not to cause further harm. With pre-built runbooks and IAM, most cloud incidents reach that in under 5 minutes.
+notes:
+The page calls containment without evidence loss the hardest single skill in cloud IR. The instinct to shut it down is wrong; isolate the workload from anything it can damage or call, while keeping it intact enough to interrogate.
+
+The AWS quarantine security group has no ingress rules, and egress only to your forensics VPC peering, your logging endpoints and the SSM endpoints for remote commands. Swapping it in isolates the workload in seconds while leaving it running. Azure and GCP use the same pattern with an NSG on the NIC or a network tag matching a deny-all firewall rule that allows only logged forensic endpoints.
+
+IAM containment is often more important than network containment in cloud breaches. Replace the principal's policies with an explicit deny on everything except the calls your IR team will use. The AWSRevokeOlderSessions inline policy denies any call made with a session issued before the revocation, apart from sts:GetCallerIdentity, which needs no permission, while the credential keeps existing so attempted reuse stays in the audit trail. A principal that can still assume the role gets a fresh session the policy does not block. For federated identities, disable the user at the IdP and revoke all refresh tokens.
+
+If the runbooks and IAM aren't pre-built, you'll spend 30 minutes deciding what to do while the attacker continues.
+
+== Credential rotation: disable, don't delete
+layout: compare
+section: credentials
+col: AWS | Access keys: set Inactive, delete after the active phase | Role sessions: the AWSRevokeOlderSessions policy | Root: rotate, re-MFA, audit its usage history
+col: Azure | Service principal secrets: rotate via Entra ID | Managed identities: if compromised, remove the role assignment, re-grant | Users: revoke all refresh tokens
+col: GCP | Service account keys: disable, delete after the active phase | OAuth: revoke refresh tokens | Users: per-user session reset
+Rotation is necessary but rarely the first thing to do. Disable, don't delete, until evidence is captured: a deleted credential's history is harder to recover.
+notes:
+The discipline is to capture evidence and contain first, then rotate, and to rotate correctly so you don't leave windows open.
+
+On AWS, setting an access key Inactive preserves it for audit lookup; delete it after the active phase, and create a new key only after confirming the workload that uses it has a containment plan. The AWSRevokeOlderSessions policy denies all actions where aws:TokenIssueTime is before a chosen timestamp, which kills active sessions without affecting the long-term credential. If the federation trust itself is suspected, rotate the IdP-side credential. The root key should never be in regular use; any use is an event in itself.
+
+On Azure, old service principal credentials remain in audit logs for the retention window. Managed identities cannot be rotated in the user-managed sense, so remove the role assignment and re-grant if you suspect the identity itself. Revoking a user's refresh tokens forces reauth on every device.
+
+On GCP, disabling a service account key preserves the audit trail. The page says the presence of long-lived keys at all is increasingly a finding, and to prefer Workload Identity Federation. Active OAuth access tokens expire on their own clock but cannot be retroactively killed in all cases.
+
+== Runbooks for the common incident classes
+layout: table
+section: runbooks
+row: Runbook | Typical trigger | Key move
+row: Compromised IAM credential | Unusual API activity, or a public leak | Store its full activity trail, then disable
+row: Exposed bucket | Researcher report or CSPM alert | Confirm exposure, enumerate accessed objects, bring in Legal
+row: Crypto-mining VM | Detection finding or billing spike | Snapshot, then find the launching principal
+row: Ransomware in storage | Mass deletion in the versioning chain | Pause auto-replication, restore from versions or backups
+row: Insider misuse | HR notification or anomalous privileged activity | Do not alert the subject; HR and Legal first
+notes:
+The right set of runbooks covers the 80% of incidents that look the same time after time. Each runbook should answer: who's on call, what to capture, how to contain, how to verify, who to notify. This is five of the page's six runbooks.
+
+The compromised IAM credential is the most common cloud incident. Identify the principal, query its full log history, store the trail in immutable storage, disable the credential, revoke active sessions, scope the blast radius from the API calls made, then notify the owner, rotate, and audit for persistence such as new IAM users, roles and modified policies.
+
+For an exposed bucket, don't trust the alert alone. Enumerate accessed objects from the access logs, fix the policy, and escalate to the data owners and Legal for breach-notification analysis. Crypto-mining is usually downstream of a compromised credential, often a forgotten access key in a code repo, so after shutting the workload down, move to the credential runbook.
+
+For ransomware in storage, pause replication so the deletions don't propagate to backups, verify versioning is intact and restore, then engage Legal for the ransom decision and law-enforcement notification. The sixth, exfiltration via egress, is triggered by a flow log anomaly, a GuardDuty network finding or DNS-tunneling indicators: quarantine the workload, capture it, identify the data and the principal, then run the credential and data-loss runbooks in parallel. For insider misuse, preserve evidence and coordinate any disablement with HR's timing.
+
+The page points to the AWS Incident Response Playbooks, the CISA federal playbooks and Microsoft's playbooks as reference sets.
+
+== Tabletop exercises
+layout: compare
+section: tabletops
+col: Quarterly | Small and scenario-specific | 90 minutes | Run the runbook on paper
+col: Annually | Major and multi-team | A full day, multiple scenarios, some overlapping
+col: Ad-hoc | After a major architectural change | After a leadership change or a near-miss
+An IR program that has never practiced will not perform under stress. Tabletops are the cheapest way to find runbooks naming accounts that no longer exist, outdated rotations and stale contacts.
+notes:
+Tabletops are the cheapest way to discover that your runbooks reference an account that no longer exists, that the on-call rotation hasn't been updated since the last reorg, or that nobody has paged Legal in 18 months and the contact is stale.
+
+Attendees: a rotating incident commander, security engineering, on-call SRE or platform, the cloud-account owners, communications, Legal or privacy counsel, an executive sponsor, and an observer who takes notes and runs the retro. If you have a DFIR retainer, the firm's account team should join, so they know your environment before the real call.
+
+Scenarios worth running include a leaked AWS access key in a public GitHub commit with crypto-mining within 4 minutes, a compromised Entra ID admin account, a public bucket found by a researcher with media interest, ransomware via a compromised CI/CD pipeline, and help-desk social engineering. The page's example is the Scattered Spider intrusion into MGM: a 10-minute phone call that, by ALPHV's account, ended in ransomware on more than 100 ESXi hypervisors. Add insider exfiltration, a malicious base-image update and a cross-tenant provider incident.
+
+== DFIR retainers: when the math works
+layout: checklist
+section: retainers
+check: Meaningful cloud presence and sensitive data, but a too-small IR team
+check: A regulated industry whose notification timelines leave no slack
+check: Cyber insurance: most policies require a panel-approved DFIR firm
+check: You want an annual tabletop or familiarization engagement
+A retainer buys a response SLA, pre-negotiated rates and, most importantly, a team that knows your environment before the call.
+notes:
+A retainer is a contracted relationship with a DFIR firm. The page lists the major firms in 2026, among them Mandiant, CrowdStrike Services, Kroll, Unit 42 and Arctic Wolf.
+
+Retainers pay off when you have meaningful cloud presence and sensitive data and an internal team too small to cover a serious incident without help; when you are in a regulated industry where timelines such as GDPR's and NYDFS's 72 hours leave no slack for shopping for a firm during the incident; and when you have cyber insurance: most policies require a panel-approved DFIR firm and offer rate concessions for retainer customers.
+
+Below those thresholds, an established phone-and-email relationship with one or two firms, without a paid retainer, is often enough. The worst case is having no one to call and shopping during the incident; the second-worst is a retainer with a firm that has never looked at your environment.
+
+== Communication: the internal side
+layout: checklist
+section: communication
+check: One dedicated incident channel, and everything in it is evidence
+check: A named human for each role, with a named replacement
+check: Status updates every 30 minutes in active response, even with no change
+check: A decision log with the reasoning at the time
+The communications layer is where most programs reveal their immaturity. The technical containment can go well and the public reception can still be terrible.
+notes:
+The war room is a dedicated Slack or Teams channel for the active incident. The incident commander, technical leads, comms, Legal and the executive sponsor live in it during the active phase, with no side-channel discussion.
+
+The roles are one rotating incident commander, a technical lead, a communications lead, a legal lead and an executive sponsor. Each has a named human, and if that human is unavailable, the runbook says who replaces them. Updates go out every 30 minutes during active response; even "no change" is a status. Drift to 60 minutes once containment is solid.
+
+The decision log records major decisions, such as containment scope, who to notify, when to rotate keys and when to declare the active phase over, with the reasoning at the time. It saves the retro from "why did we do that?" amnesia.
+
+Externally: if customers' data is affected, even potentially, they are notified per contract and the applicable law, and vague language is acceptable initially but silence is not. Notify the insurer per policy, often within 24-72 hours of awareness. For the public, tell the truth, tell it clearly, tell it before someone else does.
+
+== Regulatory clocks do not pause
+layout: stats
+section: communication | pitfalls
+stat: 72 | Hours, GDPR Article 33 | To the supervisory authority, from becoming aware
+stat: Four | Business days, SEC 8-K Item 1.05 | For public companies, from the materiality determination
+stat: 60 | Days, HIPAA | Breach notification
+U.S. state laws vary, and NIS2, DORA and sector regulators add their own clocks. Keep a one-page summary of the ones that apply, owned by your General Counsel.
+notes:
+GDPR Article 33 requires notification to the supervisory authority within 72 hours of becoming aware of a personal-data breach. SEC 8-K Item 1.05 gives public companies four business days from the materiality determination. HIPAA breach notification is 60 days.
+
+U.S. state laws vary: most require notice without unreasonable delay, a minority set 30 to 60 day deadlines, and some require law-enforcement consultation first. NIS2, DORA and sector regulators add their own clocks.
+
+Your IR runbook should include a one-page summary of the regulatory clocks that apply to you, by data type, by jurisdiction and by sector. Your General Counsel should own it, and your security team should know where to find it at 2am.
+
+== What the retro has to produce
+layout: figure
+section: post-incident
+figure: retro-outputs
+caption: An action list that only names Security has misdiagnosed the incident.
+Run it blameless, with a facilitator who is neither the incident commander nor the executive sponsor.
+notes:
+The page calls post-incident the phase most programs underinvest in, and the one with the highest long-term return.
+
+The retro is blameless, a principle borrowed from SRE: people made the best decisions they could with the information they had. Retros that hunt for fault produce defensive participants who hide details. Use a designated facilitator, follow a written agenda, and produce a written document with the timeline, the decisions, the lessons and the action items.
+
+The figure shows four of the outputs the section lists: detection backfill, runbook updates, tooling gaps and process gaps. The section also lists control improvements, the prevention or limit that would have stopped or reduced this incident.
+
+The owner of action items is not Security alone. Detection backfill is Security; control improvements often live with platform and engineering teams; comms updates live with Legal and Marketing. As the caption says, an action list that only names Security has misdiagnosed the incident.
+
+== AWS, Azure and GCP side by side
+layout: table
+section: comparison | tooling
+row: Capability | AWS | Azure | GCP
+row: Audit log | CloudTrail | Activity Log + Diagnostic Settings | Cloud Audit Logs
+row: Threat detection | GuardDuty | Defender for Cloud | Security Command Center
+row: Disk evidence | EBS snapshot, cross-account share | Managed disk export, snapshot copy | Persistent disk snapshot, cross-project share
+row: Isolation primitive | Quarantine Security Group | Quarantine NSG / NIC isolation | Network tag + firewall rule
+Native tools are necessary but not sufficient: none of the three ships a complete forensics workbench.
+notes:
+This is an excerpt of the page's one-screen reference. Its full table also covers flow logs, investigation graphs, SIEM and SOAR, memory acquisition, container runtime detection, session revocation, each provider's IR service and the vendor IR contact.
+
+Memory acquisition is the same story on all three: you run a tool such as AVML from inside the guest, via Session Manager, Run Command or OS Login, and none of them offers hypervisor-level acquisition.
+
+None of the three clouds ships a complete forensics workbench. A category of tooling fills the gap, including Velociraptor, an open-source tool that deploys agents to cloud VMs for query-based collection; GRR Rapid Response, Google's open-source remote live forensics framework; Timesketch for collaborative timeline analysis; and Google's cloud-forensics-utils, a Python library that automates disk acquisition across AWS, Azure and GCP.
+
+== Maturity stages
+layout: timeline
+section: maturity
+event: Stage 1: Reactive | The team scrambles; forensics happens in production
+event: Stage 2: Documented | Log archive, forensics account, common runbooks, first tabletop
+event: Stage 3: Practiced | Quarterly tabletops, a retainer, SLA-tracked detect and contain
+event: Stage 4: Automated | High-confidence playbooks auto-execute in seconds
+The skip-stage cost is real: automating IR without runbooks is automating against nothing, and people will distrust it.
+notes:
+The page offers this as a useful staging model for a cloud IR program.
+
+At Stage 1, logs are partially captured, runbooks are tribal knowledge, and detection is mostly post-hoc: billing alerts, customer complaints and researcher tips. It survives small incidents and breaks on big ones.
+
+Stage 2 has the immutable log archive and the forensics account, written runbooks for compromised credentials, exposed buckets and crypto-mining, a defined on-call rotation, a phone-and-email relationship with one DFIR firm, and a first tabletop.
+
+Stage 3 adds an annual full-day exercise with Legal and executives, a retainer firm that has done an environment-familiarization engagement, and detection engineering tied to MITRE ATT&CK Cloud.
+
+At Stage 4, a GuardDuty finding snapshots the workload, applies the quarantine security group, pages the on-call and files a ticket, all in seconds. Evidence collection is reproducible from a runbook commit hash.
+
+An org that tries to automate IR without runbooks gets automation that is wrong. Sequence matters.
+
+== Common pitfalls
+layout: list
+section: pitfalls
+Beyond the seven below: buying a tool only when you need it, and skipping the retro.
+item: No immutable log archive
+item: Forensics in the production account, or no forensics account
+item: Rotating credentials before capturing evidence
+item: No tabletop, ever
+item: Conflating containment with eradication
+item: Forgetting identity-side persistence
+item: Underestimating regulatory clocks
+notes:
+The page calls the missing log archive the most common and most consequential IR readiness failure: the attacker disables logging on day zero, and without a tamper-resistant archive in a separate account, the investigation goes blind.
+
+Forensics in the production account contaminates evidence and exposes the IR team to whatever the attacker is still doing. Setting up a forensics account takes a week and pays for itself the first time. Rotating credentials first destroys the live session state that's often the best evidence: disable first, capture, then rotate. Quarterly is the minimum tabletop cadence that produces lasting muscle memory.
+
+Quarantine buys time; eradication is the work that prevents the second incident an hour later. An attacker who compromised an IdP admin can plant trust relationships, app consent grants and federation backdoors that survive every workload-side cleanup, so audit the IdP after every credential-compromise incident. GDPR's 72-hour window and the SEC's clock don't pause for your investigation: pre-map the clocks in the runbook, and have Legal in the room from hour one.
+
+A tool deployed under incident pressure won't be useful in that incident, so pre-stage it. When the retro slips, the action items are never identified, and six months later the same incident class recurs. Hold it within two weeks, no exceptions.
+
+== What one step before an incident is most worth the effort?
+layout: question
+section: faq
+Think about what an attacker who compromises production would try to tamper with.
+notes:
+This is a question from the page's FAQ. Ask it and let the room answer before moving on.
+
+== An immutable, cross-account log archive
+layout: answer
+section: faq
+Build one that an attacker who compromises production cannot tamper with: the org trail to a Log Archive account on AWS, a separate subscription on Azure, a retention-locked bucket in a logging project on GCP.
+notes:
+Build an immutable, cross-account log archive that an attacker who compromises your production environment cannot tamper with.
+
+In AWS, that's CloudTrail, as an org trail across all regions with management and data events, writing to an S3 bucket in a dedicated Log Archive account, with bucket policies and SCPs that prevent deletion or alteration. In Azure, it's the Activity Log and Diagnostic Settings exported to a Log Analytics workspace and a locked storage account in a separate subscription. In GCP, it's organization-aggregated Cloud Audit Logs sinking to a retention-locked bucket in a dedicated logging project.
+
+Without this, the attacker rotates credentials, disables CloudTrail, deletes logs, and you investigate blind.
+
+== Should I rotate credentials immediately on detecting a compromise?
+layout: question
+section: faq
+Consider what rotating takes away from the investigation, and who else might depend on the credential.
+notes:
+This is another question from the page's FAQ. Again, ask it before showing the answer.
+
+== Not before you capture the trail and choose containment
+layout: answer
+section: faq
+Premature rotation tips off the attacker, destroys live session state and can lock out legitimate workloads if the credential is shared. Query its history, snapshot workloads, then rotate and revoke active sessions.
+notes:
+The instinct to kill the access key is right eventually. Rotating prematurely tips off the attacker, destroys live session state that may be the best evidence of what's happening right now, and can lock out legitimate workloads if the credential is shared.
+
+The order is: identify the compromised principal, query CloudTrail, the Activity Log or Cloud Audit Logs for the credential's full activity history, snapshot any associated workloads, then rotate. Use AssumeRole session revocation, the AWSRevokeOlderSessions inline policy, to kill active sessions, not just the long-term credential.

@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initThemeToggle();
     initSearchSuggestions();
     initShareButtons();
+    initDeferredFrames();
 
     document.querySelectorAll('a[target="_blank"]').forEach(link => {
         const rel = (link.getAttribute('rel') || '').split(' ').filter(Boolean);
@@ -1684,4 +1685,22 @@ function initExerciseControls() {
     wrap.appendChild(btn);
     first.parentNode.insertBefore(wrap, first);
     sync();
+}
+
+// A slide preview (tools/build_topic_decks.py) is a closed <details> whose
+// iframe names its viewer in data-src and has no src: with scripts off a
+// browser loads every iframe at page load, closed panel and loading="lazy" or
+// not. This copies data-src into src when the panel opens, so a closed
+// preview requests nothing from Google. A panel already open when this runs
+// loads at once. Without scripts, noscript.css hides the empty frame and the
+// panel's <noscript> link stands in for it.
+function initDeferredFrames() {
+    document.querySelectorAll('details iframe[data-src]').forEach(function (frame) {
+        const panel = frame.closest('details');
+        const load = function () {
+            if (panel.open && !frame.hasAttribute('src')) frame.src = frame.dataset.src;
+        };
+        panel.addEventListener('toggle', load);
+        load();
+    });
 }

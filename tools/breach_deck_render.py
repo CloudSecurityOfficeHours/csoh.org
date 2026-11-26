@@ -3,11 +3,14 @@
 Render a breach kill chain deck (a BDeck from build_breach_decks.py) to a
 16:9 .pptx, and reopen the saved file to verify it.
 
-The file is uploaded to Google Drive and converted to Google Slides, and the
-converter drops images, connectors, SmartArt, embedded fonts and autofit. So
-only text boxes and these native shapes are drawn: rectangles, rounded
-rectangles, ovals, chevrons, right arrows and down arrows. verify_pptx
-reports anything else it finds in the saved file.
+The file is uploaded to Google Drive and converted to Google Slides. The
+converter keeps pictures, at their placed size and aspect ratio and with
+their alt text, but drops connectors, SmartArt, embedded fonts and autofit.
+So a breach deck draws only text boxes and these native shapes: rectangles,
+rounded rectangles, ovals, chevrons, right arrows and down arrows. A deck
+kind whose slides carry pictures (topic decks, through topic_deck_render.py)
+places pictures too. verify_pptx reports anything else it finds in the
+saved file, and reports a picture unless it is told pictures are allowed.
 
 Every height is estimated before a shape is placed, the way the how-to
 renderer does it, and an element that would end below the content limit
@@ -16,7 +19,10 @@ does a stat value too wide for its tile on one line, a word too wide for
 the box it sits in, and a timeline label that wraps past its line limit.
 Widths are measured glyph by glyph in the wider of each deck face and Arial,
 the face Google Slides substitutes, because Google Slides wraps whatever
-does not fit its box and breaks a word too wide for it.
+does not fit its box and breaks a word too wide for it. Headings are the
+exception: Google Slides sets them in Space Grotesk Bold, kerned, so their
+lines are counted in that face alone (heading_rows), and a heading that
+wraps there gets the height of the lines it takes.
 
 The palette, fonts, slide size, attribution and licence lines come from
 howto_deck_render, so the two deck families share one look. Of the breach
@@ -45,6 +51,8 @@ from pptx.util import Emu, Inches, Pt
 from howto_deck_render import (
     ATTRIBUTION,
     CLOSING_LICENSE,
+    CODE_SHAPE,
+    LABEL_SHAPE,
     LICENSE_LINE,
     SLIDE_H_EMU,
     SLIDE_W_EMU,
@@ -242,6 +250,139 @@ SAFE_ADVANCE: dict[tuple[str, bool], dict[str, int]] = {
 # sets the text a little wider still does not wrap it. A single unbroken
 # word is held to its measured width alone (see _Page.check_words).
 WIDTH_SAFETY = 0.10
+
+# The heading face alone, Space Grotesk Bold (fonts/space-grotesk-700.woff2),
+# as a browser canvas measures it, in thousandths of an em: each glyph's
+# advance, what each kerned pair of adjacent characters adds to their two
+# advances, and what each run of three adds on top of its two pairs where the
+# face's contextual forms (around "tt") change the spacing. Google Slides sets
+# a slide heading in this face, kerned, so a heading wraps where its width by
+# these tables reaches its box; HEADING_ADVANCE, the wider of two faces glyph
+# by glyph, overstates that width. Only the runs that widen the text are kept,
+# so the width holds whether or not a renderer applies the contextual forms.
+# A character missing here counts as wide as the widest glyph here; a pair or
+# run missing here adds nothing.
+HEADING_FACE_ADVANCE: dict[str, int] = {
+    ch: width
+    for chars, width in (
+        ("·", 218), (" ", 254), ("|", 258), ("I", 264), ("il", 266), ("j", 268), ("',‘’", 294),
+        ("`", 296), ("!.:;", 298), ("[]", 358), ("/\\", 388), (")", 390), ("r", 396),
+        ("(", 398), ("•", 400), ("-", 432), ("f", 436), ("1", 452), ("t", 456), ("{}", 466),
+        ("§", 474), ("\"“”", 514), ("z", 518), ("s", 524), ("F", 534), ("*", 540), ("L", 542),
+        ("v", 548), ("7E", 554), ("k", 564), ("Z", 576), ("eé", 577), ("?a", 578), ("c", 586),
+        ("T", 588), ("&", 591), ("x", 592), ("2", 594), ("58", 600), ("P", 604), ("$S", 606),
+        ("3", 608), ("J", 610), ("o", 612), ("hnuy", 616), ("69V", 618), ("+<=>^_~¥×", 620),
+        ("Y", 624), ("K", 626), ("R", 632), ("A", 634), ("#4", 636), ("bdgpq£", 638),
+        ("CX", 644), ("0", 648), ("H", 656), ("G", 662), ("B", 664), ("D", 666), ("N", 670),
+        ("U", 672), ("OQ", 676), ("€", 678), ("%", 758), ("w", 784), ("…", 798), ("m", 854),
+        ("M", 882), ("W", 898), ("@", 1014),
+    )
+    for ch in chars
+}
+HEADING_FACE_KERN: dict[str, int] = {
+    pairs[i:i + 2]: value
+    for value, pairs in (
+        (-130, "tt"),
+        (-114, "LY"),
+        (-110, ",Y.YY,Y.Y…ff…Y"),
+        (-104, "L\"L'L‘L’L“L”YJ"),
+        (-98, "-YP,P.P…Y-"),
+        (-96, ",T.TLTT,T.T……T"),
+        (-94, "TcTdTeTgToTqTé"),
+        (-88, "TJYcYdYeYgYoYqYé"),
+        (-86, "Ta"),
+        (-84, "Ya"),
+        (-80, "T/TxYs\\Tr,r.r…"),
+        (-78, "\"J'JYz‘J’J“J”J"),
+        (-76, "-TP/T-TsY/YmYnYpYrYuYy\\Y"),
+        (-74, "F,F.F…Tz"),
+        (-72, "AYTuTyYA"),
+        (-70, "LV"),
+        (-68, "7,7.7…TmTnTpTrTvTwYxf,f.f…"),
+        (-66, ",V,f,t.V.f.tV,V.V……V…f…t"),
+        (-64, "\"A'AA\"A'ATA‘A’A“A”J,J.J…TAYv‘A’A“A”A"),
+        (-62, "Yw"),
+        (-60, "TfTtV/\\V\\f\\t"),
+        (-57, "J/"),
+        (-54, "J-PA"),
+        (-52, ",1.1…1"),
+        (-50, "YfYt"),
+        (-48, "LfLt"),
+        (-46, "74AVVA"),
+        (-44, "-7FA"),
+        (-42, "\"4'4477-A?‘4’4“4”4"),
+        (-40, "(4(J,v-X.v4\"4'4‘4’4“4”PJX-v,v.v……v"),
+        (-38, ",W.W41JAJcJdJeJgJoJqJéK-L\\W,W.W……W"),
+        (-36, "-V-xJJL-V-Z-afatf/k-x-"),
+        (-34, ",7.7GYJaJmJnJpJrJuJyr/…7"),
+        (-32, "GTLvbxcxexoxpxxcxdxexgxoxqxééx"),
+        (-30, " , . T …(1, . F/KCKGKOKQKfKtL P-T VaVcVdVeVgVoVqVé[1fjkckdkekgkokqké{1… "),
+        (-28, "DTDYOTOYQTQYTCTGTOTQYCYGYOYQ[4avfifl{4"),
+        (-26, " - {- AfAtKvVsW/\\W} "),
+        (-24, "\"c\"d\"e\"g\"o\"q\"é'c'd'e'g'o'q'é(v,w.wDXLCLGLOLQOXQXVxXCXGXOXQa\"a'a?a‘a’a“"
+            "a”b\"b'b‘b’b“b”c\"c'c‘c’c“c”e\"e'e‘e’e“e”o\"o'o‘o’o“o”p\"p'p‘p’p“p”tfv)w,w.w…"
+            "é\"é'é‘é’é“é”‘c‘d‘e‘g‘o‘q‘é’c’d’e’g’o’q’é“c“d“e“g“o“q“é”c”d”e”g”o”q”é…w"),
+        (-22, "\"a'a-f-t-zD/DBDDO/OBODPXQ/QBQDSTSY\\C\\G\\O\\Q\\u\\yh\\m\\n\\z-‘a’a“a”a"),
+        (-20, "(c(d(e(g(o(q(é0797GVLUYS\\va\\b)c)e)o)p)svt-v/é)"),
+        (-18, ",C,G,O,Q.C.G.O.Q/J3151AWCYD,D.D…JCJGJOJQO,O.O…PZQ,Q.Q…RYWAXfXta)h\"h'h‘h’h“h”"
+            "m\"m'm‘m’m“m”n\"n'n‘n’n“n”rcrdrergrorqrétctdtetgtotqté…C…G…O…Q"),
+        (-16, "(w-Z2467BXU/VvXcXdXeXgXoXqXé\\Ubfbtcfctefetfcfdfefgfofqféofotpfptw)éfét"),
+        (-14, ",U.U/a/c/d/e/g/o/q/éBYCTDVKcKdKeKgKoKqKéOVQVSXU,U.U…VCVGVOVQVwXv\\c\\d\\e\\g"
+            "\\o\\q\\éauayb/b\\bvc/c\\cve/e\\evhfhthvksmfmtmvnfntnvo/o\\ovp/p\\pvs\"s's‘s’"
+            "s“s”vcvdvevgvovqvéé/é\\év…U"),
+        (-12, " A V(C(G(O(Q,0-v.00,0.0…57A BTCXD)DZKuKwKyLWO)OZPcPdPePgPoPqPéQ)QZRTRVTSTiTjV "
+            "VuVyXSZCZGZOZQZfZtr-rarsv-vavs…0"),
+        (-10, " Y\"s's(0(6(8(9(A(a(f(s(t(u(y,6-W.6/s0)0]0}276)718)878]8}9)9,9.9]9}9…A)AUAvG\""
+            "G'G‘G’G“G”PaPsSVUAVfVtW-Y [0[6[8[c[d[e[g[o[q[é\\J\\sa-acadaeagaoaqaéb]b}c]c}e]"
+            "e}f-fth)kam)n)o]o}p]p}s)s/s\\sfst{0{6{8{c{d{e{g{o{q{éé]é}‘s’s“s”s…6"),
+        (-8, "-A526]6}A-CACVFaFsKSKsL)LwPYS/VSVmVnVpVrXJXsXuXwXyZcZdZeZgZoZqZé[9\\S\\wbzczez"
+            "fahuhymumynunyozpzw/xaxszczdzezgzozqzé{9éz"),
+        (-7, "sx"),
+        (-6, " W,c,d,e,g,o,q,é-w.c.d.e.g.o.q.éACAGAOAQBABVCZDADWFCFGFOFQGWOAOWP)QAQWVzW WCWG"
+            "WOWQWaWcWdWeWgWoWqWéZuZvZy\\ab,b.b…c,c.c…e,e.e…o,o.o…p,p.p…w-é,é.é……c…d…e…g…o"
+            "…q…é"),
+        (-4, "(2296162707276AwB)FcFdFeFgFoFqFéPBPDPVR)SBSDWfWtXaasfssa"),
+        (-2, ",9.96,6.6…PTZsawbwcwewh]h}m]m}n]n}owpwwcwdwewgwowqwééw…9"),
+        (10, "\"f\"t'f'tf\"f'f‘f’f“f”t\"t't‘t’t“t”‘f‘t’f’t“f“t”f”t"),
+        (14, "J\\"),
+        (16, "()"),
+        (20, ",j/T/VT\\V\\f\\"),
+        (30, "/i/ji\\j\\"),
+        (40, "[j{j"),
+        (44, "(j"),
+        (74, "\\j"),
+    )
+    for i in range(0, len(pairs), 2)
+}
+HEADING_FACE_CONTEXT: dict[str, int] = {
+    runs[i:i + 3]: value
+    for value, runs in (
+        (4, "Wtt"),
+        (10, "(ttVttfttstt"),
+        (12, "Ztt"),
+        (14, "httmttntt"),
+        (16, "bttcttettottpttétt"),
+        (18, "Xttttcttdttettgttottqtté"),
+        (20, "tt-"),
+        (22, "-tt"),
+        (24, "ttf"),
+        (26, "Att"),
+        (30, "Ktt"),
+        (36, "att"),
+        (48, "Ltt"),
+        (50, "Ytt"),
+        (60, "Ttt\\tt"),
+        (66, ",tt.tt…tt"),
+        (130, "ttt"),
+    )
+    for i in range(0, len(runs), 3)
+}
+# Google Slides wraps a heading line whose width by the tables above reaches
+# the width of its box, and keeps one that leaves half a point free on one
+# line. A line counts as fitting only when it leaves this many points free,
+# so a measure a little short of Slides' own costs a heading a line of space
+# rather than letting its second line print over what follows.
+HEADING_WRAP_SLACK_PT = 0.4
 
 # Advance widths of the body face (Source Sans 3 Regular), in thousandths of
 # an em, as a browser canvas measures fonts/source-sans-3-400.woff2. Layouts
@@ -457,6 +598,44 @@ def _safe_rows(text: str, width: float, pt: float, bold: bool = False) -> int:
     return rows
 
 
+def _heading_face_width(text: str, pt: float) -> float:
+    """Inches one line of text takes at pt in Space Grotesk Bold as Google
+    Slides sets a heading: advances, pair kerning and the contextual runs
+    that widen it (HEADING_FACE_ADVANCE, _KERN and _CONTEXT)."""
+    widest = max(HEADING_FACE_ADVANCE.values())
+    em = sum(HEADING_FACE_ADVANCE.get(ch, widest) for ch in text)
+    em += sum(HEADING_FACE_KERN.get(text[i:i + 2], 0) for i in range(len(text) - 1))
+    em += sum(HEADING_FACE_CONTEXT.get(text[i:i + 3], 0) for i in range(len(text) - 2))
+    return em / 1000 * pt / 72
+
+
+def heading_rows(text: str, width: float, pt: float) -> int:
+    """Lines a heading wraps to in Google Slides across width inches at pt:
+    whole words fill each line, measured by _heading_face_width, and a line
+    fits only when it leaves HEADING_WRAP_SLACK_PT free. A word wider than a
+    line breaks where it reaches the edge, as Slides breaks it. Callers
+    reserve the more of this and their character estimate (see _heading)."""
+    room = width - HEADING_WRAP_SLACK_PT / 72
+
+    def fits(s: str) -> bool:
+        return _heading_face_width(s, pt) <= room + 1e-9
+
+    rows, line = 1, ""
+    for word in text.split():
+        joined = f"{line} {word}" if line else word
+        if fits(joined):
+            line = joined
+            continue
+        if line:
+            rows += 1
+        line = word
+        while line and not fits(line):
+            cut = max((k for k in range(1, len(line)) if fits(line[:k])), default=1)
+            rows += 1
+            line = line[cut:]
+    return rows
+
+
 def _overhang(pt: float) -> float:
     """Inches the glyphs of a line of body text at pt reach past the line
     itself, above the first line or below the last, at TIGHT_LINE."""
@@ -554,6 +733,19 @@ class _Page:
     """One slide under construction. Tracks the lowest edge of the content
     above, and the floor that elements pinned to the bottom leave, so an
     overflow is reported before the file is written."""
+
+    # The words the generated slides use for the page. A deck kind's page
+    # class sets its own; the slides' layout stays this module's.
+    NOTES_LINK = "Full kill chain"
+    PAGE_NOUN = "kill chain"
+    HOW_TO_INTRO = (
+        "Read it on your own or present it. Every fact about the incident comes from "
+        "the csoh.org kill chain and the sources it cites.",
+        "Slides marked Background explain a general idea and name their own source. "
+        "The speaker notes are a presenter's script.",
+    )
+    CLOSING_HEADING = CLOSING_HEADING
+    CLOSING_LEAD = "Every step, source and defense in detail: "
 
     def __init__(self, prs, deck, where: str, dark: bool = False):
         self.slide = prs.slides.add_slide(prs.slide_layouts[6])
@@ -692,7 +884,7 @@ class _Page:
                  [_p(f"{n} / {total}", *args)], align=PP_ALIGN.RIGHT, track=False)
 
     def notes(self, paras: list[str]) -> None:
-        url = f"Full kill chain: {SITE}{self.deck.page}"
+        url = f"{self.NOTES_LINK}: {SITE}{self.deck.page}"
         self.slide.notes_slide.notes_text_frame.text = "\n\n".join([*paras, url])
 
 
@@ -705,10 +897,15 @@ X, W, Y = STYLE["x"], STYLE["w"], STYLE["y"]
 
 def _heading(page, text, y, x=X, w=W, pt=None, min_h=0.0) -> float:
     """The slide heading at y; returns its bottom. With min_h, the box is at
-    least that tall and its text centred in it."""
+    least that tall and its text centred in it. The box holds the lines
+    Google Slides wraps the heading to (heading_rows), or the lines the
+    character estimate gives when that is more: counting characters gives
+    narrow text a line it does not take, which costs only space, and the
+    measure adds the line it misses for wide text."""
     pt = pt or STYLE["heading_pt"]
     color = STYLE["white"] if page.dark else STYLE["heading"]
-    h = _block_h([text], w, pt, heading=True)
+    rows = max(_rows(text, _per_line(w, pt, heading=True)), heading_rows(text, w, pt))
+    h = rows * _line_h(pt, heading=True) + 0.1
     anchor = MSO_ANCHOR.MIDDLE if min_h > h else MSO_ANCHOR.TOP
     h = max(h, min_h)
     page.box("heading", x, y, w, h, [_p(text, pt, color, font="heading_font", bold=True)],
@@ -974,19 +1171,36 @@ def _render_answer(page, s) -> None:
 
 
 def _render_checklist(page, s) -> None:
-    """A box and its text per check. Each item's height comes from
-    measuring its text, so items that fit on one line are evenly spaced and
-    an item that wraps gets the room for its extra lines."""
+    """A box and its text per check."""
+    _render_items(page, s, "check", "check")
+
+
+def _render_list(page, s) -> None:
+    """The checklist's layout with a dot in place of each box, for items
+    that are not things to do."""
+    _render_items(page, s, "item", "list")
+
+
+def _render_items(page, s, key: str, prefix: str) -> None:
+    """A marker and its text per item: a box for a checklist, a dot for a
+    list. Each item's height comes from measuring its text, so items that
+    fit on one line are evenly spaced and an item that wraps gets the room
+    for its extra lines."""
     y = _heading(page, s.heading, Y) + STYLE["block_gap"]
     y = _body(page, s.paragraphs, s.bullets, y)
     pt, box, indent = LOOK["list_pt"], LOOK["check_box"], LOOK["check_indent"]
     line = _line_h(pt)
+    dot = box * 0.4
     y += STYLE["block_gap"]
-    for (text,) in s.items.get("check", []):
+    for (text,) in s.items.get(key, []):
         h = _measured_rows(text, W - indent, pt) * line + 0.05
-        page.box("check-box", X, y + (line - box) / 2, box, box, fill=STYLE["white"],
-                 line=(STYLE["bar"], 2), kind=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.15)
-        page.box("check-text", X + indent, y, W - indent, h, [_p(text, pt, STYLE["text"])])
+        if prefix == "check":
+            page.box("check-box", X, y + (line - box) / 2, box, box, fill=STYLE["white"],
+                     line=(STYLE["bar"], 2), kind=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.15)
+        else:
+            page.box("list-dot", X + (box - dot) / 2, y + (line - dot) / 2, dot, dot,
+                     fill=STYLE["bar"], kind=MSO_SHAPE.OVAL)
+        page.box(f"{prefix}-text", X + indent, y, W - indent, h, [_p(text, pt, STYLE["text"])])
         y += h + LOOK["check_gap"]
 
 
@@ -1377,20 +1591,30 @@ RENDERERS = {
 # ---------------------------------------------------------------------------
 
 
-def _render_cover(page) -> None:
+# The cover text's width when it has the slide to itself. STYLE's cover
+# character counts are calibrated across it.
+COVER_W = 11.5
+
+
+def cover_text(page, x: float, y: float, w: float, title_pt: float, promise_pt: float) -> None:
+    """The cover's title, promise, as-of, attribution and licence lines in a
+    column w inches wide from (x, y), the characters per line scaled from
+    STYLE's calibration to that width and those sizes."""
     deck = page.deck
-    x, w, y = 0.9, 11.5, 1.2
-    tpt, ppt, lpt = STYLE["cover_title_pt"], STYLE["cover_promise_pt"], STYLE["cover_line_pt"]
-    th = _rows(deck.title, STYLE["cover_title_chars_per_line"]) * _line_h(tpt, heading=True) + 0.1
+    lpt = STYLE["cover_line_pt"]
+    t_per = int(STYLE["cover_title_chars_per_line"] * STYLE["cover_title_pt"] / title_pt * w / COVER_W)
+    p_per = int(STYLE["cover_promise_chars_per_line"] * STYLE["cover_promise_pt"] / promise_pt * w / COVER_W)
+    # The title is a heading: it gets the lines it wraps to as _heading counts them.
+    th = max(_rows(deck.title, t_per), heading_rows(deck.title, w, title_pt)) * _line_h(title_pt, heading=True) + 0.1
     page.box("title", x, y, w, th,
-             [_p(deck.title, tpt, STYLE["white"], font="heading_font", bold=True)])
+             [_p(deck.title, title_pt, STYLE["white"], font="heading_font", bold=True)])
     y += th + 0.3
-    ph = _rows(deck.promise, STYLE["cover_promise_chars_per_line"]) * _line_h(ppt) + 0.1
-    page.box("promise", x, y, w, ph, [_p(deck.promise, ppt, STYLE["light"])])
+    ph = _rows(deck.promise, p_per) * _line_h(promise_pt) + 0.1
+    page.box("promise", x, y, w, ph, [_p(deck.promise, promise_pt, STYLE["light"])])
     y += ph + 0.4
     line_h = _line_h(lpt) + 0.1
     for name, text, color in (
-        ("as-of", f"Reflects the csoh.org kill chain as of {deck.as_of}", STYLE["light"]),
+        ("as-of", f"Reflects the csoh.org {page.PAGE_NOUN} as of {deck.as_of}", STYLE["light"]),
         ("attribution", ATTRIBUTION, STYLE["accent"]),
         ("license", LICENSE_LINE, STYLE["light"]),
     ):
@@ -1398,23 +1622,24 @@ def _render_cover(page) -> None:
         y += line_h + 0.05
 
 
+def _render_cover(page) -> None:
+    cover_text(page, 0.9, 1.2, COVER_W, STYLE["cover_title_pt"], STYLE["cover_promise_pt"])
+
+
 def _render_how_to_use(page) -> None:
     deck = page.deck
     y = _heading(page, HOW_TO_HEADING, Y)
     paras = [
-        "Read it on your own or present it. Every fact about the incident comes from "
-        "the csoh.org kill chain and the sources it cites.",
-        "Slides marked Background explain a general idea and name their own source. "
-        "The speaker notes are a presenter's script.",
-        f"Full kill chain: csoh.org/{deck.page}. These slides reflect it as of {deck.as_of}.",
+        *page.HOW_TO_INTRO,
+        f"{page.NOTES_LINK}: csoh.org/{deck.page}. These slides reflect it as of {deck.as_of}.",
     ]
     _body(page, paras, [], y + STYLE["block_gap"])
 
 
 def _render_closing(page) -> None:
     url = f"{SITE}{page.deck.page}"
-    y = _heading(page, CLOSING_HEADING, Y) + STYLE["block_gap"]
-    lead = "Every step, source and defense in detail: "
+    y = _heading(page, page.CLOSING_HEADING, Y) + STYLE["block_gap"]
+    lead = page.CLOSING_LEAD
     pt, color = STYLE["body_pt"], STYLE["text"]
     h = _block_h([lead + url, CLOSING_LICENSE], W, pt)
     paras = [
@@ -1424,34 +1649,38 @@ def _render_closing(page) -> None:
     page.box("body", X, y, W, h, paras, gap=LOOK["para_gap"])
 
 
-def _generated(prs, deck, which: str, draw, n: int, total: int, dark: bool = False) -> None:
-    page = _Page(prs, deck, f"{deck.slug}.deck ({which})", dark=dark)
+def _generated(prs, deck, which: str, draw, n: int, total: int, dark: bool = False,
+               page_cls=_Page) -> None:
+    page = page_cls(prs, deck, f"{deck.slug}.deck ({which})", dark=dark)
     draw(page)
     page.footer(n, total)
     page.notes([])
 
 
-def _content(prs, deck, s, n: int, total: int) -> None:
-    page = _Page(prs, deck, s.where, dark=s.layout in DARK_LAYOUTS)
+def _content(prs, deck, s, n: int, total: int, page_cls=_Page, renderers=None) -> None:
+    page = page_cls(prs, deck, s.where, dark=s.layout in DARK_LAYOUTS)
     _credits(page, s)
-    RENDERERS[s.layout](page, s)
+    (renderers or RENDERERS)[s.layout](page, s)
     page.footer(n, total)
     page.notes(s.notes)
 
 
-def render_deck(deck, out: Path) -> Path:
+def render_deck(deck, out: Path, *, page_cls=_Page, renderers=None, cover=_render_cover) -> Path:
     """Write deck as a .pptx at out: a generated cover and "how to use this
     deck", the outline's slides, a generated closing. Raises LayoutError
-    before writing if any element would end below the room it has."""
+    before writing if any element would end below the room it has. Another
+    deck kind passes its own page class (which words the generated slides),
+    cover and layout renderers (topic_deck_render.py adds the figure layout
+    and cover art)."""
     prs = Presentation()
     prs.slide_width = Emu(SLIDE_W_EMU)
     prs.slide_height = Emu(SLIDE_H_EMU)
     total = len(deck.slides) + GENERATED
-    _generated(prs, deck, "cover", _render_cover, 1, total, dark=True)
-    _generated(prs, deck, "how to use", _render_how_to_use, 2, total)
+    _generated(prs, deck, "cover", cover, 1, total, dark=True, page_cls=page_cls)
+    _generated(prs, deck, "how to use", _render_how_to_use, 2, total, page_cls=page_cls)
     for n, s in enumerate(deck.slides, start=3):
-        _content(prs, deck, s, n, total)
-    _generated(prs, deck, "closing", _render_closing, total, total)
+        _content(prs, deck, s, n, total, page_cls, renderers)
+    _generated(prs, deck, "closing", _render_closing, total, total, page_cls=page_cls)
     out.parent.mkdir(parents=True, exist_ok=True)
     prs.save(str(out))
     return out
@@ -1487,9 +1716,9 @@ def _fill_behind(shapes: list, i: int, bg: str) -> str:
     return bg
 
 
-def _kind_problem(shape) -> str | None:
+def _kind_problem(shape, pictures: bool = False) -> str | None:
     kind = shape.shape_type
-    if kind == MSO_SHAPE_TYPE.TEXT_BOX:
+    if kind == MSO_SHAPE_TYPE.TEXT_BOX or (pictures and kind == MSO_SHAPE_TYPE.PICTURE):
         return None
     if kind == MSO_SHAPE_TYPE.AUTO_SHAPE:
         auto = shape.auto_shape_type
@@ -1497,15 +1726,22 @@ def _kind_problem(shape) -> str | None:
     return f"a {kind}"
 
 
-def _run_findings(tag: str, shape, behind: str) -> list[str]:
+def _run_findings(tag: str, shape, behind: str, code: bool = False) -> list[str]:
+    """Each run's size and contrast. On a code slide (code True) the how-to
+    code box's runs are held to exactly its sizes, as the how-to verify
+    holds them; every other run to the 18 pt body or 14 pt label floor."""
     out = []
     floor = LOOK["small_floor_pt"] if shape.name in SMALL_SHAPES else LOOK["body_floor_pt"]
+    exact = {CODE_SHAPE: STYLE["code_pt"], LABEL_SHAPE: STYLE["label_pt"]}.get(shape.name) if code else None
     for p in shape.text_frame.paragraphs:
         for run in p.runs:
             if not run.text.strip():
                 continue
             size = run.font.size.pt if run.font.size is not None else None
-            if size is None or size < floor:
+            if exact is not None:
+                if size != exact:
+                    out.append(f"{tag}: {shape.name} run is {size} pt, expected {exact}")
+            elif size is None or size < floor:
                 out.append(f"{tag}: {shape.name} run is {size} pt, below {floor}")
             color = run.font.color
             if color.type != MSO_COLOR_TYPE.RGB:
@@ -1520,15 +1756,18 @@ def _run_findings(tag: str, shape, behind: str) -> list[str]:
     return out
 
 
-def _slide_findings(tag: str, slide, n: int, total: int, page: str, outline) -> list[str]:
+def _slide_findings(tag: str, slide, n: int, total: int, page: str, outline,
+                    pictures: bool = False) -> list[str]:
     findings: list[str] = []
     limit = Inches(STYLE["bottom_limit"]) + EMU_SLACK
     bg = _solid(slide.background) or STYLE["bg"]
     shapes = list(slide.shapes)
     named: dict[str, list] = {}
+    # Only a kind with the code layout has code slides; breach outlines never do.
+    code = outline is not None and outline.layout == "code"
     for i, sh in enumerate(shapes):
         named.setdefault(sh.name, []).append(sh)
-        kind = _kind_problem(sh)
+        kind = _kind_problem(sh, pictures)
         if kind:
             findings.append(
                 f"{tag}: shape {sh.name!r} is {kind}; only text boxes, rectangles, rounded "
@@ -1545,7 +1784,7 @@ def _slide_findings(tag: str, slide, n: int, total: int, page: str, outline) -> 
             findings.append(f"{tag}: {sh.name} uses autofit, which the converter drops")
         if any(d in tf.text for d in FORBIDDEN_DASHES):
             findings.append(f"{tag}: en or em dash in {sh.name}")
-        findings += _run_findings(tag, sh, _fill_behind(shapes, i, bg))
+        findings += _run_findings(tag, sh, _fill_behind(shapes, i, bg), code)
 
     for name, want in (("footer-left", f"csoh.org/{page}"), ("footer-right", f"{n} / {total}")):
         got = [sh.text_frame.text for sh in named.get(name, [])]
@@ -1579,12 +1818,13 @@ def reopen(path: Path):
     return Presentation(str(path))
 
 
-def verify_pptx(path: Path, deck) -> list[str]:
+def verify_pptx(path: Path, deck, pictures: bool = False) -> list[str]:
     """Reopen the saved file and return every finding: the slide count and
-    size; per slide, shape kinds, bottoms and sides, autofit, run sizes
-    (18 pt body, 14 pt labels), contrast of every run against what it sits
-    on, dashes, the footer, the notes, and the type label and source line
-    that background and discussion slides carry."""
+    size; per slide, shape kinds (a picture only when pictures is True),
+    bottoms and sides, autofit, run sizes (18 pt body, 14 pt labels),
+    contrast of every run against what it sits on, dashes, the footer, the
+    notes, and the type label and source line that background and
+    discussion slides carry."""
     prs = reopen(path)
     findings: list[str] = []
     want = len(deck.slides) + GENERATED
@@ -1597,6 +1837,6 @@ def verify_pptx(path: Path, deck) -> list[str]:
     outline = {i + 3: s for i, s in enumerate(deck.slides)}
     for n, slide in enumerate(prs.slides, start=1):
         findings += _slide_findings(
-            f"{path.name} slide {n}", slide, n, want, deck.page, outline.get(n)
+            f"{path.name} slide {n}", slide, n, want, deck.page, outline.get(n), pictures
         )
     return findings

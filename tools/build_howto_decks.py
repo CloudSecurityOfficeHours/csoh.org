@@ -2072,12 +2072,18 @@ def _case_render_cover_title(tmp: Path) -> None:
         return shapes["title"].top, shapes["title"].height, shapes["promise"].top
 
     one_line = r.STYLE["cover_title_pt"] * r.STYLE["line_heading"] / 72
-    for title, rows in (("x" * 30, 1), ("x" * 34, 2)):
+    # Narrow letters, so the character count alone decides: 30 fit, 34 wrap.
+    for title, rows in (("l" * 30, 1), ("l" * 34, 2)):
         top, height, promise_top = geometry(title)
         assert height >= int(rows * one_line * 914400), (len(title), rows, height)
         assert promise_top >= top + height, (len(title), top, height, promise_top)
     # Control: a 30-character title keeps one line, so it must be shorter.
-    assert geometry("x" * 30)[1] < geometry("x" * 34)[1]
+    assert geometry("l" * 30)[1] < geometry("l" * 34)[1]
+    # Thirty wide letters are within the count but wider than the 11.5 in
+    # title box in the heading face (592 thousandths of an em each, unkerned,
+    # as a browser canvas measures Space Grotesk Bold), so they get two rows.
+    assert 30 * 592 / 1000 * r.STYLE["cover_title_pt"] / 72 > 11.5
+    assert geometry("x" * 30)[1] == geometry("l" * 34)[1]
 
 
 def _case_render_heading_wrap(tmp: Path) -> None:
@@ -2097,6 +2103,37 @@ def _case_render_heading_wrap(tmp: Path) -> None:
         heading, guide = shapes["heading"], shapes["guide-line"]
         assert heading.height >= int(rows * row * 914400), (length, heading.height)
         assert guide.top >= heading.top + int(rows * row * 914400), (length, heading.top, guide.top)
+
+
+def _case_render_heading_measured(tmp: Path) -> None:
+    """A heading within the character count that Google Slides wraps,
+    measured in its face, gets two rows, so the guide line starts under the
+    second."""
+    import howto_deck_render as r
+
+    # Whole headings in thousandths of an em, as a browser canvas measures
+    # them in Space Grotesk Bold (fonts/space-grotesk-700.woff2) with
+    # kerning. Google Slides wrapped the first at 36 pt across the 12.1 in
+    # heading box and kept the second on one line.
+    em = {
+        "ignore_changes can quietly unmanage a resource": (24200, 2),
+        "Envelope encryption: how every cloud KMS works": (23937, 1),
+    }
+    pt, w = r.STYLE["heading_pt"], r.STYLE["w"]
+    row = pt * r.STYLE["line_heading"] / 72
+    for text, (width, rows) in em.items():
+        assert len(text) <= r.STYLE["heading_chars_per_line"], text
+        assert (width / 1000 * pt / 72 >= w) == (rows == 2), text
+        deck = _render_deck()
+        deck.slides[0].heading = text
+        deck.slides[0].section = "Setup"
+        out = r.render_deck(deck, tmp / "h.pptx", {})
+        assert r.verify_pptx(out, deck) == [], r.verify_pptx(out, deck)
+        shapes = {sh.name: sh for sh in _reopen(out).slides[1].shapes}
+        heading, guide = shapes["heading"], shapes["guide-line"]
+        held = (heading.height / 914400 - 0.1) / row
+        assert abs(held - rows) < 0.01, (text, held)
+        assert guide.top >= heading.top + heading.height, (text, heading.top, guide.top)
 
 
 def _case_render_build_cleanup(tmp: Path) -> None:
@@ -2145,6 +2182,7 @@ RENDER_CASES: list = [
     ("render_verify_plants", _case_render_verify_plants),
     ("render_cover_title", _case_render_cover_title),
     ("render_heading_wrap", _case_render_heading_wrap),
+    ("render_heading_measured", _case_render_heading_measured),
     ("render_build_cleanup", _case_render_build_cleanup),
 ]
 

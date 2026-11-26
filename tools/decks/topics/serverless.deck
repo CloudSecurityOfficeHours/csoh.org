@@ -1,0 +1,369 @@
+title: Serverless Function Security
+page: serverless.html
+as-of: 2026-11-25
+promise: The platform owns the OS, runtime, scaling and host-level isolation; you own the code, IAM role, event configuration and dependencies.
+
+== The 30-second version
+layout: text
+section: top
+A serverless function is code the cloud runs in response to an event, without you managing a server. The platform owns the OS, runtime, scaling and host-level isolation. You own the code, IAM role, event configuration and dependencies.
+notes:
+A serverless function, also called FaaS, is code the cloud runs in response to an event: an HTTP request, a queue message, a file upload or a schedule. You do not provision, patch or manage a server. Examples are AWS Lambda, Azure Functions and Google Cloud Run functions, formerly Cloud Functions.
+
+The platform owns the operating system, the runtime, the scaling and the host-level isolation. You own the code, the IAM role, the event configuration and the dependencies.
+
+Security shifts accordingly. Kernel-level attack surface largely disappears. What replaces it is event injection from untrusted sources, identity sprawl across hundreds of small functions, supply-chain risk in every dependency, and denial of wallet as the new flavor of DoS.
+
+== A serverless function is three things
+layout: compare
+section: what-is
+col: Code | Usually one entry point that takes an event and returns a result | Ships as a zip, container image or managed runtime layer
+col: Event configuration | Declares what makes it run | HTTP routes, queues, object events, timers, streams
+col: Execution role | The cloud identity it runs as | Permissions for the services the code calls
+notes:
+Strip the marketing off and a serverless function is three things.
+
+The first is a short piece of code, usually one entry point that takes an event object and returns a result. It can be JavaScript, Python, Go, Java, .NET, Ruby, or a custom runtime through a thin shim, and it lives in a deploy package: a zip, a container image or a managed runtime layer.
+
+The second is the event configuration, which declares what causes the function to run: HTTP routes through an API gateway, queue messages, blob or object events, scheduled timers, database streams, message-bus events and identity events.
+
+The third is the execution role, the cloud identity the function assumes when it runs. It holds permissions for whatever services the code needs to call, such as reading a row from DynamoDB, writing to S3 or calling SQS.
+
+== When an event arrives
+layout: text
+section: what-is
+The platform allocates an isolated environment, copies your code in and runs it for a capped time, varying by provider. Later invocations can reuse that environment until the platform discards it.
+notes:
+When an event arrives, the platform allocates an isolated execution environment: a Firecracker micro-VM on AWS, and equivalents on Azure and GCP. It copies your code in and runs it for a capped time. That varies by provider; Lambda defaults to 3 seconds and allows up to 30 minutes per invocation. Then it keeps the environment so later invocations can reuse it, until the platform discards it.
+
+From your side, there are no servers visible, no nodes to patch and no operating system to maintain. The platform handles all of that.
+
+The serverless name is a marketing term, and there are servers underneath. The page's framing is functions as a service: the unit of deployment is a function, the unit of billing is the millisecond of execution, and the platform owns everything between your code and the silicon.
+
+== Why use serverless
+layout: text
+section: why-cloud
+It fits event-driven, intermittent work with bursty concurrency.
+- Pay only when it runs
+- Scales to zero and to thousands automatically
+- No server patching
+- One-line wiring to cloud event sources
+- A smaller per-workload security surface
+- Deploy and roll back in seconds
+notes:
+The model maps cleanly onto a specific shape of workload: event-driven, intermittent, with bursty concurrency.
+
+You pay only when the function runs, with no idle compute charges. A function invoked 1,000 times a day costs cents to dollars rather than the monthly minimum of a small VM. It scales to zero and to thousands automatically, and the platform handles spikes that would have needed a pre-warmed fleet. The cloud upgrades the OS, runtime and language version on a published schedule; you take the deprecation hit when your runtime reaches end of life, but day-to-day patching disappears.
+
+Wiring S3 to Lambda, Blob to a Function or GCS to a Cloud Run function is one line, where a decade ago it needed a polling daemon. There is no kernel to share, no node to compromise and no DaemonSet to misconfigure, so the unit of compromise is one function execution. You deploy, roll back and version every change in seconds.
+
+The typical fit is API endpoints that don't need persistent state, ETL pipelines that fire when a file lands, scheduled jobs, fan-out and fan-in patterns, lightweight integrations between SaaS services, and any use case that responds to a cloud event.
+
+== The good and the bad
+layout: table
+section: good-bad
+row: Dimension | The good | The bad
+row: Cost | Pennies at low traffic | At sustained high traffic, a container or VM is usually 3-10× cheaper
+row: Operations | No nodes, patches or OS to manage | Harder production debugging: only logs and traces
+row: Scaling | Zero to thousands in seconds | Cold starts, concurrency limits, downstream throttling
+row: Latency | Warm calls add single-digit ms | Cold starts add 100ms to several seconds
+row: Security surface | No host kernel to share, no nodes to compromise | Shifts to identity, events, dependencies and cost
+notes:
+This is an excerpt of the page's tradeoff matrix. At low traffic the cost is pennies, truly free at small scale. Above a few thousand QPS continuously, a long-running container or VM is usually 3-10× cheaper.
+
+There are no nodes, patches or OS to manage, but debugging a misbehaving function in production is harder: there is no shell and no kubectl exec, only logs and traces. The platform scales from zero to thousands in seconds, but concurrency limits, cold starts and downstream throttling remain. The platform scales; the database the function calls may not. Warm invocations add single-digit milliseconds of overhead, while cold starts add 100ms to several seconds, which is bad for latency-sensitive paths unless you use provisioned concurrency, which costs more.
+
+The hard caps are Lambda 30 minutes, Cloud Run functions 60 minutes for HTTP, and Azure Functions Consumption 10 minutes. Work that exceeds them doesn't fit. On security, there is no host kernel to share, but the attack surface shifts to identity, events, dependencies and cost. The page says the total surface is the same, with a different shape.
+
+The full table also covers stateful work, local testing and vendor lock: the code itself is portable, but event wiring, IAM, observability and orchestration are not.
+
+== A working heuristic
+layout: compare
+section: good-bad
+col: Serverless is usually the right default when all hold | Event-driven | Intermittent | Mostly stateless | Finishes well inside the timeout
+col: Containers or VMs usually fit better when any holds | Sustained throughput | Long-running | A hard latency budget under 100ms p99
+notes:
+The page offers a working heuristic. If your workload is event-driven, intermittent, mostly stateless, and finishes well inside the provider's timeout, 30 minutes on Lambda, serverless is usually the right default.
+
+If it is sustained throughput, long-running, or has a hard latency budget under 100ms at p99, containers or VMs are usually a better fit.
+
+== The trust boundary per invocation
+layout: table
+section: boundary
+row: Part | What it means
+row: Execution environment | Short-lived and hypervisor-isolated; Lambda Managed Instances work differently
+row: Identity | The execution role, with no node identity to fall back to
+row: Entry point | The event source; untrusted input arrives in the payload
+row: Outbound calls | Bounded by the role: that is the blast radius
+Per-function least-privilege roles are the difference between "one function compromised" and "one function got the keys to everything."
+notes:
+For each invocation, the page calls the security-relevant boundary straightforward. The execution environment is short-lived and hypervisor-isolated. On AWS, Lambda environments run in Firecracker micro-VMs dedicated to one customer, and warm invocations reuse them; Azure and GCP have similar isolation. Lambda never reuses an environment across functions and never shares a micro-VM between AWS accounts. Lambda Managed Instances works differently: functions on the same capacity provider can share an EC2 instance, and AWS says the containers between them are not a security boundary.
+
+The function's identity is its execution role. There is no node identity, no shared service-account token and no host-level credential to fall back to. Whatever calls the function, such as API Gateway, an HTTP function URL, S3 events or queue messages, is the threat surface. If the role can read a single DynamoDB table, that is the blast radius.
+
+The platform makes the boundary stronger than a long-lived container or VM in some ways: short-lived execution environments, hypervisor isolation by default and no host to patch. It also makes some kinds of compromise cheaper: if a function leaks its IAM credentials, using them outside the function is easy, and the function only needs to be compromised once.
+
+== Seven risk categories that matter
+layout: list
+section: risks
+The names differ across vendors; the threats don't.
+item: Event injection through untrusted payloads
+item: Identity sprawl across many over-permissioned roles
+item: Supply chain: dependencies load on every cold start
+item: Secrets in env vars, the leakiest easy pattern
+item: Network egress to the internet by default
+item: Denial of wallet: the target is your invoice
+item: An observability gap: if you didn't log it, it didn't happen
+notes:
+Serverless security in the cloud collapses into seven categories. The names differ across vendors; the threats don't.
+
+Event injection: untrusted data lands in the function through an event payload such as S3 object metadata, an SQS message body, an API Gateway request or an EventBridge event. The OWASP injection classes are the same, with new entry points. Identity sprawl means hundreds of functions, each with its own role, each accumulating just-in-case permissions. They are hard to audit, with a high blast radius when one role escalates. Supply chain: every npm, pip or Maven dependency is loaded into the runtime on every cold start, and a poisoned package is in production within one deploy.
+
+Secrets in env vars are visible through the console, logs, error stacks and any code that prints process.env. Default egress to the internet is the standard, and nothing in the platform stops a compromised function calling home unless you put it in a VPC with restricted egress. Denial of wallet comes from public function URLs, unrate-limited APIs and recursive event loops, and a weekend of fuzzing can produce a five-figure bill. Finally, there is no shell and no host-level forensics, and an attacker who knows that has every reason to keep their activity inside the gap.
+
+== Event injection: where attacker data enters
+layout: table
+section: event-injection
+row: Source | What can be attacker-controlled
+row: S3 or Blob events | The object key of a file an attacker can upload
+row: Queue messages | The body, if outsiders can write to the queue
+row: HTTP requests | Headers, body, path, query and cookies
+row: Event-bus events | Events from compromised or unexpected sources
+row: Database streams | Records a vulnerable upstream service inserted
+row: Auth events | Custom attributes and names passed to triggers
+The page calls this the most underestimated serverless risk.
+notes:
+The page calls event injection the most underestimated serverless risk. A function triggered by an event receives a structured payload, and that payload often contains attacker-controlled fields.
+
+For S3 or Blob object events, the object key is in the event. An attacker who can upload a file with a path like ../../etc/passwd, or a name containing shell metacharacters, has just put that string into your function. For SQS and other queues, if anything outside your control can write to the queue, whether cross-account, public SQS via SNS or a chain of services, the message body is attacker-controlled. HTTP requests carry the same input as any web app, and function URLs without API Gateway skip even the basic input validation that gateway features provide.
+
+On an event bus, sources you trust can be compromised, and sources you didn't realize were writing to the bus can inject too. A record inserted by a vulnerable upstream service flows into the database stream and into your function. And user-controlled fields such as custom attributes and names get passed to Cognito post-confirmation Lambda triggers.
+
+== Defending against event injection
+layout: checklist
+section: event-injection
+check: Validate every event field, even "system-generated" ones
+check: Schema-validate at entry with JSON Schema, Pydantic or Zod
+check: Sanitize object keys, message IDs and record IDs
+check: Don't eval event data
+check: Constrain who can push to the source
+notes:
+Validate every field of the event before using it, even fields the docs say are system-generated, because they often include user-supplied strings. Schema-validate at the function entry with JSON Schema, Pydantic or Zod, and reject malformed input fast and loudly.
+
+Treat event-source IDs as untrusted. Even an object key, a message ID or a record ID needs to be sanitized before it flows into a shell command, a SQL query or a path operation. Don't eval event data: the page says it sounds obvious and happens anyway in glue functions that build paths or queries from event fields.
+
+Finally, constrain who can push to the source with bucket policies, queue policies and event-bus rules. A queue that should only receive messages from one account shouldn't be writable cross-account.
+
+== Identity sprawl: the blast-radius math
+layout: compare
+section: identity
+col: 50 functions, one shared role | s3:* on * | Any one compromise reaches every S3 bucket in the account
+col: 50 functions, 50 roles | Each scoped to one bucket | The blast radius is one function's worth of data
+The right pattern is one role per function. The frequent reality is a few broad roles reused across dozens of functions.
+notes:
+The right pattern is one IAM role per function, each scoped to the minimum permissions that function needs. The frequent reality is a small number of broad roles that work for most of the Lambdas, reused across dozens of functions, all over-permissioned.
+
+The page gives four reasons this drifts. Defining a tight role requires knowing exactly which APIs the function calls, and as the function evolves, the role doesn't. Copy-pasting an existing role is faster than authoring a new one. It works locally with admin, so teams deploy and plan to tune later, and there is no later. Resource-level conditions are verbose to write, so wildcards win.
+
+The math: if 50 functions share one role with s3:* on *, any one of those 50 being compromised gives the attacker access to every S3 bucket in the account. With 50 distinct roles each scoped to one bucket, the blast radius is one function's worth of data.
+
+== Tightening function roles
+layout: checklist
+section: identity
+check: One role per function, generated through IaC
+check: Cut permissions unused in the last N days
+check: Scope to the bucket ARN, not *; add a key prefix if possible
+check: A permission boundary on every function role, on AWS
+check: Alert on new permissions, or role use outside usual region or time
+notes:
+Generate one role per function through IaC such as Terraform, SAM, Bicep or CDK, so authoring is automatic and consistent. Each cloud now has a tool, such as Access Analyzer, that reports which permissions in a role have been used in the last N days. Cut the unused ones.
+
+Use resource-level constraints: s3:GetObject on the specific bucket ARN, with a key prefix condition if possible, rather than s3:GetObject on *. On AWS, set a permission boundary on every function role so it cannot escalate even if its inline policy gets modified.
+
+Detect role drift with SIEM-side detections for a role getting a new permission, or a function role used outside the function's typical region or time. The page says both are signals worth alerting on.
+
+== Supply chain: every dependency is runtime
+layout: list
+section: supply-chain
+Every dependency loads on every fresh execution environment. The attack window matches a long-lived container's; shorter deploy cycles ship upgrades faster.
+item: Typosquatted packages, one letter off
+item: Dependency confusion: a public name shadows an internal package
+item: Compromised maintainer accounts, such as event-stream and Shai-Hulud
+item: Third-party Lambda Layers, almost never audited
+notes:
+In a long-lived container, dependencies are pulled at build time and frozen. In a serverless function they are still pulled at build time, but every dependency is loaded on every fresh execution environment. The attack window is identical. What is higher is the velocity of an upgraded dependency shipping to production, because deploy cycles are shorter.
+
+The page lists real serverless supply-chain incidents. Typosquatted npm packages, such as request versus requst or aws-sdk versus aws-sdk-js: a function that depends on the wrong package by one letter exfiltrates credentials on the first cold start. Dependency confusion, where a public registry name shadows an internal package and the pull resolves to the public, malicious copy. Compromised maintainer accounts, such as event-stream in 2018, Shai-Hulud and chalk in 2025, and repeated PyPI and npm token leaks, where the function gets a new transitive dependency on the next deploy.
+
+Public Lambda Layers from third parties are convenient and almost never audited. Trusting one is trusting the layer publisher's pipeline.
+
+== Supply chain defenses
+layout: checklist
+section: supply-chain
+check: Lockfiles pinned by hash, enforced in the build
+check: Scan dependencies in CI; fail on HIGH or CRITICAL CVEs
+check: An SBOM for every deploy
+check: Signed packages, verified at the deploy boundary
+check: A private mirror or proxy as the policy chokepoint
+check: No third-party Layers in prod without ownership or verifiable provenance
+notes:
+Pin lockfiles by hash: package-lock.json, requirements.txt with hashes, or go.sum, enforced with npm ci or pip install --require-hashes in your build. Scan dependencies in CI with tools such as Trivy, Snyk, Dependabot, OSV-Scanner or OpenSSF Scorecard, and fail the build on HIGH or CRITICAL CVEs.
+
+Keep an SBOM per deploy to track exactly what shipped. When the next CVE drops, you query the SBOM rather than rebuild and pray. Sign packages, with Cosign or Sigstore for container-image functions and AWS Signer for Lambda zips, and verify at the deploy boundary.
+
+A private mirror or proxy, such as Verdaccio, Artifactory, JFrog or GitHub Packages, is the chokepoint where you enforce policy. And avoid third-party Lambda Layers in production unless you have ownership or verifiable provenance.
+
+== Secrets: env vars are the wrong place
+layout: compare
+section: secrets
+col: Why env vars leak | Readable in the console and function configuration | Visible in IaC templates in source control | Easy to log, hard to rotate
+col: What to do instead | A secrets store, fetched at init and cached | Extensions or bindings that bypass env vars | Encrypt with your own KMS key; scan logs
+Environment variables are convenient and standard, and the wrong place for secrets.
+notes:
+Every serverless platform offers environment variables as the easy way to inject configuration. They are convenient and standard, and the page says they are the wrong place for secrets.
+
+They are visible in the console to anyone with read access on the function, which is almost always a wider audience than the people who should know the production database password. They are visible in CloudFormation, Terraform or Bicep templates in source control, and even encrypted at rest, they are decrypted when applied. Any principal allowed to run aws lambda get-function-configuration, or its equivalent, gets the secret. They are easy to log by accident, through console.log(process.env), an error stack or a verbose telemetry payload, and hard to rotate without redeploying.
+
+Instead, use a secrets store such as AWS Secrets Manager, SSM Parameter Store SecureString, Azure Key Vault or Google Secret Manager. Fetch at function init and cache for the warm-execution lifetime. Lambda Extensions, the Azure Functions secret-manager binding and GCP's volume mount of Secret Manager keep secrets out of env vars entirely. Encrypt env vars at rest with a KMS key you control rather than the default service key, so decryption is logged to CloudTrail. Keep secrets out of env vars even for non-prod, and scan logs for secrets continuously.
+
+== Outside your VPC by default
+layout: compare
+section: networking
+col: Attach to a VPC when | It must reach a private resource | You want NAT or firewall egress controls | Compliance needs it, or you want VPC Flow Logs
+col: Skip the VPC when | It calls only public AWS APIs | It is pure event glue with no outbound calls
+A function has open internet egress by default. Either way, block egress to known-bad destinations at some layer.
+notes:
+By default, a serverless function runs outside your VPC. It has internet egress, so it can call any external API, and it can be invoked over the internet through an API Gateway or function URL. The good face of that default: functions scale to thousands of concurrent executions without exhausting your VPC's IP space, and call public APIs without a NAT gateway. The bad face: any compromise has unrestricted outbound access, and calling a command-and-control server or exfiltrating data is unimpeded.
+
+Attach the function to a VPC when it needs a private resource such as an RDS instance, an internal API or an EFS mount; when you want egress controls through a NAT gateway allow-list or a transit gateway with a firewall; when compliance requires traffic to stay within your perimeter; or when you want VPC Flow Logs of its network behavior.
+
+The VPC isn't worth it when the function only calls public AWS APIs such as S3, DynamoDB and SQS, which VPC endpoints can reach when needed, or is pure event glue. The page also lists a cold-start budget that can't absorb ENI attach time, though on Lambda, Hyperplane ENIs moved that to function creation and VPC configuration updates.
+
+Either way, block egress to known-bad destinations with a NAT gateway allow-list, a managed firewall such as AWS Network Firewall, Azure Firewall or Cloud NGFW, or runtime egress policy if your CNAPP supports it.
+
+== Denial of wallet: attacking the bill
+layout: list
+section: wallet
+The attacker drives up your invocation count, and your cloud bill is the casualty.
+item: Public function URLs with no authentication
+item: APIs with no throttling: every request is a paid invocation
+item: Recursive loops: the function's own S3 write triggers it
+item: Amplification through paid downstream calls
+item: Queue floods: the function scales to drain them
+item: Patterns that keep forcing cold starts
+notes:
+Denial of wallet is the serverless equivalent of DDoS. Instead of taking your application offline, the attacker drives up your invocation count and your cloud bill becomes the casualty. The page says recent incidents have reported five-figure damages from a single weekend.
+
+A public function URL with no authentication is a free invocation source for anyone with the URL. An API Gateway with no throttling makes every request one paid invocation and every response one paid response. When a function writes to S3 and the S3 event triggers the same function, you have an infinite loop billed per invocation, unless there is a deduplication step or output-prefix isolation.
+
+A function that calls a paid service per request, such as Comprehend, Translate, Bedrock or a third-party API, turns one attacker request into multiple paid downstream calls. A producer flooding an SQS or Kafka queue makes the function scale to drain it. And a pattern designed to keep forcing cold starts costs more per invocation than a warm one would.
+
+== Capping the bill
+layout: checklist
+section: wallet
+check: Reserved or max concurrency per function
+check: API Gateway throttling, quotas and usage plans
+check: Budget alarms wired to auto-pause
+check: Idempotency keys to short-circuit duplicate work
+check: Trigger on input/, write to output/
+check: Authentication on every public-facing function
+check: A WAF with rate-based rules on public API Gateways
+notes:
+Reserved or max concurrency puts a hard cap on concurrent executions: the attack can use 100% of the function, but no more than that. API Gateway throttling gives per-route rate limits, per-API-key quotas and usage plans. Wire AWS Budgets with anomaly detection, Azure Cost Alerts or GCP Budgets to SNS, EventBridge or Pub/Sub, and trigger a Lambda that pauses concurrency or revokes the function URL.
+
+Idempotency keys detect and short-circuit duplicate work before it bills compute. If the function reads from bucket/input/ and writes to bucket/output/, configure the S3 trigger to filter on input/ only, and no recursion is possible.
+
+Lambda Function URLs default to authenticated; don't switch them to NONE unless you've thought about why. And put a WAF in front of public API Gateways, with rate-based rules, IP allow and deny lists and AWS Managed Rules. The same WAF that protects your web apps catches the denial-of-wallet path.
+
+== There is no host left to inspect
+layout: figure
+section: observability
+figure: serverless-logs
+By default, function logs hold only what your code prints, and the environment is gone when the call ends.
+notes:
+The serverless version of "did anything weird run last month?" is "do we have the logs to answer that?", and the default answer is often no. Compared with a VM or container, there is no persistent host to inspect after the fact, no kubectl exec or SSH for a live forensics session, and no host-level process or network logs unless you opt in. By default, function logs hold only your console.log or print calls.
+
+The figure shows that a function's environment disappears when the call ends, so the logs, the trace and the management-plane audit are the only record. If none of this is on, last month is unknowable.
+
+What good looks like: structured JSON logs with consistent keys, shipped out of the cloud's default 7-day retention immediately; distributed tracing with X-Ray, Application Insights, Cloud Trace or OpenTelemetry; per-function alarms on error rate, duration and throttles; audit logs of the management plane, where a new function with admin IAM is a SIEM-worthy signal; and runtime telemetry tools that capture syscall-level and dependency-call telemetry without code changes.
+
+== AWS, Azure and GCP side by side
+layout: table
+section: comparison
+row: Building block | AWS Lambda | Azure Functions | Cloud Run functions
+row: Max execution time | 30 min | 10 min Consumption; no maximum on Premium and Dedicated | 60 min (HTTP)
+row: Isolation | Firecracker micro-VM | Sandboxed worker on Consumption; container on Premium | gVisor or microVM, by generation
+row: Identity | IAM execution role per function | Managed identity per function app | Per-function service account
+row: Runtime threat detection | GuardDuty Lambda Protection | Defender for Cloud / App Service | Security Command Center, Cloud Run-shared signals
+notes:
+The three major FaaS platforms are broadly similar in shape and different in details. This is an excerpt of the page's table, which also covers public invocation, secrets integration, VPC attach, concurrency control, signing and native observability.
+
+Lambda caps execution at 30 minutes. Azure Functions caps it at 10 minutes on Consumption and sets no maximum on Flex Consumption, Premium and Dedicated, and Cloud Run functions allow 60 minutes for HTTP. Lambda isolates with Firecracker micro-VMs. Azure uses a sandboxed worker on Consumption and a container on Premium. Cloud Run functions run on a sandboxed Cloud Run instance: gVisor in the first generation or a microVM in the second.
+
+The page says the three converge over time as each picks up the others' best ideas. The differences it calls worth caring about are max execution time, where the 30-minute cap on Lambda is sometimes a deal-breaker, VPC attach behavior, and how secrets are referenced.
+
+== The hardening checklist
+layout: table
+section: hardening
+row: Area | Non-negotiables
+row: Identity | One role per function, resource-level permissions where possible, permission boundaries, no wildcards in prod
+row: Input | Schema-validate every event; "system" fields are untrusted too; constrain sources
+row: Supply chain | Hash-pinned lockfiles, CI scans failing on HIGH or CRITICAL, signed deployments
+row: Operational guardrails | Reserved concurrency, throttling, budget auto-pause, central logs, auth on public functions
+Then add a secrets store, egress controls for internet-callable functions, and runtime or CNAPP telemetry.
+notes:
+The page calls this the non-negotiable serverless hardening list, in four groups.
+
+For identity, it wants one execution role per function, resource-level permissions where possible, a permission boundary on every role, and no wildcards in production. For input, schema-validate every event at the entry point, treat user-controlled and system fields alike as untrusted, and constrain who can push to event sources. For the supply chain, pin dependencies in a lockfile, verify hashes at install, run CI scanning that fails on HIGH or CRITICAL CVEs, and verify signed deployments at the deploy boundary. The operational guardrails are reserved concurrency, API Gateway throttling, budget alarms with auto-pause, centralized logging and traces, and auth on every public function.
+
+On top of that, the page adds a secrets store for anything sensitive, never env vars; egress controls if the function is internet-callable; and runtime or CNAPP telemetry for the things logs can't show you.
+
+== Common pitfalls
+layout: list
+section: pitfalls
+The page lists three more: trusting "system-generated" event fields, no centralized logging, and long batch jobs forced into a function.
+item: A generic Lambda role shared across many functions
+item: Secrets in env vars
+item: Public function URLs with AuthType: NONE
+item: No reserved concurrency or budget alarms
+item: Recursive S3 event loops
+item: Third-party Layers and extensions without provenance review
+item: Deploying from a laptop with long-lived keys
+notes:
+These are the pitfalls the page lists. With a shared generic Lambda role, one leaky function compromises all the others; use per-function roles. Secrets in env vars are console-readable, log-leakable and hard to rotate; use a secrets store. Public function URLs with AuthType: NONE are easy to set up and produce weekend-sized cloud bills when fuzzed, so authenticate or rate-limit, ideally both. Without reserved concurrency or budget alarms, the platform will happily scale your function and your bill on attack.
+
+A recursive S3 loop happens when a function writes to the same bucket prefix it reads from; filter the trigger to a different prefix or write to a different bucket. Third-party Layers and extensions run inside your execution environment with your IAM credentials, so they are as much your code as your code is. Deploying from a developer laptop with long-lived keys is the same anti-pattern as in the rest of cloud, and the page points to the CI/CD page for the OIDC-federation fix.
+
+The rest: many "system-generated" event fields include user-controlled strings, so validate them. Without centralized logging, short default retention leaves you no after-the-fact forensics. And if a batch job takes 14 minutes today, it'll take 16 tomorrow: use Step Functions, Durable Functions or Workflows, or move it to a container.
+
+== Should everything be a serverless function?
+layout: question
+section: faq
+Consider the shape of each workload, and what it costs to run all day.
+notes:
+This is a question from the page's FAQ. Ask it and let the room answer before moving on.
+
+== No: keep functions for the shapes they fit
+layout: answer
+section: faq
+Functions suit event-driven, intermittent, mostly stateless work that finishes well inside the provider's timeout. They get expensive at high sustained throughput, awkward for long-running work, and lock you to one cloud's event wiring.
+notes:
+No. Functions are great for event-driven, intermittent, mostly stateless workloads that finish well inside the provider's timeout, which is 30 minutes on Lambda. They get expensive at high sustained throughput, awkward for long-running work, and lock you to one cloud's event-source wiring.
+
+The page says the "rebuild everything as Lambdas" pattern from 2018 burned a lot of teams. Most have since migrated steady-state services back to containers and kept serverless for the parts where it fits.
+
+== How is cold start security-relevant?
+layout: question
+section: faq
+Consider what runs on a fresh execution environment that a warm one skips.
+notes:
+This is another question from the page's FAQ. Again, ask it before showing the answer.
+
+== Dependencies reload, and init code runs differently
+layout: answer
+section: faq
+Every cold start reloads all dependencies, so a compromised one activates on every cold start, not just at deploy. Init-time code paths run differently from warm ones, so init-only bugs can be harder to catch.
+notes:
+The page gives two ways. First, every cold start re-loads all dependencies, which means a compromised dependency activates on every cold start, not just at deploy.
+
+Second, init-time code paths, such as loading secrets and opening connections, run differently from steady-state warm code paths. So bugs that only happen during init can be harder to catch.

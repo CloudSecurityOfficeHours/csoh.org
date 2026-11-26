@@ -1,0 +1,383 @@
+title: Learn AI
+page: ai-learning.html
+as-of: 2026-11-25
+promise: Most security professionals don't need to train models from scratch; they need to understand how LLMs work, how to use them well and how they fail, because soon they will be asked to defend an agent with access to their production cloud.
+
+== The short version
+layout: text
+section: top | why-now
+Most security professionals don't need to train models from scratch. You need to understand how LLMs work, how to use them well, and how they fail. Soon you will be asked to defend an agent with production cloud access.
+notes:
+This deck follows the page's roadmap, which its author calls the shortest path he would recommend to a working CNAPP engineer, detection engineer or cloud architect who has used ChatGPT but hasn't yet built or attacked anything with an LLM.
+
+You don't need to become a machine-learning researcher. The goal is working AI literacy: enough to use these tools well, build small things, and reason about how they break. The reason it matters now is that soon you will be asked to defend an agent that has access to your production cloud.
+
+== Why this belongs on a cloud security site
+layout: text
+section: why-now
+- An agent with an IAM role and a browser tool has a compromised admin's blast radius
+- If you can't read a system prompt, you can't review what your team ships
+- Prompt injection isn't XSS, and RAG isn't SQL
+notes:
+The page gives three reasons this is on a cloud-security site.
+
+First, agents are landing in your cloud. An agent with an IAM role and a browser tool has the blast radius of a compromised admin, and defending that is a cloud-security problem, not a separate AI team's problem.
+
+Second, your job is changing. Detection engineers are writing prompts to triage alerts, IR teams are using LLMs to summarize CloudTrail, and pen testers are using AI to draft attacks faster than humans can review. If you can't read a system prompt, you can't review what your team ships.
+
+Third, the attack surface is new. Prompt injection isn't XSS and RAG isn't SQL. Most of the OWASP LLM Top 10 has no clean analog from the appsec world, so you have to learn it on its own terms.
+
+== What makes the start much easier
+layout: checklist
+section: prerequisites
+check: Comfort in a terminal and one scripting language; Python is the lingua franca
+check: HTTP and JSON intuition: every model API is a POST returning JSON
+check: Cloud security fundamentals, since AI security is a layer on top
+check: A credit card with a $20-50/month budget for API calls
+You do not need linear algebra, calculus, or a PyTorch tattoo to be useful here.
+notes:
+The page says you'll have a much easier time if you already have these four. You don't need to be fluent in Python, but you need to read other people's notebooks and modify them. Every model API is a POST request returning JSON, so if you can hit an API with curl, you have what you need.
+
+If you're new to cloud security, the page sends you to the cloud security learning path first. AI security is a layer on top of cloud security, not a substitute for it.
+
+You'll burn the budget on API calls, and the page calls it the cheapest tuition in tech.
+
+== Six stages that overlap
+layout: figure
+section: prerequisites
+figure: ai-stages
+The roadmap runs in six stages, from daily user through to specializing, shown with the timeboxes the page gives them.
+notes:
+The roadmap has six stages, from becoming a daily user through to specializing, shown with the timeboxes the page gives them.
+
+The stages overlap on purpose: months 3 to 6 and months 5 to 8 run together.
+
+== Stage 1: become a daily user
+layout: checklist
+section: stage-1
+Goal, weeks 0 to 2: build instinct for what frontier models can and can't do. You can't defend a tool you've never used in anger.
+check: Pick one frontier model and pay for it
+check: Use it for everything for two weeks
+check: Try a coding agent on a real task in a real repo
+notes:
+Pick Claude from Anthropic, ChatGPT from OpenAI, or Gemini from Google, and pay the $20/month. The page says the gap between the free and paid tier is enormous, and the gap between occasional user and daily user is bigger still. Don't try to evaluate three at once; you'll learn more by going deep on one.
+
+For two weeks, use it for everything: drafting Slack messages and emails, reading a CloudTrail log dump and explaining what an attacker just did, writing the boilerplate of a Terraform module before you fix it by hand, summarizing a security paper, explaining a concept you almost understand. Notice when it's confidently wrong, when it saves you an hour, and how rephrasing a prompt changes the answer.
+
+Then try a coding agent such as Claude Code, Cursor, GitHub Copilot or Codex: write a small tool, debug a Lambda, refactor a script. The leap from chat assistant to an agent that edits files and runs commands is exactly the shift you'll later need to defend.
+
+The milestone: you reach for an LLM for the right kinds of tasks and avoid it for the wrong ones, and you can describe to a colleague three things this model does well and three it fails at.
+
+== Stage 2: the 30-minute mental model
+layout: list
+section: stage-2
+Goal, weeks 2 to 6: understand what happens when you press send. You need crisp answers to these.
+item: What is a token, and why does it cost money?
+item: What is the context window, and what happens when you exceed it?
+item: What does temperature change?
+item: What is an embedding, and how is it different from a token?
+item: Fine-tuning, RAG or prompting: when do you reach for each?
+item: What is a system prompt, and why is it not a security boundary?
+item: Why do models hallucinate, and which hallucinations are dangerous?
+notes:
+The point of stage 2 is no more magic. You don't need to derive attention from scratch, but you need crisp answers to these seven questions.
+
+The page recommends a few primers. Andrej Karpathy's Intro to Large Language Models is 1 hour and free, a plain-language introduction for newcomers, and the page says to watch it twice. DeepLearning.AI's short courses are free and 1-2 hours each; start with ChatGPT Prompt Engineering for Developers and Building Systems with the ChatGPT API. Anthropic's and OpenAI's prompt-engineering docs are vendor docs, but unusually high signal. Anthropic Courses on GitHub are interactive Jupyter notebooks for prompt engineering, tool use, RAG and evals.
+
+== Prompt engineering, briefly
+layout: checklist
+section: stage-2
+Most prompt-engineering content online is hype. The 80/20:
+check: Be specific: vague input, vague output
+check: Show, don't tell: few-shot examples beat instructions almost every time
+check: Ask for step-by-step reasoning on hard problems, then for verification
+check: Constrain the output format with JSON schemas and clear delimiters
+check: Iterate: the first prompt is rarely the right prompt
+notes:
+For hard reasoning, ask the model to think step by step, which is chain of thought, then ask it to verify its own answer. JSON schemas and clear delimiters reduce variance in the output.
+
+The stage 2 milestone: you can read a prompt-engineering blog post or a model evaluation paper and not get lost in the jargon. You stop calling LLMs AI in casual conversation, because the precision matters.
+
+== Stage 3: build two things with the API
+layout: compare
+section: stage-3
+Goal, months 1.5 to 3: get past consumer-app polish and into raw model behavior.
+col: First: RAG over your own notes | Embed documents in a vector store; start with FAISS or Chroma | Retrieve top-k by similarity, then re-rank | Put the results in a prompt with a system message | Stream the response back
+col: Second: an evaluation harness | Pick a security task | Build ~30 examples with ground truth | Run the same prompt on every change | Watch your changes regress things
+notes:
+The canonical first project is a retrieval-augmented Q&A bot over a corpus you control: your blog posts, last year's incident write-ups, every CloudTrail finding from a CTF, your runbooks. Start with FAISS or Chroma locally, and don't reach for Pinecone yet. It will work badly the first time, and the page says fixing it is where the real learning lives.
+
+The second project is an evaluation harness for a security task, such as extracting IOCs from an incident report, classifying a CloudTrail event as benign or suspicious, or summarizing a CVE in three bullets. Build a small dataset of about 30 examples with ground truth and run the same prompt against it on every change. Watching your changes regress things is what real AI engineering feels like.
+
+For starting kits, the page lists the OpenAI and Anthropic cookbooks, LangChain if you like batteries included, or the raw SDK if you want to understand what's happening, which it recommends. Hugging Face Learn goes deeper into the ML side.
+
+The milestone: you've shipped two things you wrote yourself, in code, that call a model API, and you have an opinion about model providers based on real use.
+
+== Stage 4: read the canon, know the standards
+layout: table
+section: stage-4 | frameworks
+Goal, months 3 to 6: move from "I can build" to "I can break, and I can defend."
+row: Source | What it is
+row: OWASP Top 10 for LLM Applications | What goes wrong; read the 2026 edition
+row: NIST AI RMF 1.0 | Govern, Map, Measure, Manage
+row: NIST AI 600-1 | The AI RMF applied to GenAI
+row: MITRE ATLAS | Adversarial techniques, mapped like ATT&CK
+row: ISO/IEC 42001 | AI management system standard
+notes:
+Read every entry of the OWASP 2026 edition, published in August 2026, and re-read it next quarter: the page says it is revised, not just reissued. Check which edition you have landed on. The original owasp.org project page is now kept as a historical archive and still displays the 2023 v1.1 list.
+
+The page calls the NIST AI RMF boring and important. NIST AI 600-1, the Generative AI Profile, comes from the page's list of frameworks and standards to know cold. Map MITRE ATLAS techniques to detections. ISO/IEC 42001 is useful when GRC inevitably knocks, and is increasingly asked for in vendor questionnaires. The EU AI Act is risk-tiered regulation that you'll touch if your company sells in the EU. Stage 4 also lists Google's Secure AI Framework and the CISA and UK NCSC Guidelines for Secure AI System Development. Google SAIF and Microsoft's Responsible AI Standard are vendor frameworks, useful as templates, and the CSA AI Controls Matrix gives practical control mappings.
+
+You'll be asked about all of these in interviews and audits. Skim them now, and deep-read the ones your job touches.
+
+== Attack classes to understand, part one
+layout: table
+section: stage-4
+Prompt injection is the defining LLM vulnerability.
+row: Class | What it is
+row: Prompt injection, direct and indirect | Hidden instructions in retrieved content, webpages, emails or calendar invites, which the model executes
+row: Jailbreaks | Inputs that defeat safety training; different from injection, sometimes overlapping
+row: Training-data extraction | Coercing a model into reproducing memorized secrets, PII or proprietary code
+row: Unbounded consumption | Inputs that blow up token budgets, latency or spend
+notes:
+In prompt injection, an attacker hides instructions in retrieved content, a webpage, an email or a calendar invite, and the model executes them. It comes in direct and indirect forms.
+
+Jailbreaks are inputs that defeat safety training. They are different from injection, and sometimes overlapping.
+
+Training-data extraction coerces a model into reproducing memorized training data: secrets, PII or proprietary code.
+
+Unbounded consumption was named model denial of service in the 2023 list, which is still what most write-ups call it.
+
+== Attack classes to understand, part two
+layout: table
+section: stage-4
+Vector and embedding weaknesses are easy to miss, because the model itself behaves correctly throughout.
+row: Class | What it is
+row: Improper output handling | Model-returned code, SQL or shell executed downstream, making the model an attack proxy
+row: Vector and embedding weaknesses | Poisoned index documents, embedding inversion, cross-tenant leakage from a shared vector store
+row: Supply-chain attacks | Tampered model weights, poisoned datasets, malicious Hugging Face repos
+row: Excessive agency | An agent given more tools, scopes or authority than the threat model warrants
+notes:
+Improper output handling is when the model returns code, SQL or shell that gets executed downstream, so the model is now an attack proxy. It was listed as insecure output handling before the 2025 renumbering.
+
+Vector and embedding weaknesses are attacks on the retrieval layer rather than the model: poisoned documents in the index, embedding inversion that recovers source text, and cross-tenant leakage from a shared vector store. This is the RAG-specific class.
+
+Supply-chain attacks cover tampered model weights, poisoned datasets and malicious Hugging Face repos. Excessive agency is an agent given more tools, scopes or authority than the threat model warrants.
+
+== Defenses you'll build, or buy
+layout: checklist
+section: stage-4 | stage-2
+Stage 4 milestone: you can review an LLM-powered feature in your company's product and produce a credible threat model.
+check: Input and output filtering: helpful, never sufficient
+check: Strong system prompts with structured output and schema validation
+check: No agent write access you wouldn't give a junior contractor on day one
+check: Log every prompt, completion, tool call and model identity
+check: A human in the loop for irreversible actions
+notes:
+Filtering tools include Llama Guard, Lakera, Prompt Guard and NeMo Guardrails. The page calls them helpful, never sufficient. Pair strong system prompts with structured output and schema validation.
+
+Scope tools tightly: never give an agent write access to anything you wouldn't give a junior contractor on day one. Log every prompt, completion, tool call and model identity, because you can't investigate what you didn't record. Actions such as send email, delete resource or pay invoice should not be one prompt away.
+
+The page describes what the job looks like: most AI security work in 2026 is plumbing (guardrails, secrets, observability), not exotic adversarial ML. By the end of this stage you stop treating "the LLM is powerful" as a magic explanation.
+
+== Stage 5: agents and MCP
+layout: text
+section: stage-5
+Goal, months 5 to 8: internalize what changes when an LLM stops talking and starts doing. Agents are LLMs in a loop with tools. Model Context Protocol (MCP) is the open standard for plugging tools and data into them.
+notes:
+Model Context Protocol is already the default: teams are running MCP servers in production and governing them, not evaluating whether to adopt them.
+
+The page calls agents and MCP together the most consequential security shift since cloud itself, and says plenty of companies are still finding out what they have deployed. The site's MCP security page covers the threat model.
+
+== Build an agent, then attack your own
+layout: checklist
+section: stage-5
+check: Pick a small, well-scoped goal for an agent
+check: Implement tool calling against the raw API
+check: Add a max-steps cap, a budget cap and confirmation for destructive actions
+check: Connect an MCP-capable client to at least two MCP servers
+check: Read the spec: the security boundary is the client, not the protocol
+check: Design an injection that flips the agent's intent; try it on your setup
+notes:
+The page's example goals are summarizing your unread security newsletters, or opening a GitHub issue when a new high-severity CVE matches your stack. Implement tool calling against the raw API and watch the agent loop in your terminal. Once the caps and the confirmation hook are in, notice how often you would have nuked something without them.
+
+For MCP, install Claude Desktop or another MCP-capable client and connect at least two servers, such as the file system, GitHub or a database. The injection is a malicious file, issue or row that flips the agent's intent.
+
+For reading, the page points to Simon Willison's writing on prompt injection, which it calls the most important running commentary on this attack class; Embrace The Red by Johann Rehberger for practical agent and assistant exploits; Anthropic's research on agentic misuse and misalignment; and the CSOH Breach Kill Chains, where agent-related incidents are starting to show up.
+
+The milestone: you can sketch the threat model for an agentic system on a whiteboard, identify the three highest-blast-radius tools, and explain to an exec why "but the system prompt forbids that" is not a control.
+
+== Governing AI: find out what is already running
+layout: table
+section: governing-ai
+This is the part your employer will ask you about first. You cannot govern an inventory you do not have, and shadow AI arrives through a browser tab, not a procurement process.
+row: Signal | What it covers
+row: Identity logs | On Microsoft, non-interactive and managed-identity sign-ins too, collected and alerted on
+row: Network egress | Which model endpoints are reached, by what, and how often
+row: Device and browser inventory | What is installed, and the far larger set of logged-in web apps
+row: CASB rules and DLP | Existing machinery aimed at prompt and upload paths
+notes:
+Your employer will ask you about this first, usually before you feel ready. The page gives it its own section because it comes up on the Friday call more than any other AI topic. The four signals on this slide are the ones people report working.
+
+On identity logs: if you are on Microsoft, confirm you are collecting non-interactive sign-in logs and managed-identity sign-in logs as well as the interactive ones, then alert on them. The page calls this the most common gap: the logs exist, the workspace is not ingesting them, and the dashboard shows a reassuring zero.
+
+A proxy or SASE tier sees the traffic that never touches a corporate identity at all. Mobile device management covers what is installed, and browser-side visibility covers the far larger set of tools that are just a logged-in web app. Browser extensions and desktop agents that inspect a prompt before it leaves are a real control point, not a theoretical one. CASB rules and DLP are the same machinery you already point at file sharing.
+
+== Pick your control points
+layout: checklist
+section: governing-ai
+The sanctioned model list is the most useful artifact you can produce. Everything else is enforcement of this list.
+check: A sanctioned model list: which models, for what data, through which route
+check: An AI gateway: one egress point, with logging you own
+check: Managed settings files, shipped centrally
+check: Guardrails on prompts and outputs, in both directions
+notes:
+An AI gateway decides which models are reachable and what data may reach them. The page calls it the difference between a policy document and a control.
+
+Most enterprise AI clients now ship an admin-controlled config: which tools are enabled, which directories are readable, whether a given integration can run. Ship it centrally instead of trusting per-user setup.
+
+Guardrails mean topic restrictions and sensitive-data filtering in both directions. The model providers' enterprise controls are recent additions to products that were not designed with them in mind, so verify what a control does rather than what the feature page says.
+
+== The parts that are not technical
+layout: text
+section: governing-ai
+Bring a sanctioned path that is easier than the workaround.
+- Permissive versus strict is a live fight, and you may lose it
+- Separate the two kinds of bypass
+- Cost is a governance surface
+- Write it down against a framework
+notes:
+Plenty of executives are rejecting restrictive AI policy on purpose, on the view that the productivity upside outweighs the risk. Turning up with only a blocklist is how you get routed around, so come with a sanctioned path that is easier than the workaround.
+
+The next slide covers the two kinds of bypass.
+
+Cost covers token budgets, central purchasing, and who pays. Watch for metrics that accidentally reward consumption rather than output, and note that newer models are often less token-efficient than the ones they replace, so last year's limits quietly stop meaning what they meant.
+
+For the framework, NIST AI RMF and ISO/IEC 42001 map onto the GRC stack you already run, and the site's cloud GRC page covers the surrounding process.
+
+== Two kinds of bypass
+layout: compare
+section: governing-ai
+Treating the first as the second poisons the well.
+col: Working around a control to fix a technical problem | A signal that the sanctioned path is broken | The fix is engineering
+col: Deliberately exfiltrating to an unapproved model | An HR matter | No additional control will resolve it
+notes:
+Someone working around a control to fix a technical problem is telling you the sanctioned path is broken, and the fix is engineering. Someone deliberately exfiltrating to an unapproved model is an HR matter, and no additional control will resolve it.
+
+The milestone for this section: you can answer which AI tools are in use here, by whom, against which data and through what route, with evidence rather than a guess, and there is one sanctioned path that is easier to use than working around you.
+
+== Stage 6: specialize
+layout: table
+section: stage-6
+row: Lane | What it covers
+row: AI red teaming | Offensive skill against LLM apps and agents
+row: Defending agentic systems | Detections for prompt injection and tool misuse
+row: AI governance & risk | AI inventories, use-case review, AI RMF on your GRC stack
+row: MLSecOps | Pipeline security: registry, dataset lineage, signed weights
+row: AI-native security tooling | SOC triage agents, alert summarization, IR copilots
+row: Runtime protection | Monitoring deployed models and agent behavior in production
+notes:
+Pick the lane your career and curiosity pull you toward.
+
+AI red teaming builds offensive skill against LLM apps and agents: adversarial prompting, jailbreak research, agent-tool exploitation and multi-modal attacks. The page names the HackerOne AI Safety Fund and AI Village at DEF CON as communities. Defending agentic systems covers detection content for prompt-injection patterns and tool-misuse anomalies, model-identity tracking, and the analogue of CloudTrail for AI control planes.
+
+AI governance and risk means mapping NIST AI RMF and ISO 42001 onto your existing GRC stack, running AI inventories, approving and reviewing use cases, and talking to legal regularly. MLSecOps is pipeline security (model registry, dataset lineage, signed weights, deployment guardrails), the ML world's answer to DevSecOps. AI-native security tooling covers triage agents for the SOC, alert summarization, IaC review and autonomous IR copilots, and the page says the market is wide open.
+
+Runtime protection monitors deployed model endpoints, prompts, completions and agent behavior in production. Wiz markets this as AI-APP (disclosure: the site's author works at Wiz). The page says that name is one vendor's coinage rather than an established category, so treat the label with more caution than the capability.
+
+== Hands-on labs and CTFs
+layout: table
+section: labs
+You can read for a year and learn less than in one weekend of CTFs.
+row: Lab | What you do
+row: Gandalf: Agent Breaker (Lakera) | Prompt-injection puzzles against vulnerable agent apps
+row: Prompt Airlines | Trick a customer-service chatbot into a free flight
+row: Doublespeak | Extract a secret from a deception-resistant AI character
+row: AI Goat (Orca Research) | A Terraform-based vulnerable AI/ML pipeline in AWS
+row: Hugging Face Spaces | Run a small open-source LLM locally, then break it
+notes:
+Gandalf: Agent Breaker is free and browser-based, with prompt-injection puzzles against deliberately vulnerable agent apps: poisoned data sources, hijacked objectives, tool abuse and data exfiltration. The page calls it still the gateway drug, but the target is agentic attack surface now rather than a single password game, and the original Gandalf redirects there. The page calls Prompt Airlines realistic. AI Goat covers AI supply chain attacks, data poisoning and output integrity attacks. On Hugging Face Spaces, find a small open-source LLM, run it locally and try to break your own deployment.
+
+AI-themed CTF events are happening multiple times a year now, and the CSOH CTF directory lists live challenges.
+
+For each lab, write up what you tried, what worked and what didn't. The page says that, of the portfolio items in this field right now, public write-ups give the most for the effort.
+
+== Project ideas to build
+layout: list
+section: projects
+Pick one or two. Publish the code, and write up what worked and what didn't.
+item: CloudTrail summarizer that posts the interesting events to Slack
+item: IAM policy reviewer that explains what a policy allows
+item: IaC linter for risky patterns the static linters miss
+item: Phishing-email triage agent on a local model
+item: Prompt-injection canary that tracks which assistants execute hidden instructions
+item: Local-only RAG over your runbooks
+item: AI security review checklist generator, mapped to OWASP LLM Top 10 and ATLAS
+notes:
+The page says the portfolio that matters in 2026 is a small handful of running, public, AI-flavored projects.
+
+The CloudTrail summarizer streams events and explains the interesting ones so a tier-1 analyst can act. The IAM policy reviewer explains in English what an arbitrary policy allows, what it implicitly denies, and the three closest privilege-escalation paths. The IaC linter is an LLM pass on Terraform, Bicep or Helm for patterns the static linters miss because they need context to judge. The phishing triage agent classifies, extracts IOCs and drafts a response on a local model, so no data leaves the box. The canary is a small site or document with hidden instructions that reports back. Local RAG over your runbooks, with Ollama, Llama and a vector store, is useful, private, and a great way to feel the limits of small models.
+
+The page says that published artifact will outrun any cert in interviews.
+
+== A sustainable rhythm for staying current
+layout: timeline
+section: stay-current
+This field changes faster than cloud, which is saying something.
+event: Daily | Use a frontier model on real work; skim Simon Willison
+event: Weekly | Read Latent Space and Import AI; skim AI-tagged CSOH news
+event: Monthly | Read one model or system card start to finish; try the newest model
+event: Quarterly | Ship something: a new lab, project or write-up
+event: Annually | Re-read OWASP LLM Top 10; refresh AI RMF mapping; audit your AI inventory
+notes:
+Daily, use a frontier model on real work and skim Simon Willison. Weekly, read Latent Space and Import AI and skim the CSOH news feed for AI-tagged items. Monthly, read one model card or system card start to finish and try the newest frontier model. Quarterly, ship something: a new lab, a new project, a new write-up. Annually, re-read the OWASP LLM Top 10, refresh your AI RMF mapping and audit your company's AI inventory.
+
+== Common mistakes
+layout: list
+section: mistakes
+One more beyond these: believing AI security is unrelated to cloud security. Almost every interesting AI system runs in someone's cloud.
+item: Treating the system prompt as a security boundary
+item: Confusing fluency with capability
+item: Going wide before going deep
+item: Skipping the API in favor of just chatting
+item: Ignoring evals
+item: Granting agents broad cloud roles "just to demo"
+item: Trusting any single benchmark
+notes:
+Anything you tell the model in the system prompt, an attacker can convince it to ignore. Models that sound confident are sometimes wrong, and models that hedge are sometimes right, so calibrate on outcomes, not vibes. One serious project beats six toy demos. The chat product hides the levers, so spend time at the raw API at least once.
+
+If you can't measure it, you can't improve it: build a small dataset before you build a feature. Demos become production, so scope tightly from day one. Benchmarks leak into training data, so trust your own evals on your own task.
+
+Last, almost every interesting AI system runs in someone's cloud, with cloud identities, talking to cloud APIs. The page says the two are converging fast.
+
+== Is the system prompt a security control?
+layout: question
+section: mistakes | stage-5
+An agent's instructions say it must never take a dangerous action. Consider who else gets to write text the model reads.
+notes:
+This comes from the page's common mistakes. Ask it and let the room answer before moving on.
+
+== No: an attacker can talk the model out of it
+layout: answer
+section: mistakes | stage-5
+Anything you tell the model in the system prompt, an attacker can convince it to ignore. Be ready to explain to an exec why "but the system prompt forbids that" is not a control.
+notes:
+The page lists treating the system prompt as a security boundary first among its common mistakes. Explaining to an exec why "but the system prompt forbids that" is not a control is part of the stage 5 milestone.
+
+Injection makes the point concrete: the page has you design a malicious file, issue or row that flips the agent's intent, and try it on your own setup. It also has you add a max-steps cap, a budget cap and a require-confirmation hook for destructive actions, and notice how often you would have nuked something without them.
+
+== How do you know a prompt change helped?
+layout: question
+section: stage-3 | mistakes
+You changed a triage prompt and the next few answers look better. Consider what would convince you it is better across the board.
+notes:
+This one comes from stage 3 and the common mistakes. Again, ask it before showing the answer.
+
+== Measure it with your own evals
+layout: answer
+section: stage-3 | mistakes
+Build a small dataset of about 30 examples with ground truth and run the same prompt against it on every change. Trust your own evals on your own task over any single benchmark.
+notes:
+If you can't measure it, you can't improve it: the page says to build a small dataset before you build a feature. Running the harness on every change is how you watch your changes regress things, which the page calls what real AI engineering feels like.
+
+Benchmarks leak into training data, which is why the page says to trust your own evals on your own task rather than any single benchmark.

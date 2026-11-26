@@ -1,0 +1,396 @@
+title: Google Cloud Security
+page: gcp-security.html
+as-of: 2026-11-25
+promise: Any GCP security program pivots on the org, folder and project hierarchy, governed by Organization Policy and observed by Security Command Center.
+
+== The 30-second version
+layout: text
+section: top
+Google Cloud is the smallest of the big three by revenue but ships the most opinionated security platform. VPC Service Controls remains the killer feature; the default Compute Engine service account remains the killer footgun.
+notes:
+Google Cloud is the smallest of the big three by revenue, but the page calls it the most opinionated security platform: every project encrypted by default since 2014, a hardware root of trust on Google's own Titan chips, BeyondCorp as a productized zero-trust model, and VPC Service Controls as a data-exfiltration prevention primitive the other clouds don't have.
+
+The pivot point of any GCP security program is the org, folder and project hierarchy, governed by Organization Policy and observed by Security Command Center.
+
+In 2026 the story runs like this. SCC Premium covers posture, attack paths and threat detection. Google Security Operations, formerly Chronicle, is a separately bought SIEM now that Google is retiring the SCC Enterprise bundle. Workload Identity Federation is displacing service-account keys. Binary Authorization and GKE Security Posture cover containers. Assured Workloads handles FedRAMP, Department of Defense Impact Level, ITAR and HIPAA workloads that previously needed a separate cloud.
+
+== Shared responsibility on GCP
+layout: table
+section: shared-responsibility
+row: Layer | Google | You
+row: Hypervisor, host OS | Patched, hardened, attested | None
+row: Managed services | Runtime, patching, encryption at rest | IAM, classification, VPC Service Controls, KMS key choice
+row: VM guest OS | None | Patching, hardening, agents, OS Login
+row: Identity | Cloud Identity, the IAM service | Users, groups, SAs, role bindings
+row: Data | Encryption at rest by default | Classification, retention, key choice, DLP
+row: Audit logs | Admin Activity logs, free, immutable | Data Access logs, sinks, retention
+notes:
+The model has the same shape as on AWS and Azure, in Google's own vocabulary. Google is responsible for security of the cloud: the hardware, the hypervisor, the physical facilities, the global network, the operating systems under managed services, and the security of every API endpoint. You are responsible for security in the cloud: the IAM configuration, the projects you create, the workloads you deploy, the data you store and the policies you enforce.
+
+The line moves with the service. On Compute Engine, which is IaaS, you own the guest OS, the patches, the workload and the IAM. On Cloud Run or App Engine, Google owns the runtime and you own the container image, the IAM and the data. On managed services like BigQuery, Cloud Storage, Pub/Sub and Spanner, you own the data, the IAM bindings and the access controls, and Google owns everything underneath.
+
+This is an excerpt of the page's table. It also covers physical hardware, which is entirely Google's, and the global network, where Google runs the backbone and you own VPC design, firewall rules, Cloud NAT and peering.
+
+== Google's security differentiators
+layout: table
+section: differentiators
+row: Differentiator | What it gives you
+row: BeyondCorp | Productized zero trust, now Chrome Enterprise Premium
+row: Encryption by default | Every byte at rest encrypted since 2014, no checkbox
+row: Titan chips | A hardware root of trust that signs boot firmware
+row: VPC Service Controls | A perimeter that blocks data movement across it, regardless of IAM
+row: Mandiant and Google SecOps | Mandiant threat intel built into Google's SIEM
+row: Supply-chain integrity | Google originated Sigstore, SLSA, Binary Authorization
+Several have no clean equivalent at AWS or Azure.
+notes:
+These are the defensive primitives that protect Search, Gmail and YouTube, exposed to GCP customers. That infrastructure has long been a target for sophisticated attackers: in 2010 Google disclosed a targeted attack on its corporate infrastructure originating from China. After Operation Aurora, in 2009 and 2010, Google rebuilt internal access around identity and device context per request, with no network-based trust. That became BeyondCorp, published in 2014.
+
+Encryption at rest uses Google-managed keys by default, and you can upgrade to customer-managed keys in Cloud KMS, or to customer-supplied keys or External Key Manager when keys must sit outside Google's boundary.
+
+Titan chips sit on every server, networking device and peripheral. With Shielded VMs and Confidential VMs, the chain of trust runs from the silicon to the workload.
+
+Google acquired Mandiant in 2022. The SCC Enterprise tier bundled Mandiant and Google SecOps with SCC, but Google has deprecated it: it shuts down on 21 May 2027. Google SecOps carries on as its own product.
+
+On supply chain, the end-to-end story is build attestations in Cloud Build, images in Artifact Registry with vulnerability scanning, and Binary Authorization before deploy to GKE or Cloud Run.
+
+== Architecture Framework: the Security pillar
+layout: checklist
+section: architecture-framework
+The Security pillar of Google's Architecture Framework organizes the work into seven principles.
+check: Security by design: threat-model first; hierarchy as the blast-radius unit
+check: Zero trust: IAP for apps, Workload Identity Federation for non-human callers
+check: Shift left: scan code, IaC and images; Binary Authorization for production
+check: Preemptive defense: threat intel, red teams, ATT&CK for GCP coverage
+check: Use AI securely: controls on Gemini Enterprise Agent Platform workloads
+check: Use AI for security: Security Command Center attack paths and Gemini copilots to triage
+check: Compliance: pick the Assured Workloads regime up front
+notes:
+Google publishes the Google Cloud Architecture Framework as its opinion on how customers should design GCP workloads, and the page calls the Security pillar the practitioner's reference.
+
+Security by design means threat-modelling before deploying, using the hierarchy as the unit of blast-radius isolation, and applying Organization Policy constraints centrally. Zero trust means authenticating and authorizing every request, Identity-Aware Proxy for application access, Workload Identity Federation for non-human callers, and never granting project-level Editor. Shift left means scanning code, IaC and images in CI, requiring Binary Authorization for production deploys, and rejecting non-conformant Terraform plans before apply.
+
+Preemptive cyber defense means subscribing to threat intel such as Mandiant, running red-team exercises, and mapping detection coverage to MITRE ATT&CK for GCP. Using AI securely covers model versioning, dataset access logging, prompt-injection guardrails and output classification on Gemini Enterprise Agent Platform, formerly Vertex AI. For compliance, also run Compliance Reports Manager continuously and map controls to your framework.
+
+== Security Command Center and detection
+layout: table
+section: services
+row: Service | What it does
+row: SCC Standard | Free; Security Health Analytics misconfig scans
+row: SCC Premium | Threat detection, attack paths, toxic combinations
+row: Event Threat Detection | Scans audit logs for known-malicious patterns
+row: Container Threat Detection | Runtime detection for GKE, such as reverse shells
+row: Web Security Scanner | Crawls web apps for OWASP issues; no DAST replacement
+row: Google SecOps | SIEM and SOAR, priced on ingestion, bought on its own
+Plan on SCC Premium for posture and detection. Standard and Premium both cover Google Cloud only.
+notes:
+Security Command Center is Google's central security platform. Standard is free and scans for misconfigurations with Security Health Analytics. Premium adds Event Threat Detection, Container Threat Detection, Web Security Scanner, attack paths and toxic combinations.
+
+Event Threat Detection looks for patterns such as leaked service-account keys posted to GitHub, anomalous IAM grants, brute-force SSH and crypto-mining indicators. Its detections are Mandiant-curated, and the page says the signal-to-noise is meaningfully better than DIY rules in most cases. Container Threat Detection needs kernel-level instrumentation and runs on GKE node images that include the agent. Web Security Scanner crawls App Engine, Compute Engine and GKE-hosted apps for issues such as XSS, mixed content, insecure libraries and outdated frameworks: a starting point for surfacing the obvious.
+
+Google Security Operations, formerly Chronicle, is Google's cloud-native SIEM and SOAR, with the YARA-L rule language and native Mandiant threat intel. It is bought on its own. We come back to SCC's tiers at the end.
+
+== Cloud Audit Logs: four categories
+layout: table
+section: services
+row: Category | What it records
+row: Admin Activity | Every configuration change; always on, free, immutable
+row: Data Access | Reads; off by default for most services; can be expensive at scale
+row: System Event | Google-initiated changes such as patches and hardware events
+row: Policy Denied | Denied requests, including VPC SC violations; high signal
+Data Access logs are the only way to see reads. Without them you have no record of who read what data. Route all four to a dedicated security project log sink early.
+notes:
+Cloud Logging is the aggregation point for all GCP logs. Log sinks route them to BigQuery for analytics, Cloud Storage for cold archive, Pub/Sub for real-time pipelines, or an external SIEM.
+
+The page calls this the most-overlooked footgun: Data Access logs are off by default for most services, so without explicit configuration you have no record of who read what data. They can be expensive at scale, but they are the only way to see reads.
+
+Policy Denied logs record denied requests, including VPC Service Controls violations, and the page calls them high signal for misconfigurations and attacks. Configure all four categories to a dedicated security project log sink early.
+
+== Cloud IAM: inheritance cuts both ways
+layout: text
+section: services
+Grants at org, folder or project scope flow down: an org-level grant applies to every project unless explicitly denied.
+- Principals include public allUsers and allAuthenticatedUsers
+- Roles: basic (Owner, Editor, Viewer), predefined, custom
+- IAM Recommender suggests least-privilege replacements from actual usage
+notes:
+Cloud IAM is the authorization layer for every GCP resource. It has many principal types: users, groups, service accounts, domains, the public allUsers and allAuthenticatedUsers, and federated workforce and workload identities. It has three role types, and bindings at organization, folder, project or resource scope.
+
+The page calls the hierarchical inheritance the model's strength and its biggest footgun: a grant at the org level applies to every project unless explicitly denied.
+
+Policy Intelligence is the umbrella for four tools. IAM Recommender suggests least-privilege replacements based on actual usage. Policy Analyzer answers who can do what on a resource. Policy Troubleshooter explains why a request was denied or allowed. Policy Simulator previews the effect of an IAM change before you apply it. The page calls Recommender plus Analyzer one of GCP's most underused features.
+
+For the identities themselves, Cloud Identity is Google's free standalone identity platform, separate from Workspace, and federates to an existing IdP such as Okta or Entra ID through SAML. Identity Platform is for your applications' end users, not your workforce.
+
+== Workload Identity Federation replaces SA keys
+layout: timeline
+section: services | faq
+event: Token | The external identity provider issues a signed token
+event: Validate | GCP checks it against a workload identity pool configuration
+event: Exchange | GCP returns a short-lived access token for a specific service account
+Workloads on AWS, Azure, GitHub Actions, Kubernetes or any OIDC issuer get GCP access with no long-lived service-account JSON key.
+notes:
+Workload Identity Federation lets workloads outside GCP assume a GCP service account through short-lived tokens. The external identity provider issues a signed token, GCP validates it against a workload identity pool configuration, and GCP returns a short-lived access token for a specific service account.
+
+The page calls it the right answer to the question of how to avoid hardcoded service-account JSON keys, and the most impactful security upgrade for any GCP customer with CI/CD outside GCP, because it eliminates the entire service-account-key-leak class of incidents.
+
+It is the GCP equivalent of AWS IAM OIDC federation, or IAM Roles Anywhere for X.509 certificates, and of Azure Workload Identity. Inside GKE, Workload Identity for GKE does the same job for pods.
+
+== Zero trust without a third-party ZTNA
+layout: compare
+section: services | faq
+col: Identity-Aware Proxy | Requires Google identity and IAM before forwarding traffic | Replaces VPN for most internal-application access
+col: Access Context Manager | The policy engine behind IAP and VPC SC | Access levels from IP, geography, device trust, identity
+col: Chrome Enterprise Premium | IAP, ACM, Endpoint Verification and browser protection | Formerly BeyondCorp Enterprise; sold per user
+Never trust the network; verify identity, device and context on every request.
+notes:
+BeyondCorp is Google's internal zero-trust model from 2011, productized as BeyondCorp Enterprise and sold since April 2024 as Chrome Enterprise Premium. The model is to never trust the network and always verify identity, device and context per request.
+
+Identity-Aware Proxy is a managed reverse proxy that requires Google identity and IAM authorization before forwarding traffic. It works for App Engine, Compute Engine, GKE, and on-prem workloads through IAP TCP forwarding. Access Context Manager defines access levels from attributes and attaches them as conditions on IAM bindings or VPC Service Controls ingress rules. Endpoint Verification proves device posture.
+
+GCP customers can adopt the same pattern without buying a third-party ZTNA. The page calls Chrome Enterprise Premium the GCP-native answer if you would otherwise be buying Zscaler, Netskope or Cloudflare Access.
+
+== Encryption: who holds the keys
+layout: layers
+section: differentiators | services
+layer: Default | Google-managed keys, at rest, since 2014
+layer: CMEK | Customer-managed keys in Cloud KMS, software or Cloud HSM
+layer: CSEK or EKM | Customer-supplied or External Key Manager keys, outside Google's boundary
+Use CMEK on every service that supports it: the marginal cost is small, the audit-evidence and control-plane value is large.
+notes:
+Every byte stored on Google Cloud has been encrypted at rest by default with Google-managed keys since 2014, with no checkbox to remember.
+
+The next step up is customer-managed encryption keys through Cloud KMS, software-protected by default or HSM-backed in Cloud HSM at FIPS 140-2 Level 3. If you need to hold keys outside Google's boundary, use customer-supplied keys, or External Key Manager with a third-party HSM such as Fortanix or Thales. The page calls EKM the right answer when regulators want literal possession of the keys.
+
+Other data protection services sit beside this. Secret Manager stores secrets with versioning, IAM-scoped access and audit logging; never write secrets into Cloud Build substitutions or Cloud Run functions environment variables in plaintext. Sensitive Data Protection, formerly Cloud DLP, finds, classifies and de-identifies sensitive data with 150+ built-in detectors. Confidential Computing encrypts memory for VMs and GKE nodes.
+
+== Network security services
+layout: table
+section: services
+row: Service | Role
+row: Cloud Armor | WAF and DDoS protection on global HTTP(S) load balancers
+row: Cloud NGFW Enterprise | TLS inspection, IPS and L7 filtering, east-west, without appliances
+row: Private Service Connect | Google APIs over internal IPs, equivalent to AWS PrivateLink
+row: Cloud IDS | Network IDS on mirrored VPC traffic; findings go to SCC
+row: Firewall Insights | Finds rules that have never matched, to clean up sprawl
+row: Cloud NAT | Internet egress for private workloads without public IPs
+notes:
+Cloud Armor comes with preconfigured OWASP top-10 rules, a custom rules language that is a subset of the Common Expression Language, ML-driven Adaptive Protection against DDoS, and bot management. It sits at Google's edge.
+
+Cloud NGFW Enterprise is powered by a Palo Alto Networks Threat Prevention partnership, sold as a managed L7 capability on top of standard VPC firewall rules. Cloud IDS also uses Palo Alto threat signatures, giving east-west network detection without running your own sensors.
+
+Private Service Connect endpoints can make Cloud Storage, BigQuery and Pub/Sub reachable only through internal IPs inside your VPC. Firewall Insights is part of Network Intelligence Center, and the page calls the signal that a rule has been in place for 6 months and never matched gold for cleaning up rule sprawl. Pair Cloud NAT with VPC Service Controls egress rules to constrain what private workloads can reach.
+
+== Posture and compliance services
+layout: table
+section: services
+row: Service | What it gives you
+row: Organization Policy | Constraint guardrails at org, folder or project scope
+row: Cloud Asset Inventory | Every resource, binding and policy, 35-day history
+row: Security Health Analytics | CIS GCP Foundations misconfig scanning in SCC
+row: Recommender | Flags idle SAs and unused project IAM grants
+row: Assured Workloads | Folder auto-enforcing a regime such as FedRAMP, IL, ITAR, HIPAA
+row: Compliance Reports Manager | Attestation reports such as SOC, ISO, PCI DSS, FedRAMP
+notes:
+Organization Policy applies constraints such as disabling external IPs, restricting regions, enforcing CMEK, requiring Shielded VMs and denying public Cloud Storage access. Inheritance flows down, and explicit exceptions are themselves auditable.
+
+Cloud Asset Inventory is queryable in real time and exportable to BigQuery: the answer to what your GCP environment looks like right now. Security Health Analytics runs continuously and at every config change; it is free in SCC Standard with deeper coverage in Premium. The page says most engineers don't realize how much risk reduction the unused service-account recommender alone produces.
+
+Assured Workloads is a folder inside your normal commercial organization where Google automatically enforces data residency, personnel access, encryption and which services are available. It is the in-place alternative to a separate GovCloud-style tenant. Compliance Reports Manager is the single place to pull the documents auditors and procurement teams ask for.
+
+Cyber Insurance Hub, formerly Risk Manager, builds an evidence-based report from SCC findings and posture for cyber-insurance underwriting.
+
+== Container and GKE security
+layout: table
+section: services
+row: Control | What it does
+row: Binary Authorization | Only images signed by trusted attestors deploy to GKE or Cloud Run
+row: Artifact Registry scanning | Continuous CVE scanning; findings surface in SCC
+row: GKE Security Posture | Cluster and workload misconfigurations, no extra agent or charge
+row: Workload Identity for GKE | Pods get short-lived GCP credentials, no host-mounted SA keys
+Pair scanning with Binary Authorization to block images above a CVSS threshold. That severity floor works as a deployment gate, but it does not tell you what to patch first.
+notes:
+Binary Authorization is admission control that requires container images to be signed by trusted attestors before they deploy to GKE, Cloud Run or Google Distributed Cloud. It enforces SLSA build provenance and signed attestation chains end to end.
+
+Artifact Registry scans container images and Maven, npm, Python, Go and Helm artifacts. Pair it with Binary Authorization to block images above a CVSS threshold. The page adds that the prioritization stack layers known exploitation, exploit likelihood and reachability on top of severity.
+
+GKE Security Posture reports cluster configuration findings, workload misconfigurations such as privileged pods and hostPath mounts, and security bulletins, in both Standard and Autopilot clusters. Its image-vulnerability scanning has been shut down; image CVEs now come from Artifact Analysis or Security Command Center.
+
+Workload Identity for GKE maps Kubernetes service accounts to GCP service accounts. The GKE metadata server blocks pods from the node's Compute Engine metadata credentials unless they run on the host network. It is always on in Autopilot; Standard clusters must opt in, and older node pools must be updated.
+
+== Landing zone: the hierarchy
+layout: table
+section: reference-architecture
+row: Folder | What lives there
+row: Bootstrap | Terraform state, seed projects, break-glass admin accounts
+row: Common | Shared services: VPC host, DNS, central monitoring and logging
+row: Security | SCC, Google SecOps, the log sink destination, security tooling
+row: Production | Workload projects under stricter Org Policies
+row: Non-production | Dev, staging and QA; looser policies, no production data
+row: Sandbox | Engineer exploration; hard cost limits; allowed to break
+The hierarchy is the unit of blast radius, and the first of a landing zone's four pieces.
+notes:
+A defensible GCP landing zone has four moving pieces: the hierarchy, the org policies, the perimeters and the central log sink. The page says that if you get these right, most other controls compose cleanly on top.
+
+The organization is your domain, and these folders sit under it in a typical pattern. Production holds workload projects, one per app or service or per environment, and inherits stricter Org Policies: no external IPs, CMEK required, Shielded VMs. Non-production has looser policies and a smaller blast radius. The security folder holds the projects the security team owns.
+
+The landing-zones page has the general pattern; this is the GCP-specific variant.
+
+== Organization Policy baseline
+layout: checklist
+section: reference-architecture
+Apply at the org or top-level folder; override down where justified.
+check: iam.allowedPolicyMemberDomains: grants only to your own domain
+check: iam.automaticIamGrantsForDefaultServiceAccounts: no automatic Editor for new default SAs
+check: iam.disableServiceAccountKeyCreation: no long-lived SA JSON keys
+check: compute.vmExternalIpAccess: no external IPs by default
+check: storage.publicAccessPrevention: no public Cloud Storage access
+check: compute.requireShieldedVm: Shielded VMs everywhere
+check: gcp.resourceLocations: approved regions only
+notes:
+Each of these names starts with constraints/. Restrict IAM grants to your own Cloud Identity domain. Block creation of long-lived service-account JSON keys, to force Workload Identity Federation. Deny external IPs by default and allow them only for explicit projects. Block public Cloud Storage access org-wide. Restrict resource creation to approved regions for residency.
+
+The automatic-grants constraint needs care. It stops new default Compute Engine and App Engine service accounts from being granted Editor automatically, but it does not remove Editor from default service accounts that already have it, so revoke those grants by hand. To also block later Editor and Owner grants to default service accounts, manual ones included, use iam.managed.preventPrivilegedBasicRolesForDefaultServiceAccounts.
+
+The page lists three more: uniformBucketLevelAccess to disable per-object ACLs, sql.restrictPublicIp for Cloud SQL, and gcp.restrictCmekCryptoKeyProjects to restrict which projects' CMEK keys can be used.
+
+== Landing zone: perimeter and central log sink
+layout: compare
+section: reference-architecture
+col: VPC SC perimeter | One around production | BigQuery, Cloud Storage, Pub/Sub, Cloud KMS, Cloud SQL inside | Ingress and egress rules for specific identities and paths | Everything else denied, regardless of IAM
+col: Central log sink | One aggregated sink at the org level | All four audit log types to the security project | Split to BigQuery, Bucket Lock storage, Pub/Sub, a log bucket
+The security project is the only place humans hold the IAM to read these logs.
+notes:
+The perimeter wraps production and every service holding regulated data. Ingress rules permit specific identities from specific networks, and egress rules permit specific outbound paths, for example to a partner project. The perimeter denies everything else, regardless of IAM.
+
+The log sink routes Admin Activity, Data Access, System Event and Policy Denied audit logs into a single project in the security folder. From there, split sinks go to BigQuery for analytics, Cloud Storage with Bucket Lock for tamper-evident retention, Pub/Sub for streaming to Google SecOps or an external SIEM, and a Cloud Logging bucket for short-term operational queries.
+
+== Top 10 GCP misconfigurations
+layout: list
+section: misconfigurations
+Also on the list: permissive Firebase rules, Cloud Run with --allow-unauthenticated, and Owner sprawl at org or folder level.
+item: Public Cloud Storage buckets
+item: allUsers or allAuthenticatedUsers on Pub/Sub, Cloud Run, BigQuery
+item: Default Compute Engine SA at Editor
+item: No VPC Service Controls
+item: Editor or Owner granted on whole projects
+item: No audit log sinks
+item: Hardcoded SA JSON keys in code
+notes:
+These are the findings every CSPM tool will surface in any GCP environment that hasn't been actively hardened.
+
+The page calls a public bucket the most common cause of accidental data exposure on GCP: enforce publicAccessPrevention at the org level and audit existing buckets with Asset Inventory. For other public bindings, search the org's IAM bindings and treat each match as an incident. Legacy projects auto-grant Editor to the default Compute Engine service account, so every workload using it inherits almost everything. Without VPC Service Controls, a single compromised credential is sufficient to exfiltrate, so add a perimeter even if it starts in dry-run mode. Editor and Owner are essentially admin, so replace them with task-specific roles. Without audit log sinks, logs are 30 days old at best when you need them for incident response.
+
+The page calls hardcoded keys the biggest preventable GCP incident class. Firebase projects auto-create databases with permissive default rules, so audit the rules file. Public invocation with --allow-unauthenticated is sometimes intentional, for a public API, but often not. Owner can grant any IAM and self-escalate, so treat it as break-glass only.
+
+== GCP-specific attack paths
+layout: table
+section: attack-paths
+row: Attack path | What to do
+row: actAs an SA, then attach it to a new resource | Map every actAs grant with Policy Analyzer
+row: Escalation via Deployment Manager or Cloud Build | Audit which SAs these services run as
+row: SSH key added via setMetadata | Tight setMetadata scope; OS Login org-wide
+row: Claiming a deleted bucket's global name | Watch for orphaned bucket references in code
+row: An IAM Condition that always evaluates true | Review every conditional binding
+row: Default Compute SA on a compromised workload | Kill the default SA grants
+notes:
+These are the techniques offensive operators reach for in real GCP engagements.
+
+A principal that can actAs a service account and create a resource such as a VM or Cloud Run service can attach the account to it and run code as it, which amounts to becoming it. Direct impersonation needs getAccessToken instead. roles/iam.serviceAccountUser at the project level is wide.
+
+Historically, Deployment Manager ran with a service account that had Editor on the project, so anyone who could submit a template could escalate, and Cloud Build has similar dynamics with its default service account. Metadata SSH key injection bypasses OS Login and normal user-access controls, so also monitor metadata changes. Bucket names are global, so an attacker who claims a deleted bucket can serve content to anything still pointing at it. A condition such as request.time after some past date effectively becomes an unconditional grant, so review every conditional binding with Policy Analyzer.
+
+The page calls default service-account abuse from a compromised workload a common post-exploitation path wherever the legacy Editor grant remains. Red teams run GCPBucketBrute and GCP-Hound; hayat is a Bash auditing baseline.
+
+== VPC Service Controls: from where, and to where
+layout: table
+section: vpc-sc
+row: Threat | What the perimeter does
+row: Credential theft | A stolen SA key or session can't move data outside
+row: Insider exfiltration | A privileged user can't copy regulated data to a personal project
+row: Misconfigured public access | An allUsers bucket stays unreachable from outside the perimeter
+row: Cross-project lateral movement | No reach into data inside a different perimeter
+IAM answers who may call an API. VPC SC answers from where, and where the data can go.
+notes:
+The page calls VPC Service Controls the GCP security primitive with no clean equivalent at AWS or Azure.
+
+The classic exfiltration scenario: an attacker compromises a workload with legitimate IAM permissions on a BigQuery dataset, queries it, and copies the result to a personal Cloud Storage bucket in their own project. IAM does not stop this, because the call is authorized. VPC Service Controls does: the perimeter denies the cross-perimeter API call regardless of IAM.
+
+That is the threat model on the slide. For misconfigured public access, the perimeter is defense in depth on top of IAM.
+
+== Designing perimeters
+layout: checklist
+section: vpc-sc
+The hard part of VPC SC is the design, not the technology.
+check: One perimeter per data domain, not per project
+check: Run dry-run mode for 2-4 weeks before enforcing
+check: Bridges or ingress and egress rules, not both; newer designs prefer rules
+check: Cover every restricted service; unsupported services can leak data
+check: Keep a heavily monitored break-glass identity for the Access Policy
+notes:
+Group projects that legitimately share data into one perimeter. A production analytics perimeter might span 15 projects that all read and write the same BigQuery datasets, and cross-perimeter access requires explicit ingress or egress rules.
+
+Dry-run mode logs every violation without enforcing. The page says you will discover legitimate flows you didn't know existed, such as CI builds, monitoring agents and support tooling.
+
+Bridges connect perimeters in both directions for specific services; ingress and egress rules express richer conditions on identities, networks, services and methods. VPC Service Controls works at the service level: Cloud Storage, BigQuery, Pub/Sub, Cloud KMS, Cloud Logging and others are perimeter-aware, and services not on the supported list can leak data across the boundary, so treat the list as an evolving feature.
+
+A misconfigured perimeter can block legitimate admin access. The break-glass identity can edit the Access Policy and is used only when the primary admin path is broken.
+
+== Ingress and egress rules
+layout: compare
+section: vpc-sc
+col: Ingress | Identity X from network Y reaches service Z inside, via methods M | Example: the build SA, from the build VPC, creates objects in production storage
+col: Egress | Identity X inside calls service Z outside, via methods M | Example: the data pipeline writes to a partner's Pub/Sub topic
+Every request the perimeter denies, or a dry-run would deny, shows in Policy Denied audit logs.
+notes:
+These two rules are the composition primitive. In the ingress example, the build pipeline's service account, from the build VPC, can call storage.objects.create on production Cloud Storage. In the egress example, the production data pipeline writes to a partner's Pub/Sub topic in a partner project for daily exports.
+
+Every rule is auditable. The page names this the asymmetric value of VPC Service Controls: everything blocked at the perimeter is logged, even if no other detection fires.
+
+== GCP-native or third-party?
+layout: compare
+section: comparisons | native-vs-third-party
+col: GCP-native wins | VPC Service Controls | Chrome Enterprise Premium, when most apps live on GCP | Encryption by default; Assured Workloads | Google SecOps: price it at high volume
+col: Non-native still wins | Multi-cloud CNAPP: Wiz, Orca, Cortex Cloud | SIEM for highly heterogeneous estates | Privileged-access management at enterprise scale | GRC platforms as the system of record
+SCC Premium sees Google Cloud only. Google acquired Wiz in March 2026, so choosing Wiz over SCC is one Google product against another (disclosure: the site's author works at Wiz, an interest in both options).
+notes:
+The page says no third party can replicate VPC Service Controls, because it operates at the Google service edge, not the network edge. If most internal apps live on GCP, IAP and Access Context Manager beat bolting on a third-party ZTNA. Encryption by default means the forgot-to-encrypt-the-bucket finding doesn't exist, and Assured Workloads gives in-place compliance regimes. Google SecOps packages include a year of retention, which makes it worth pricing against per-GB SIEMs at high volume.
+
+The multi-cloud CNAPPs see across AWS, Azure and GCP with a single graph. SCC's AWS and Azure support belongs to the Enterprise tier that shuts down on 21 May 2027. Google completed its acquisition of Wiz on 11 March 2026. Google's announcement committed that Wiz keeps its brand and stays available across AWS, Azure, GCP and Oracle Cloud, which is why the page says the multi-cloud argument survives, but it is a commitment, not a structural guarantee.
+
+Google SecOps has improved on cross-cloud detection, but for highly heterogeneous estates the page says Splunk and Sentinel still beat it. Dedicated privileged-access tools still beat any cloud's first-party offering for credential vaulting and session recording at enterprise scale, and SCC tracks GCP controls, not the rest of your business. The page asks you to calibrate all of this against your own evaluation.
+
+== Is the default Compute Engine service account a problem?
+layout: question
+section: faq
+Think about which identity a new VM or Cloud Run service runs as when nobody chooses one, and what that identity can do.
+notes:
+This question comes from the page's FAQ. Ask it and let the room answer before showing the next slide.
+
+== Yes: treat it as deprecated
+layout: answer
+section: faq
+It has historically held project Editor, roughly "modify almost anything in the project". In organizations created on or after 3 May 2024, new default SAs no longer get Editor automatically; default SAs created earlier keep it until removed.
+notes:
+By default every Compute VM and Cloud Run service in a project runs as the Compute Engine default service account, which historically has the project Editor role. Editor includes reading data and impersonating other service accounts.
+
+In organizations created on or after 3 May 2024, a constraint stops new default service accounts from being granted Editor automatically, but it is not retroactive.
+
+The fix has four parts: remove the Editor grant from existing default service accounts, enforce constraints/iam.automaticIamGrantsForDefaultServiceAccounts so new ones don't get it, bind every workload to a least-privilege service account, and treat the default service account as deprecated.
+
+== Should I use SCC Premium or Enterprise?
+layout: question
+section: faq
+Security Command Center comes in tiers. Consider what each one covers, and whether each will still exist.
+notes:
+This is the second question from the page's FAQ. Again, ask it before showing the answer.
+
+== Premium, plus Google SecOps if you want the SIEM
+layout: answer
+section: faq
+Premium adds threat detection, Web Security Scanner and attack paths, for Google Cloud only. Enterprise added AWS and Azure coverage plus Google SecOps, but it shuts down on 21 May 2027 and its organizations move to Premium.
+notes:
+Standard is free and gives you Security Health Analytics and a basic posture view. Premium adds Event Threat Detection, Container Threat Detection, Web Security Scanner and attack-path analysis, for Google Cloud only.
+
+Enterprise added AWS and Azure coverage and the Google SecOps SIEM and SOAR stack with Mandiant threat intelligence, but Google has deprecated it: the tier shuts down on 21 May 2027 and its organizations move to Premium.
+
+So pick Premium, and if you want Google's SIEM, buy Google SecOps, formerly Chronicle, on its own.

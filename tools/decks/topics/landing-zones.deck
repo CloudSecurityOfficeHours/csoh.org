@@ -1,0 +1,402 @@
+title: Landing Zones & Cloud Foundations
+page: landing-zones.html
+as-of: 2026-11-25
+promise: A landing zone is the baseline every workload lands into, so each one starts from the same identity model, network, logging and guardrails.
+
+== The 30-second version
+layout: text
+section: top
+A landing zone, or cloud foundation, is the baseline of accounts, identities, networks, logging sinks and guardrails that workloads land into. Every workload starts from the same identity model, network segmentation, log aggregation and policy-as-code guardrails.
+notes:
+A landing zone, also called a cloud foundation, is the baseline that workloads land into when they are deployed: accounts, identities, networks, logging sinks and guardrails.
+
+The point is that every workload, the second, the fiftieth or the five-hundredth, starts from the same identity model, network segmentation, log aggregation and policy-as-code guardrails, instead of whatever the team that built it decided in the moment.
+
+Every cloud has a reference design: AWS Control Tower and the Landing Zone Accelerator, the Azure Cloud Adoption Framework landing zones, and the GCP Enterprise Foundations Blueprint. The shapes look different, but the building blocks underneath are the same.
+
+== What a landing zone is
+layout: table
+section: what-is
+row: Component | What it is
+row: Resource hierarchy | OUs or folders by environment and business unit
+row: Identity baseline | Federated SSO, group access, no long-lived root credentials
+row: Shared network | Central VPC or VNet, no public egress by default
+row: Logging spine | Audit, flow and resource logs to a central security project
+row: Policy spine | Org-level guardrails pre-blocking risky configurations
+row: Delivery pipeline | IaC repo, review and pipeline: the only way to change the foundation
+Six things, deployed once and reused by every workload that follows.
+notes:
+Strip the marketing off and the page says a landing zone is six concrete things, deployed once and reused by every workload that follows.
+
+A resource hierarchy of folders or organizational units groups accounts, subscriptions or projects by environment and business unit. An identity baseline federates your SSO provider to the cloud, with group-based access and no long-lived root credentials. A shared network is a central VPC or VNet topology, often hub-and-spoke, with private connectivity to on-prem and no public egress by default.
+
+A logging spine sends aggregated audit, flow and resource logs to a centralized security project for long-term retention. A policy spine is organization-level guardrails that pre-block risky configurations everywhere: no public buckets, no internet-routable security groups in prod, no unencrypted databases. A delivery pipeline, meaning the IaC repository, the review process and the deploy pipeline, is the only thing allowed to change foundation resources.
+
+Everything else, workloads bring themselves. The foundation gives them a defined surface to land on.
+
+== Two organizations, 200 workloads each
+layout: compare
+section: why
+col: Org A | Built the first workload by hand | Each team chose its own log destination, VPC, IAM naming and MFA | Audit's answer: it depends on the team | Blast radius is the whole org
+col: Org B | Stood up a landing zone first | All 200 share a security project, SSO groups and Shared VPC | Org policies pre-block public buckets in prod | Audit's answer: one project, here's the dashboard
+The landing zone is slower on day one and pays off on day 200, when fixing 199 different patterns costs much more than building one good pattern up front.
+notes:
+The page tells this as two organizations that adopt cloud, and both end up with 200 workloads after three years.
+
+Org A built its first workload by hand, and every later workload made similar decisions independently: its own log destination, its own VPC, its own IAM role naming, its own MFA enforcement. When audit asks where all the CloudTrail logs are going, the answer is that it depends on the team. Its blast radius is the whole org, because a compromise in one workload's permissions can reach other workloads' data.
+
+Org B stood up a landing zone first. Its second workload landed on it, then its fiftieth, then its two-hundredth. All 200 send logs to the same security project, use the same SSO groups for access, sit in the same Shared VPC with the same egress controls, and are pre-blocked by the same org policies from creating public buckets in prod. Audit asks the same question, and the answer is one project and a dashboard.
+
+The landing zone is slower on day one. It pays off on day 200, when the cost of fixing 199 different patterns is much higher than the cost of building one good pattern up front.
+
+The same logic applies at smaller scale: any time more than one team deploys to more than one environment, the foundation removes a whole class of where-does-this-go decisions.
+
+== The eight building blocks: 1 to 4
+layout: table
+section: building-blocks
+row: Block | What it gives you
+row: 1. Resource hierarchy | Accounts in a folder tree by environment and business unit
+row: 2. Identity and SSO | Your IdP federated to the cloud, group access, MFA everywhere
+row: 3. Shared network | Hub-and-spoke or transit, private on-prem link, no public egress by default
+row: 4. Centralized logging | Audit, flow and resource logs in a dedicated security account
+Every cloud's reference design organizes the same eight ideas. The names and tooling differ; the underlying capabilities do not.
+notes:
+Every cloud's reference design organizes the same eight ideas. The names and the tooling differ, but the underlying capabilities do not.
+
+One, the resource hierarchy: accounts, subscriptions or projects organized in a folder tree by environment, such as prod, non-prod and sandbox, and by business unit. These are the boundaries for billing, policy and access.
+
+Two, identity and SSO: your IdP, such as Okta, Entra or Google Workspace, federated to the cloud. Access is group-based, there are no long-lived root keys, and MFA is enforced everywhere.
+
+Three, the shared network: a hub-and-spoke or transit topology, private connectivity to on-prem through Direct Connect, ExpressRoute or Interconnect, and no public egress by default.
+
+Four, centralized logging: aggregated audit, flow and resource logs sunk to a dedicated security account for long-term retention, analysis and SIEM export.
+
+== The eight building blocks: 5 to 8
+layout: table
+section: building-blocks
+row: Block | What it gives you
+row: 5. Policy guardrails | Org-level policy-as-code that pre-blocks risky configurations
+row: 6. Encryption and secrets | Central KMS keys and a secrets project with audited access
+row: 7. Account vending | Self-service accounts that arrive pre-wired into the foundation
+row: 8. Detective controls | Findings surfaced centrally, with a feedback loop to remediation
+Guardrail examples: no public buckets in prod, no IMDSv1, no unencrypted disks.
+notes:
+Five, policy guardrails: organization-level policy-as-code, meaning SCPs, Azure Policy or Org Policy, pre-blocking risky configurations. The page's examples are no public buckets in prod, no IMDSv1 and no unencrypted disks.
+
+Six, encryption and secrets: centrally managed KMS keys and a secrets-management project, using Secret Manager, Key Vault or Secrets Manager, with audited access.
+
+Seven, account vending: a self-service way for teams to request a new account, subscription or project that arrives pre-wired into the foundation, with IAM, network, logging and policies all attached.
+
+Eight, detective controls: Security Hub, Defender for Cloud or Security Command Center surfacing findings centrally, plus a feedback loop to remediation.
+
+== Region strategy comes first
+layout: figure
+section: building-blocks | residency
+figure: residency-choice
+caption: A region list on one hierarchy is enough for most organizations. A jurisdiction boundary is a second landing zone.
+Which regions you allow is a day-one decision, and the one most likely to force a rebuild if you get it wrong.
+notes:
+The figure shows two ways to express region strategy. In the first, a guardrail on one hierarchy denies regions outside an approved list. In the second, a separate boundary gets its own policy set, its own log sink and its own account pipeline.
+
+As the caption says, a region list on one hierarchy is enough for most organizations, and a jurisdiction boundary is a second landing zone.
+
+The page treats region strategy as a constraint that runs through several of the eight building blocks rather than as a ninth block. It decides the shape of your hierarchy before you create the first account.
+
+== Guardrail or hierarchy boundary
+layout: compare
+section: residency
+col: Residency as a guardrail | One hierarchy; an org policy denies regions outside a list | Simplest, and right for most organizations | A policy assignment
+col: Residency as a hierarchy boundary | A separate OU, management group or folder per jurisdiction | Its own policy set, logging sink and account vending | Changes blocks 1, 4 and 7
+The boundary is expensive, so wait until a requirement forces it. Decide early, though: retrofitting it means moving accounts between OUs after they hold production data.
+notes:
+Residency as a guardrail means one hierarchy, with an org-level policy denying resource creation outside an approved region list. The page calls it the simplest option, and right for most organizations. On AWS it is an SCP denying actions where the aws:RequestedRegion condition key is outside your list, plus Control Tower's governed-Regions setting. On Azure it is the built-in Allowed locations and Allowed locations for resource groups policies, assigned at the management-group scope. On GCP it is the constraints/gcp.resourceLocations organization policy.
+
+Residency as a hierarchy boundary means a separate OU, management group or folder per jurisdiction, each with its own policy set, its own logging sink and its own account-vending pipeline. It is necessary when different jurisdictions need different controls or different administrators. It is expensive, so do not reach for it until a requirement forces you to.
+
+Choosing between these is why residency belongs at the front of the project. The first pattern is a policy assignment. The second changes block 1, block 4 and block 7, and retrofitting it means moving accounts between OUs after they hold production data.
+
+== The parts people miss
+layout: list
+section: residency
+item: Global services such as IAM sit outside the region deny
+item: Centralized logging is itself a residency decision
+item: Where KMS keys live, and who can reach the key material
+item: Operator access can be in scope even when no data leaves
+item: A restricted region list will eventually block a service someone wants
+For most sovereignty requirements, where keys live and who can reach them matters more than where the bytes are stored.
+notes:
+Global services sit outside the region deny. IAM, CloudFront, Route 53 and their equivalents are not regional, so a region-restricting policy has to exempt them or it breaks the account it is protecting. Exempting them is correct, and it also means those control planes are not covered by your residency claim.
+
+Centralized logging is itself a residency decision. Block 4 aggregates audit and flow logs into one security account. If that sink lives in one region and your workloads are spread across jurisdictions, you have moved the data you were trying to keep in place. Decide whether you need per-jurisdiction sinks before you wire the aggregation.
+
+Keys, and who holds them: where KMS keys live, whether you bring your own or hold your own, and which of the provider's personnel can reach the key material. For most sovereignty requirements this matters more than where the bytes are stored.
+
+Operator access: support and operations staff in other jurisdictions can be in scope for a residency requirement even when no data ever leaves the region. Read the requirement rather than assuming it is about storage.
+
+Service availability differs by region. Have a documented exception path before a team hits a blocked service, or the list gets widened in an emergency by whoever is on call.
+
+== Sovereign cloud: one estate or two
+layout: compare
+section: residency
+col: A separate cloud | AWS European Sovereign Cloud, run by EU-resident operators | Google's partner-operated dedicated clouds | Usually a separate hierarchy
+col: In-region options | Microsoft's Sovereign Public Cloud: engineer access from outside Europe approved and monitored | Google's Data Boundary controls inside its public cloud | Closer to guardrails on the estate you have
+If sovereign cloud is plausibly in your future, decide now whether your foundation is one estate or two. The answer changes your identity design more than your network design.
+notes:
+Beyond region pinning, all three hyperscalers now sell sovereign options, and they differ in kind. AWS European Sovereign Cloud is a separate cloud run by EU-resident operators. Microsoft's Sovereign Public Cloud runs in its existing European regions, with remote access by engineers outside Europe approved and monitored rather than ruled out. Google offers Data Boundary controls inside its public cloud as well as partner-operated dedicated clouds. There is also a growing set of non-hyperscaler European providers.
+
+The page notes that European governments and large enterprises have been moving workloads off US providers on sovereignty and geopolitical grounds, sometimes accepting real capability gaps to do it.
+
+The landing-zone consequence: a sovereign estate built on a separate cloud, such as AWS European Sovereign Cloud or a partner-operated cloud, is usually a separate hierarchy rather than a region inside your existing one, because the identity plane, the support model and often the tenant itself are separate. In-region options such as Microsoft's Sovereign Public Cloud or Google's Data Boundary sit closer to guardrails on the estate you already have.
+
+So if sovereign cloud is plausibly in your future, decide now whether your foundation is one estate or two, because the answer changes your identity design more than your network design.
+
+== AWS, Azure and GCP side by side
+layout: table
+section: comparison
+row: Block | AWS | Azure | GCP
+row: Hierarchy | AWS Organizations, OUs, accounts | Management groups, subscriptions | Organization, folders, projects
+row: Identity | IAM Identity Center + permission sets | Entra ID + role assignments | Cloud Identity + IAM allow policies
+row: Network | Transit Gateway, network account | Hub VNet, Azure Firewall, Virtual WAN | Shared VPC, host project
+row: Logging | Org-wide CloudTrail to log archive account | Activity log + diagnostic settings to Log Analytics | Aggregated log sinks to security project
+The names differ, and the capabilities map nearly one-to-one.
+notes:
+Each cloud ships a reference landing-zone implementation. The names differ, but the capabilities map nearly one-to-one.
+
+The hierarchy is AWS Organizations with OUs and accounts, Azure management groups and subscriptions, or a GCP organization with folders and projects. Identity is IAM Identity Center with permission sets, Entra ID with role assignments, or Cloud Identity with IAM allow policies.
+
+The network is a Transit Gateway in a network account, a hub VNet with Azure Firewall and Virtual WAN, or a Shared VPC in a host project. Logging is an org-wide CloudTrail to a log archive account, the Activity log and diagnostic settings to a Log Analytics workspace, or aggregated log sinks to a security project.
+
+== Policy, encryption, vending and detection
+layout: table
+section: comparison
+row: Block | AWS | Azure | GCP
+row: Policy | Service Control Policies (SCPs) | Azure Policy + initiatives | Organization Policy constraints
+row: Encryption | KMS + Secrets Manager | Key Vault | Cloud KMS + Secret Manager
+row: Account vending | Control Tower Account Factory / AFT | Subscription vending via Bicep / Terraform | Project factory (Terraform)
+row: Detection | Security Hub, GuardDuty | Defender for Cloud, Sentinel | Security Command Center
+Build a landing zone on one cloud and you have 80% of the conceptual model for another. The remaining 20% is the cloud-specific quirks of each service.
+notes:
+Policy is Service Control Policies on AWS, Azure Policy with initiatives, or Organization Policy constraints on GCP. Encryption is KMS and Secrets Manager, Key Vault, or Cloud KMS and Secret Manager.
+
+Account vending is Control Tower's Account Factory or Account Factory for Terraform on AWS, subscription vending through Bicep or Terraform on Azure, and a Terraform project factory on GCP. Detection is Security Hub and GuardDuty, Defender for Cloud and Sentinel, or Security Command Center.
+
+The page's table also names each cloud's reference design: Control Tower with the Landing Zone Accelerator, the CAF Enterprise-Scale landing zones known as ALZ, and the Enterprise Foundations Blueprint. The next slides take them one cloud at a time.
+
+The page says anyone who has built a landing zone on one cloud has 80% of the conceptual model needed to build one on another. The remaining 20% is the cloud-specific quirks of each service, and that is where the multi-day reading lives.
+
+== AWS: two overlapping reference designs
+layout: compare
+section: aws
+col: Control Tower | AWS-managed, opinionated, console-driven | Built-in Account Factory for vending new accounts | Mandatory and elective guardrails, plus Audit and Log Archive accounts | For when you want AWS to own the wiring
+col: Landing Zone Accelerator | Open-source AWS Solution, built on CloudFormation and CDK | More security services, more customizable networks, regulated workloads | Can run on top of Control Tower | For more control: custom regions, FedRAMP, ITAR
+Knowing which is which matters when someone tells you about their landing zone.
+notes:
+AWS ships two overlapping reference designs, and knowing which is which matters when someone tells you about their landing zone.
+
+AWS Control Tower is an AWS-managed service that provisions and continuously governs a multi-account landing zone. It is low-code and opinionated, with a console-driven experience and a built-in Account Factory for vending new accounts. It includes mandatory and elective guardrails, made of SCPs and AWS Config rules, and a managed Audit and Log Archive account out of the box. The page calls it the right choice if you want AWS to own the wiring.
+
+The Landing Zone Accelerator, or LZA, is an open-source AWS Solution built with CloudFormation and CDK. It deploys a more comprehensive baseline: more security services, more customizable network architectures, and support for regulated workloads. It can run on top of Control Tower. The page calls it the right choice if you need more control than Control Tower's opinions allow, such as custom regions or specific compliance frameworks like FedRAMP and ITAR.
+
+== The key AWS decisions
+layout: checklist
+section: aws
+check: Vend accounts with AFT for GitOps, or the built-in factory for console
+check: Set SCPs at the OU level, your strongest preventive control
+check: Delegate GuardDuty and Security Hub to the audit account
+check: Put Transit Gateway in the network account, with egress through an inspection VPC
+SCP examples: deny disabling CloudTrail, deny all actions outside approved regions, deny iam:DeleteRolePolicy on detective-only roles.
+notes:
+Account vending: Account Factory for Terraform, or AFT, is the GitOps-flavor pattern, and Control Tower's built-in factory is the console-flavor.
+
+SCPs at the OU level are your strongest preventive control. The page's examples are denying iam:DeleteRolePolicy on detective-only roles, denying all actions outside approved regions, and denying the disabling of CloudTrail.
+
+Centralize GuardDuty and Security Hub by delegating both to the audit account, so you have one pane across all accounts.
+
+Put the Transit Gateway in the network account. Spoke accounts attach through the shared Transit Gateway, and egress goes through an inspection VPC with firewalls.
+
+== Azure: the CAF management-group tree
+layout: layers
+section: azure
+layer: Root | Tenant Root, then a top-level management group
+layer: Under it | Platform | Landing Zones | Decommissioned, Sandbox
+layer: Platform subscriptions | Connectivity | Identity | Management
+layer: Landing Zones | Workload subscriptions for application teams
+A documented architecture plus reference IaC (Bicep, Terraform, ARM). Unlike AWS, no single managed service is the landing zone.
+notes:
+Microsoft's reference is the CAF Enterprise-Scale landing zone, often abbreviated ALZ, for Azure Landing Zone. Unlike AWS, Azure's reference is a documented architecture plus reference IaC in Bicep, Terraform and ARM. There is no single managed service that is the landing zone.
+
+The design is a management-group tree. The Tenant Root sits at the top, then a top-level management group, and under it the Platform, Landing Zones, Decommissioned and Sandbox management groups. Subscriptions hang off the right management groups. The Platform management group holds the Connectivity, Identity and Management subscriptions, and the Landing Zones management group holds workload subscriptions for application teams.
+
+== The key Azure decisions
+layout: checklist
+section: azure
+check: Assign Azure Policy initiatives at the top of the management-group tree
+check: Hub VNet with Azure Firewall in the Connectivity subscription
+check: Central Log Analytics workspace in Management, read by Sentinel
+check: Entra ID PIM for just-in-time elevation; standing access only for break-glass
+check: Defender for Cloud at the management-group level, applied top-down
+Implement it with the Enterprise-Scale repo, ALZ-Bicep, the Terraform module or the portal-driven accelerator. All deploy roughly the same architecture.
+notes:
+Azure Policy goes at the management-group level. Built-in initiatives such as the Microsoft cloud security benchmark, formerly the Azure Security Benchmark, are assigned at the top of the tree, with deny and audit effects on configurations everywhere below.
+
+The hub VNet lives in the Connectivity subscription, with Azure Firewall or an NVA and the ExpressRoute gateway, peered to spoke VNets in workload subscriptions.
+
+The Log Analytics workspace lives in the Management subscription. Diagnostic settings on every resource point to that central workspace, and Sentinel reads from it.
+
+Entra ID Privileged Identity Management gives just-in-time elevation, with standing access only for break-glass. Defender for Cloud is applied top-down at the management-group level, so recommendations and secure score are visible across all subscriptions.
+
+For the implementation, the choices are the Enterprise-Scale reference repo, ALZ-Bicep, the Terraform module, or the portal-driven Azure landing zone accelerator. All deploy roughly the same architecture.
+
+== GCP: the Enterprise Foundations Blueprint
+layout: checklist
+section: gcp
+check: Cloud Identity synced from your IdP; groups drive IAM, no individual grants
+check: Shared VPC host project; no workload owns its own VPC
+check: Org-level aggregated log sinks to a dedicated security project
+check: Organization Policy constraints pre-block risky configurations
+check: A Cloud Build and Terraform pipeline is the only identity that changes the foundation
+check: Security Command Center Premium surfaces findings across the org
+A documented design plus reference Terraform: one organization, folders by environment and business unit, projects grouped by purpose.
+notes:
+Google's reference is the Enterprise Foundations Blueprint, formerly the Security Foundations Blueprint. Like Azure's, it is a documented design plus reference Terraform, the terraform-example-foundation repository, and not a single managed service.
+
+There is one organization at the top, a folder hierarchy by environment, meaning production, non-production and development, and by business unit. Projects sit under each folder, grouped by purpose: workload projects, host projects for Shared VPC, and security projects for centralized services.
+
+The key decisions: Cloud Identity is synced from your IdP, and groups drive the IAM allow-policy bindings, with no individual user grants. Workload projects attach to a Shared VPC host project as service projects, so no workload owns its own VPC. Aggregated log sinks at the org level route every project's audit, data-access and VPC flow logs to a central bucket or BigQuery dataset in a dedicated security project.
+
+Organization Policy constraints pre-block configurations, for example storage.publicAccessPrevention, compute.requireOsLogin, allowed regions and allowed external IPs. A Cloud Build and Terraform pipeline is the only identity that can change foundation resources, and humans get view-only. Security Command Center Premium surfaces findings across the org with built-in detectors such as Event Threat Detection and Container Threat Detection.
+
+== Maturity: how many accounts at each stage
+layout: stats
+section: maturity
+stat: 1 | Stage 1: Bootstrap | SSO, MFA on root, billing alerts, audit logs to a bucket
+stat: 3-5 | Stage 2: Separation | Prod, non-prod and sandbox split; the first real landing zone
+stat: 20-50 | Stage 3: Scale | IaC vending, hub-and-spoke network, central SIEM
+stat: 100+ | Stage 4: Enterprise | Service perimeters, automated remediation, a platform team
+The reference designs assume Stage 3. Skipping stages is expensive, so build incrementally.
+notes:
+You don't deploy the full reference design on day one. Foundations grow with the org.
+
+Stage 1, Bootstrap, is one account: SSO from day one, MFA on root, billing alerts on, CloudTrail or the Activity Log to a dedicated bucket, and baseline guardrails. The page says do this in any account, because it is just hygiene, and it costs an afternoon.
+
+Stage 2, Separation, is 3 to 5 accounts. Split prod from non-prod from sandbox, add an OU, management group or folder per environment, aggregate logs to one of them, and add a few SCPs or policies on prod. This is the first real landing zone.
+
+Stage 3, Scale, is 20 to 50 accounts: account vending via IaC, a hub-and-spoke shared network, centralized SIEM ingestion, an org-policy library covering 20+ guardrails, and consolidated detective controls. The reference designs assume you are here.
+
+Stage 4, Enterprise, is 100+ accounts: multi-region failover for the foundation itself, service perimeters and private-only data planes, automated remediation, compliance frameworks such as FedRAMP, PCI and HITRUST layered as policy initiatives, and a dedicated platform team owning the foundation as a product.
+
+A common failure mode is going from Stage 1 to Stage 4 because someone read the reference design and tried to deploy all of it at once. You end up with a complex foundation no one understands. Build incrementally: the reference designs are the destination, not the starting point.
+
+== When you do not need a landing zone
+layout: list
+section: when-not
+item: Single workload, single team, single environment
+item: Greenfield prototype: a sandbox account with sensible defaults
+item: Pure-SaaS organization: you want SSPM instead
+item: Acquired estate: migrate workloads over one at a time
+If your second workload is six months away, you don't need a landing zone yet. If it is six weeks away, you needed one yesterday.
+notes:
+Foundations are overhead. The overhead pays off when you have multiple teams, environments and workloads. If you don't, it is pure cost.
+
+A landing zone for one static site is over-engineering. If you are not sure a greenfield prototype will exist in six months, build it in a dedicated sandbox account with sensible defaults, and move it into a real landing zone once it is surviving.
+
+If your cloud is Microsoft 365, Salesforce and Workday, with no IaaS workloads, the landing-zone concept doesn't fit. You want SSPM instead, which is a different posture problem.
+
+Don't try to retrofit a brand-new landing zone onto an acquired company's 5-year-old cloud estate. Migrate workloads onto your foundation one at a time, and leave the acquired estate as it is, in a separate management boundary.
+
+The page's rule of thumb: if your second workload is six months away, you don't need a landing zone yet. If it is six weeks away, you needed one yesterday.
+
+== Bootstrapping path: reference, identity, logs, hierarchy
+layout: checklist
+section: bootstrap
+check: Pick a reference: Control Tower + LZA, ALZ, or the GCP blueprint
+check: Identity first: SSO, group-to-role mappings, MFA, root accounts locked away
+check: Log spine second: one destination per log type, with retention
+check: Hierarchy third: prod, non-prod and sandbox, even with one workload
+Don't invent your own reference. The hierarchy is cheap; restructuring later is expensive.
+notes:
+For anyone standing up a foundation from scratch, the page gives an order of operations.
+
+Pick a reference: Control Tower and LZA on AWS, ALZ on Azure, the Enterprise Foundations Blueprint on GCP. Don't invent your own. The author says every "we built our own landing zone" story he has seen ended in a rewrite within three years.
+
+Stand up identity first: SSO from your IdP, group-to-role mappings, MFA enforced and root accounts locked away. Nothing else matters if identity is broken.
+
+Stand up the log spine second: one destination per log type, meaning audit, flow and data-access, with retention policies. Sink it into your SIEM, or just into a bucket, storage account or dataset for now.
+
+Stand up the hierarchy third: three top-level folders, OUs or management groups for prod, non-prod and sandbox, even if you have one workload. The hierarchy is cheap; restructuring later is expensive.
+
+== Then network, guardrails, pipeline and vending
+layout: checklist
+section: bootstrap
+check: Network once more than one workload needs to talk privately
+check: Guardrails as needed: start with the 10 that pay back most
+check: Foundation changes through CI/CD with code review, no console writes in prod
+check: Vending last, once there is a working foundation to put accounts into
+Realistic time for a small org with a focused team: 2-3 months to a usable Stage 2, and 6-12 months to a credible Stage 3.
+notes:
+Layer in the network, a Shared VPC, hub VNet or Transit Gateway, once you have more than one workload that needs to talk privately. Skip it if you don't.
+
+Layer in guardrails as needed. Don't deploy 100 SCPs or policies on day one. Pick the 10 that pay back the most for the work, such as no public buckets, deny outside approved regions, require encryption and deny disabling logs, and grow the library as patterns emerge.
+
+Wire deploys through CI/CD. Foundation changes go through a pipeline with code review, with no console writes in prod: the same model as application deploys.
+
+Do vending last. Once you have a working foundation, automate the new-account path so app teams can self-serve. Don't write account-factory code before you have a working foundation to put accounts into.
+
+The page's realistic estimate for a small org with a focused team is 2-3 months to a usable Stage 2 and 6-12 months to a credible Stage 3. The reference designs are larger and assume larger teams; they are not deliverables in a quarter.
+
+== Common pitfalls
+layout: list
+section: pitfalls
+item: Building the foundation faster than the org needs it
+item: Treating the landing zone as a one-time project
+item: Guardrails that block real work, with no exception path
+item: Centralized logging that no one analyzes
+item: Deploying the reference design by console instead of IaC
+item: Not federating identity from day one
+Foundations rot. Treat the foundation as a product owned by a named team; if nobody owns it, it decays.
+notes:
+A team of three building a 20-account landing zone for two prototypes is theater. Build to the scale you have, plus one stage.
+
+Foundations rot. Cloud providers add services every quarter, org policy guardrails need updating, and SCPs accumulate exceptions. Treat the foundation as a product owned by a named team.
+
+Guardrails that pre-block every "I need to test this" path force teams to ship around the foundation instead of on top of it. Build an exception path, such as a sandbox OU with looser policy or a documented request-elevation flow, so the guardrails stay strict in prod without being a barrier to learning.
+
+Aggregating logs is necessary but not sufficient. If no one reads them, they are a compliance artifact rather than a security control. Wire the high-signal logs, such as org changes, IAM changes and security-finding creates, into alerts on day one.
+
+It is tempting to deploy the reference design once through the console for speed. Don't: the foundation, more than any other resource set, needs to be in version control, especially because the reference designs are configurable and you will lose track of what you changed and why.
+
+Workloads created with local IAM users are technical debt forever. SSO every account from creation, and never create local users for humans.
+
+== Vendor reference, or build your own?
+layout: question
+section: faq
+Consider what a homegrown foundation would have to reimplement, and who keeps it working later.
+notes:
+This is a question from the page's FAQ. Ask it and let the room answer before moving on.
+
+== Use the reference, and customize on top
+layout: answer
+section: faq | bootstrap
+Building your own almost always reinvents the patterns the reference already implements, but worse, undocumented, and abandoned when the original engineer leaves. Customize on top of the reference; don't replace it.
+notes:
+The page's answer is to use the reference. The "we built our own" path almost always reinvents the same patterns the reference already implements, but worse, undocumented, and abandoned when the original engineer leaves.
+
+Customize on top of the reference rather than replacing it. The bootstrapping section makes the same point from experience: the author says every "we built our own landing zone" story he has seen ended in a rewrite within three years.
+
+== Can I add data-residency controls later?
+layout: question
+section: faq
+Suppose the foundation already runs production workloads when a residency requirement arrives.
+notes:
+This is the second FAQ question. Again, ask it before showing the answer, and point back to the two ways to express residency.
+
+== Region lists retrofit; structure does not
+layout: answer
+section: faq | residency
+Region restriction is a policy assignment you can make on day 500 as easily as day 1, though you then relocate what was built meanwhile. A per-jurisdiction hierarchy does not retrofit cheaply.
+notes:
+Region restriction, yes. It is a policy assignment you can make on day 500 as easily as on day 1, though you will then have to relocate whatever was built in the meantime.
+
+What does not retrofit cheaply is residency expressed as structure: a separate OU, management group or folder per jurisdiction, with its own logging sink and its own account vending. That reshapes the hierarchy, and moving accounts between OUs once they hold production data is the expensive kind of migration.
+
+So read the requirement first: it tells you which of the two ways it calls for.

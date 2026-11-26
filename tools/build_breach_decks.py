@@ -52,6 +52,12 @@ tools/breach_deck_render.py, the one breach deck module that imports
 python-pptx. This tool imports the renderer only on the --build and
 --self-test-render paths, so --check and --self-test run without python-pptx.
 
+The machinery is shared with tools/build_topic_decks.py through DeckKind:
+every function that reads a kind-specific value (where outlines, pages and
+the mapping live, the header keys, layouts and control lines, the slide and
+notes limits, the deck line, the page gate, the renderer) takes a `kind`,
+which defaults to BREACH. A function both kinds need lives here once.
+
 Usage:
     python3 tools/build_breach_decks.py --self-test
     python3 tools/build_breach_decks.py --check
@@ -69,11 +75,13 @@ import argparse
 import contextlib
 import hashlib
 import html as htmllib
+import importlib
 import io
 import json
 import re
 import sys
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -84,6 +92,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_howto_decks import (  # noqa: E402
     EM_DASH,
     EN_DASH,
+    MAX_CODE_LINES,
     SPACED_HYPHEN_RE,
     PRES_ID_RE,
     SHA256_RE,
@@ -91,9 +100,12 @@ from build_howto_decks import (  # noqa: E402
     OutlineError,
     _is_iso_date,
     _run_cases,
+    code_visual_rows,
 )
 
 MAX_PROSE_WORDS = 40
+# A figure slide's prose shares the slide with a picture and its caption.
+MAX_FIGURE_PROSE_WORDS = 25
 MAX_HEADING_WORDS = 12
 MAX_FIELD_WORDS = 14
 MAX_NOTES_WORDS = 220
@@ -124,6 +136,9 @@ CONTROL_KEYS = ("layout", "stage", "stages", "phase", "source", "credit")
 MIN_GROUP, MAX_GROUP = 2, 6
 # A flow step's technique field for a stage the page maps to no technique.
 NO_TECHNIQUE = "-"
+# How many page sections one section: line may cite, so the page gate and a
+# review of the slide stay scoped to the part of the page it draws on.
+MAX_SECTIONS = 2
 
 
 @dataclass(frozen=True)
@@ -134,8 +149,11 @@ class LayoutSpec:
     prose: str
     # Control lines that must be present.
     requires: tuple[str, ...] = ()
+    max_prose_words: int = MAX_PROSE_WORDS
 
 
+# Every layout either kind can use; a DeckKind's `layouts` says which of
+# them its outlines may name.
 LAYOUTS: dict[str, LayoutSpec] = {
     "text": LayoutSpec({}, "required"),
     "stats": LayoutSpec({"stat": (2, 4, 3, 3)}, "optional"),
@@ -158,6 +176,9 @@ LAYOUTS: dict[str, LayoutSpec] = {
     "question": LayoutSpec({}, "prose-only"),
     "answer": LayoutSpec({}, "required"),
     "checklist": LayoutSpec({"check": (2, 7, 1, 1)}, "optional"),
+    # The checklist's items without its boxes, for a list that is not things
+    # to do (pitfalls, anti-patterns). Only the topic kind takes it.
+    "list": LayoutSpec({"item": (2, 7, 1, 1)}, "optional"),
     "links": LayoutSpec({"link": (1, 8, 2, 2)}, "optional"),
     # A step's technique field is NO_TECHNIQUE for a stage with none. A chain
     # of more than eight stages takes more than one flow slide.
@@ -170,11 +191,14 @@ LAYOUTS: dict[str, LayoutSpec] = {
     "matrix": LayoutSpec(
         {"columns": (1, 1, 2, 8), "row": (2, 8, 2, 9)}, "optional"
     ),
+    # One of the page's own diagrams, rendered to a picture; its figure:
+    # line names the figure. Only a kind whose slides carry pictures takes it.
+    "figure": LayoutSpec({}, "optional", ("figure",), MAX_FIGURE_PROSE_WORDS),
+    # An excerpt of one of the page's code blocks, in a fenced block as the
+    # how-to outlines write it, drawn in the how-to renderer's code box.
+    # Only the topic kind takes it.
+    "code": LayoutSpec({}, "optional", ("code",)),
 }
-
-TYPED_KEYS = frozenset(k for spec in LAYOUTS.values() for k in spec.typed)
-KNOWN_KEYS = frozenset(CONTROL_KEYS) | TYPED_KEYS
-
 
 @dataclass
 class BSlide:
@@ -194,6 +218,22 @@ class BSlide:
     # Where prose first follows a bullet. The renderer draws every paragraph
     # above every bullet, so that prose would move; style_findings reports it.
     prose_after_bullet: str | None = None
+    # The section ids a section: line cites, and a figure slide's figure id.
+    # Only a kind whose control keys include them reads these lines.
+    section: list[str] | None = None
+    figure: str | None = None
+    # A figure slide's caption: line, the whole sentences of the page's
+    # caption it prints in place of the whole caption, and that line's
+    # file:line, which caption findings name.
+    caption: str | None = None
+    caption_where: str = ""
+    # A code slide's excerpt, the language after its opening fence (which,
+    # as in a how-to outline, nothing reads: the box's tab comes from the
+    # page), and the fence's file:line, which code findings name. Only a
+    # kind with the code layout reads a fence.
+    code: list[str] | None = None
+    code_lang: str | None = None
+    code_where: str = ""
 
 
 @dataclass
@@ -206,6 +246,96 @@ class BDeck:
     slides: list[BSlide]
     # The outline as read; the publish hash is taken over it.
     text: str = ""
+
+
+@dataclass(frozen=True)
+class DeckKind:
+    """What differs between the deck families that share this builder.
+    Paths are relative to the repository root and resolve against ROOT when
+    used, so _set_root moves every kind's paths together."""
+
+    name: str
+    outline_dir: Path
+    mapping_path: Path
+    # The attribute that marks a deck line on a page.
+    deck_attr: str
+    header_keys: tuple[str, ...]
+    # What an outline's page: header must look like.
+    page_re: re.Pattern[str]
+    layouts: frozenset[str]
+    control_keys: frozenset[str]
+    # The slide limits count the three generated slides.
+    min_slides: int
+    max_slides: int
+    max_notes_words: int
+    # Whether slides may carry pictures; the renderer's verify reads it.
+    pictures: bool
+    # (page html, presentation id) -> the page with one deck line added.
+    insert_deck_line: Callable[[str, str], str]
+    # (deck, page html) -> every way the deck says what its page does not.
+    page_findings: Callable[[BDeck, str], list[str]]
+    # Where a slug's page lives, and every page the kind gates.
+    page_dir: Path
+    pages: Callable[[], list[Path]]
+    # The module with render_deck, verify_pptx and LayoutError.
+    renderer: str
+    # The deck line's class, and where --stamp puts it, for messages.
+    deck_line_class: str
+    deck_line_place: str
+    # A mapping entry's keys. A key ending in _sha256 holds a hash; any
+    # other but id and published maps names to hashes.
+    entry_keys: tuple[str, ...]
+    # (deck, page html) -> the page-derived entry fields --record writes.
+    page_state: Callable[[BDeck, str], dict]
+    # (deck, mapping entry, page html) -> why the page moved since --record,
+    # or [].
+    page_changes: Callable[[BDeck, dict, str], list[str]]
+    # The elements a deck line may be. Each opens and closes on its own line.
+    deck_line_tags: tuple[str, ...] = ("p",)
+    # (presentation id, indentation) -> more whole lines --stamp writes under
+    # the deck line, or None for none.
+    deck_line_extra: Callable[[str, str], str] | None = None
+    # Files beyond the pages that show a deck: given the mapping, extra_plan
+    # returns the new text of each file --stamp changes plus the errors that
+    # stop it, and extra_findings what --check reports. Both run with the
+    # pages' own, so one refusal writes nothing.
+    extra_plan: Callable[[dict], tuple[dict[Path, str], list[str]]] | None = None
+    extra_findings: Callable[[dict], list[str]] | None = None
+
+
+# The callables name functions defined further down; a lambda reads the name
+# when it is called, so BREACH can be the default of every function below.
+BREACH = DeckKind(
+    name="breach",
+    outline_dir=Path("tools") / "decks" / "breaches",
+    mapping_path=Path("tools") / "decks" / "breaches" / "published.json",
+    deck_attr="data-breach-deck",
+    header_keys=HEADER_KEYS,
+    page_re=PAGE_RE,
+    # Breach slides carry no pictures and no code.
+    layouts=frozenset(LAYOUTS) - {"figure", "list", "code"},
+    control_keys=frozenset(CONTROL_KEYS),
+    min_slides=MIN_SLIDES,
+    max_slides=MAX_SLIDES,
+    max_notes_words=MAX_NOTES_WORDS,
+    pictures=False,
+    insert_deck_line=lambda html, pres_id: _insert_deck_line(html, pres_id),
+    page_findings=lambda deck, html: page_findings(deck, parse_breach_page(html, deck.page)),
+    page_dir=Path("breaches"),
+    pages=lambda: sorted((ROOT / BREACH.page_dir).glob("*.html")),
+    renderer="breach_deck_render",
+    deck_line_class="u-mt-075",
+    deck_line_place="right after the last pm-link line in inc-header",
+    entry_keys=("id", "outline_sha256", "page_sha256", "published"),
+    page_state=lambda deck, html: {"page_sha256": page_sha256(html)},
+    page_changes=lambda deck, entry, html: _page_hash_changes(entry, html),
+)
+
+
+def _known_keys(kind: DeckKind) -> tuple[frozenset[str], frozenset[str]]:
+    """The control keys and the typed keys an outline of this kind may use."""
+    typed = frozenset(k for name in kind.layouts for k in LAYOUTS[name].typed)
+    return kind.control_keys, typed
 
 
 def _err(name: str, lineno: int, msg: str) -> OutlineError:
@@ -223,7 +353,7 @@ def _fields(name: str, lineno: int, key: str, rest: str) -> list[str]:
     return parts
 
 
-def _parse_header(lines: list[str], name: str) -> dict[str, str]:
+def _parse_header(lines: list[str], name: str, kind: DeckKind = BREACH) -> dict[str, str]:
     header: dict[str, str] = {}
     for i, line in enumerate(lines):
         if not line.strip():
@@ -232,27 +362,34 @@ def _parse_header(lines: list[str], name: str) -> dict[str, str]:
         if not m:
             raise _err(name, i + 1, f"header line is not 'key: value': {line!r}")
         key, value = m.group(1), m.group(2).strip()
-        if key not in HEADER_KEYS:
+        if key not in kind.header_keys:
             raise _err(name, i + 1, f"unknown header key {key!r}")
         if key in header:
             raise _err(name, i + 1, f"header key {key!r} given twice")
         header[key] = value
-    for key in HEADER_KEYS:
+    for key in kind.header_keys:
         if not header.get(key):
             raise _err(name, 1, f"missing required header key {key!r}")
-    if not PAGE_RE.fullmatch(header["page"]):
-        raise _err(name, 1, f"page must be breaches/<slug>.html, got {header['page']!r}")
+    if not kind.page_re.fullmatch(header["page"]):
+        form = (kind.page_dir / "<slug>.html").as_posix()
+        raise _err(name, 1, f"page must be {form}, got {header['page']!r}")
     if not _is_iso_date(header["as-of"]):
         raise _err(name, 1, f"as-of {header['as-of']!r} is not a YYYY-MM-DD date")
     return header
 
 
-def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide]:
+def _parse_slides(lines: list[str], first_lineno: int, name: str, kind: DeckKind = BREACH) -> list[BSlide]:
+    control_keys, typed_keys = _known_keys(kind)
+    known_keys = control_keys | typed_keys
     slides: list[BSlide] = []
     cur: BSlide | None = None
     para: list[str] = []
     notes: list[str] = []
     in_notes = False
+    # Inside a code fence every line is code, kept as written, until a line
+    # that is exactly ``` (the how-to outline rule).
+    in_fence = False
+    fence_line = 0
     # Typed lines are checked against the layout when the slide ends, because
     # the layout line may come after them. Each entry keeps its line number.
     typed: list[tuple[int, str, list[str]]] = []
@@ -295,6 +432,21 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
             )
         if "stage" in seen and cur.layout == "stage-group":
             raise _err(name, seen["stage"], "a stage-group slide takes stages:, not stage:")
+        if "figure" in seen and cur.layout != "figure":
+            raise _err(
+                name, seen["figure"],
+                f"a {cur.layout} slide does not take a figure: line; a figure slide does",
+            )
+        if "caption" in seen and cur.layout != "figure":
+            raise _err(
+                name, seen["caption"],
+                f"a {cur.layout} slide does not take a caption: line; a figure slide does",
+            )
+        if cur.code is not None and cur.layout != "code":
+            raise _err(
+                name, int(cur.code_where.rsplit(":", 1)[1]),
+                f"a {cur.layout} slide does not take a code block; a code slide does",
+            )
         if not cur.notes:
             raise _err(name, at, "slide has no notes: block")
         slides.append(cur)
@@ -305,6 +457,16 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
 
     for i, line in enumerate(lines):
         lineno = first_lineno + i
+        if in_fence:
+            assert cur is not None and cur.code is not None
+            if line == "```":
+                in_fence = False
+                if not any(c.strip() for c in cur.code):
+                    raise _err(name, fence_line, "empty code block")
+            else:
+                cur.code.append(line)
+            continue
+
         if line.startswith("== "):
             finish()
             heading = line[3:].strip()
@@ -322,7 +484,17 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
 
         stripped = line.strip()
         if stripped.startswith("```"):
-            raise _err(name, lineno, "breach outlines have no code fences")
+            if "code" not in kind.layouts:
+                raise _err(name, lineno, f"{kind.name} outlines have no code fences")
+            if in_notes:
+                raise _err(name, lineno, "a code block goes above the notes: line, not in the notes")
+            if cur.code is not None:
+                raise _err(name, lineno, "a slide may have only one code block")
+            flush_para()
+            cur.code, cur.code_lang = [], stripped[3:].strip() or None
+            cur.code_where = f"{name}:{lineno}"
+            in_fence, fence_line = True, lineno
+            continue
 
         if in_notes:
             if stripped:
@@ -346,7 +518,7 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
             continue
 
         km = KNOWN_KEY_RE.match(stripped)
-        if km is not None and km.group(1).lower() in KNOWN_KEYS:
+        if km is not None and km.group(1).lower() in known_keys:
             key, rest = km.group(1).lower(), km.group(2).strip()
         else:
             m = KEY_LINE_RE.match(stripped)
@@ -362,18 +534,16 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
                 continue
             key, rest = m.group(1), (m.group(2) or "").strip()
         flush_para()
-        if key in CONTROL_KEYS:
+        if key in control_keys:
             if key in seen:
                 raise _err(name, lineno, f"slide has two {key}: lines")
             seen[key] = lineno
             if not rest:
                 raise _err(name, lineno, f"empty {key}: line")
             if key == "layout":
-                if rest not in LAYOUTS:
-                    raise _err(
-                        name, lineno,
-                        f"unknown layout {rest!r}; known: {', '.join(LAYOUTS)}",
-                    )
+                if rest not in kind.layouts:
+                    known = ", ".join(n for n in LAYOUTS if n in kind.layouts)
+                    raise _err(name, lineno, f"unknown layout {rest!r}; known: {known}")
                 cur.layout = rest
             elif key == "source":
                 parts = _fields(name, lineno, key, rest)
@@ -382,22 +552,33 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
                 cur.source = (parts[0], parts[1])
             elif key == "stages":
                 cur.stages = rest.split()
+            elif key == "caption":
+                cur.caption, cur.caption_where = rest, f"{name}:{lineno}"
+            elif key == "section":
+                cur.section = _fields(name, lineno, key, rest)
+                if len(cur.section) > MAX_SECTIONS:
+                    raise _err(
+                        name, lineno,
+                        f"section: cites {len(cur.section)} sections; a slide cites one or two",
+                    )
             else:
                 setattr(cur, key, rest)
-        elif key in TYPED_KEYS:
+        elif key in typed_keys:
             typed.append((lineno, key, _fields(name, lineno, key, rest)))
         else:
             raise _err(name, lineno, f"unknown line key {key!r}")
 
+    if in_fence:
+        raise _err(name, fence_line, "code fence is never closed")
     finish()
     return slides
 
 
-def parse_outline_text(text: str, name: str) -> BDeck:
+def parse_outline_text(text: str, name: str, kind: DeckKind = BREACH) -> BDeck:
     lines = text.split("\n")
     body_start = next((i for i, ln in enumerate(lines) if ln.startswith("== ")), len(lines))
-    header = _parse_header(lines[:body_start], name)
-    slides = _parse_slides(lines[body_start:], body_start + 1, name)
+    header = _parse_header(lines[:body_start], name, kind)
+    slides = _parse_slides(lines[body_start:], body_start + 1, name, kind)
     slug = name[: -len(".deck")] if name.endswith(".deck") else name
     return BDeck(
         slug=slug,
@@ -410,8 +591,8 @@ def parse_outline_text(text: str, name: str) -> BDeck:
     )
 
 
-def parse_outline(path: Path) -> BDeck:
-    return parse_outline_text(path.read_text(encoding="utf-8"), path.name)
+def parse_outline(path: Path, kind: DeckKind = BREACH) -> BDeck:
+    return parse_outline_text(path.read_text(encoding="utf-8"), path.name, kind)
 
 
 def outline_sha256(deck: BDeck) -> str:
@@ -466,7 +647,7 @@ def _stage_group_findings(s: BSlide) -> list[str]:
     return out
 
 
-def slide_findings(s: BSlide) -> list[str]:
+def slide_findings(s: BSlide, kind: DeckKind = BREACH) -> list[str]:
     """Every style-limit breach on one slide, each starting with its `where`."""
     out: list[str] = []
     spec = LAYOUTS[s.layout]
@@ -479,7 +660,14 @@ def slide_findings(s: BSlide) -> list[str]:
 
     for ctl in spec.requires:
         if not getattr(s, ctl):
-            out.append(f"{s.where}: a {s.layout} slide needs a {ctl}: line")
+            what = "a code block" if ctl == "code" else f"a {ctl}: line"
+            out.append(f"{s.where}: a {s.layout} slide needs {what}")
+    if s.code is not None:
+        rows = code_visual_rows(s.code)
+        if rows > MAX_CODE_LINES:
+            out.append(
+                f"{s.code_where}: code takes {rows} rows once long lines wrap; the limit is {MAX_CODE_LINES}"
+            )
 
     prose = s.paragraphs + s.bullets
     if spec.prose == "none" and prose:
@@ -497,15 +685,15 @@ def slide_findings(s: BSlide) -> list[str]:
         )
 
     words = sum(_words(t) for t in prose)
-    if words > MAX_PROSE_WORDS:
-        out.append(f"{s.where}: {words} words of prose; the limit is {MAX_PROSE_WORDS}")
+    if words > spec.max_prose_words:
+        out.append(f"{s.where}: {words} words of prose; the limit is {spec.max_prose_words}")
     if _words(s.heading) > MAX_HEADING_WORDS:
         out.append(
             f"{s.where}: heading is {_words(s.heading)} words; the limit is {MAX_HEADING_WORDS}"
         )
     note_words = sum(_words(p) for p in s.notes)
-    if note_words > MAX_NOTES_WORDS:
-        out.append(f"{s.where}: notes are {note_words} words; the limit is {MAX_NOTES_WORDS}")
+    if note_words > kind.max_notes_words:
+        out.append(f"{s.where}: notes are {note_words} words; the limit is {kind.max_notes_words}")
 
     fields = [f for rows in s.items.values() for row in rows for f in row]
     for f in fields:
@@ -541,20 +729,20 @@ def slide_findings(s: BSlide) -> list[str]:
     return out
 
 
-def style_findings(deck: BDeck) -> list[str]:
+def style_findings(deck: BDeck, kind: DeckKind = BREACH) -> list[str]:
     """Every style-limit breach in the deck. Slide findings start with the
     slide's `where`; deck-level findings start with the deck's file."""
     findings: list[str] = []
     total = len(deck.slides) + GENERATED_SLIDES
-    if not MIN_SLIDES <= total <= MAX_SLIDES:
+    if not kind.min_slides <= total <= kind.max_slides:
         findings.append(
             f"{deck.slug}.deck: {total} slides including the generated cover, "
-            f"how-to-use and closing; the deck must have {MIN_SLIDES} to {MAX_SLIDES}"
+            f"how-to-use and closing; the deck must have {kind.min_slides} to {kind.max_slides}"
         )
     # The cover shows the title and promise, so they follow the slide dash rules.
     findings += _dash_findings(f"{deck.slug}.deck", [deck.title, deck.promise])
     for s in deck.slides:
-        findings += slide_findings(s)
+        findings += slide_findings(s, kind)
     return findings
 
 
@@ -563,14 +751,28 @@ def style_findings(deck: BDeck) -> list[str]:
 # only that.
 # ---------------------------------------------------------------------------
 
-DECK_ATTR = "data-breach-deck"
-# A deck line is one <p> carrying data-breach-deck, alone on its line and
-# closed on that line. Nothing it matches can reach past the line, so
-# removing a match never takes other page content with it.
-DECK_LINE_RE = re.compile(
-    r"^[ \t]*<p[^>\n]*\bdata-breach-deck\b[^>\n]*>(?:(?!</p>)[^\n])*</p>[ \t]*(?:\n|\Z)",
-    re.MULTILINE,
-)
+DECK_ATTR = BREACH.deck_attr
+
+
+def deck_line_re(attr: str, tags: tuple[str, ...] = ("p",)) -> re.Pattern[str]:
+    """A deck line: one element of tags (a <p> unless a kind says otherwise)
+    carrying attr, alone on its line and closed on that line. Nothing it
+    matches can reach past the line, so removing a match never takes other
+    page content with it."""
+    if tags == ("p",):
+        return re.compile(
+            r"^[ \t]*<p[^>\n]*\b" + re.escape(attr) + r"\b[^>\n]*>(?:(?!</p>)[^\n])*</p>[ \t]*(?:\n|\Z)",
+            re.MULTILINE,
+        )
+    names = "|".join(re.escape(t) for t in tags)
+    return re.compile(
+        r"^[ \t]*<(" + names + r")(?=[\s>])[^>\n]*\b" + re.escape(attr)
+        + r"\b[^>\n]*>(?:(?!</\1>)[^\n])*</\1>[ \t]*(?:\n|\Z)",
+        re.MULTILINE,
+    )
+
+
+DECK_LINE_RE = deck_line_re(DECK_ATTR)
 
 SITE = "https://csoh.org/"
 
@@ -642,8 +844,15 @@ def _strip_tags(fragment: str) -> str:
     return " ".join(htmllib.unescape(fragment).split())
 
 
+# The "Find on this page" field tools/sync_page_finder.py stamps at the top
+# of every kill chain. It is a control, not anything a deck restates, so the
+# page text and its hash leave it out, and stamping it or changing its markup
+# never makes a published deck look stale.
+PAGE_FINDER_RE = re.compile(r"<!-- page-finder -->.*?<!-- /page-finder -->", re.S)
+
+
 def _main_html(html: str) -> str:
-    html = DECK_LINE_RE.sub("", html)
+    html = PAGE_FINDER_RE.sub("", DECK_LINE_RE.sub("", html))
     m = MAIN_RE.search(html)
     if m is None:
         raise OutlineError("page has no <main> element")
@@ -665,6 +874,14 @@ PAGER_RE = re.compile(
 def page_sha256(html: str) -> str:
     """Hash of the page's <main> text, without its deck line or its pager."""
     return hashlib.sha256(main_text(PAGER_RE.sub("", html)).encode("utf-8")).hexdigest()
+
+
+def _page_hash_changes(entry: dict, html: str) -> list[str]:
+    """A breach deck's page moved when its page hash did."""
+    if entry.get("page_sha256") == page_sha256(html):
+        return []
+    when = entry.get("published")
+    return [f"page changed since it was published on {when}; review the deck against the page"]
 
 
 def _normalize_number(raw: str) -> str:
@@ -779,22 +996,26 @@ def _host_allowed(url: str) -> bool:
     return any(host == h or host.endswith("." + h) for h in BACKGROUND_HOSTS)
 
 
-def _slide_text_fields(s: BSlide) -> list[str]:
-    """Every text the page gate reads on a non-background slide. The URL of a
-    link line and of source: are left out: they carry digits and technique
-    IDs that are not page text, and the link gate checks them."""
+def _slide_text_fields(s: BSlide, notes: bool = True) -> list[str]:
+    """Every text the page gate reads on a non-background slide, the notes
+    last unless notes is False. The URL of a link line and of source: are
+    left out: they carry digits and technique IDs that are not page text,
+    and the link gate checks them."""
     out = [s.heading, *s.paragraphs, *s.bullets]
     for key, rows in s.items.items():
         for row in rows:
             out += row[:1] if key == "link" else row
     if s.credit:
         out.append(s.credit)
-    out += s.notes
+    if notes:
+        out += s.notes
     return out
 
 
-def _text_findings(where: str, texts: list[str], page: BreachPage) -> list[str]:
-    """Numbers and technique IDs in `texts` that the page does not carry."""
+def _text_findings(where: str, texts: list[str], page, on: str = "on the page") -> list[str]:
+    """Numbers and technique IDs in `texts` that `page` (anything with
+    `numbers` and `techniques` sets) does not carry. `on` says where they
+    were looked for."""
     out: list[str] = []
     seen: set[str] = set()
     for text in texts:
@@ -802,11 +1023,11 @@ def _text_findings(where: str, texts: list[str], page: BreachPage) -> list[str]:
             raw = m.group(0)
             if _normalize_number(raw) not in page.numbers and raw not in seen:
                 seen.add(raw)
-                out.append(f"{where}: number {raw} is not on the page")
+                out.append(f"{where}: number {raw} is not {on}")
         for tid in TECHNIQUE_RE.findall(text):
             if tid not in page.techniques and tid not in seen:
                 seen.add(tid)
-                out.append(f"{where}: technique {tid} is not on the page")
+                out.append(f"{where}: technique {tid} is not {on}")
     return out
 
 
@@ -919,9 +1140,10 @@ def page_findings(deck: BDeck, page: BreachPage, today: date | None = None) -> l
 
 # Paths come from this file's location, not the working directory: a check run
 # from elsewhere would find no outlines and no pages, and a check that reads
-# nothing reports clean. _set_root() moves all four together for the
-# self-test. Breach outlines live in their own subdirectory so the how-to
-# tool, which globs tools/decks/*.deck without recursing, never reads them.
+# nothing reports clean. _set_root() moves ROOT, and every kind's paths with
+# it, for the self-test; the four breach paths below follow it too. Each
+# kind's outlines live in their own subdirectory so the how-to tool, which
+# globs tools/decks/*.deck without recursing, never reads them.
 ROOT = Path(__file__).resolve().parents[1]
 DECKS_DIR = ROOT / "tools" / "decks" / "breaches"
 PAGES_DIR = ROOT / "breaches"
@@ -949,32 +1171,51 @@ def _rel(path: Path) -> str:
         return str(path)
 
 
+def outline_dir(kind: DeckKind = BREACH) -> Path:
+    return ROOT / kind.outline_dir
+
+
+def mapping_path(kind: DeckKind = BREACH) -> Path:
+    return ROOT / kind.mapping_path
+
+
+def page_rel(slug: str, kind: DeckKind = BREACH) -> str:
+    """The page a slug's outline must name, relative to the root."""
+    return (kind.page_dir / f"{slug}.html").as_posix()
+
+
 PRESENTATION_RE = re.compile(r"docs\.google\.com/presentation\b")
-ENTRY_KEYS = ("id", "outline_sha256", "page_sha256", "published")
+ENTRY_KEYS = BREACH.entry_keys
 # The indentation of the pm-link lines on every breach page.
 PM_INDENT = "    "
 HEADER_OPEN_RE = re.compile(r'^([ \t]*)<div\b[^>\n]*\bclass="inc-header"[^>\n]*>[ \t]*$', re.MULTILINE)
 PM_LINK_RE = re.compile(r'^([ \t]*)<a class="pm-link"[^\n]*</a>[ \t]*$')
 
 
-def deck_line_html(pres_id: str, indent: str = PM_INDENT) -> str:
+def deck_line_html(pres_id: str, indent: str = PM_INDENT, kind: DeckKind = BREACH) -> str:
     base = f"https://docs.google.com/presentation/d/{pres_id}"
     ext = 'target="_blank" rel="noopener noreferrer"'
     licence = "https://creativecommons.org/licenses/by-nc/4.0/"
     return (
-        f'{indent}<p class="u-mt-075" {DECK_ATTR}><strong>Slides:</strong> '
+        f'{indent}<p class="{kind.deck_line_class}" {kind.deck_attr}><strong>Slides:</strong> '
         f'<a href="{base}/export/pdf" {ext}>download the PDF</a> or '
         f'<a href="{base}/copy" {ext}>make your own editable copy</a> '
         "(copying needs a Google account). The slides are licensed "
         f'<a href="{licence}" {ext}>CC BY-NC 4.0</a>.</p>'
-    )
+    ) + (f"\n{kind.deck_line_extra(pres_id, indent)}" if kind.deck_line_extra else "")
 
 
-def loose_deck_markup(html: str) -> int:
-    """data-breach-deck mentions that are not part of a whole deck line: a
+def _line_shape(kind: DeckKind) -> str:
+    """How a deck line of this kind looks, for messages."""
+    tags = " or ".join(f"<{t}>" for t in kind.deck_line_tags)
+    return f"(one {tags} alone on its line, closed on that line)"
+
+
+def loose_deck_markup(html: str, kind: DeckKind = BREACH) -> int:
+    """Deck attribute mentions that are not part of a whole deck line: a
     line missing its </p>, one written inline after other markup, or two on
     one line. --stamp cannot remove these without guessing."""
-    return DECK_LINE_RE.sub("", html).count(DECK_ATTR)
+    return deck_line_re(kind.deck_attr, kind.deck_line_tags).sub("", html).count(kind.deck_attr)
 
 
 def _last_pm_link_end(html: str) -> tuple[int, str] | None:
@@ -1012,22 +1253,23 @@ def _insert_deck_line(html: str, pres_id: str) -> str:
     return html[:end] + deck_line_html(pres_id, indent) + "\n" + html[end:]
 
 
-def stamp_page(html: str, pres_id: str | None) -> str:
-    """The page as --stamp writes it: every deck line removed, then, when
-    pres_id is given, one deck line right after the last pm-link line in
-    inc-header. Raises ValueError when the page holds deck markup that is
-    not a whole deck line, the id is not a Drive file id, or there is no
-    pm-link line to put the deck line after."""
-    loose = loose_deck_markup(html)
+def stamp_page(html: str, pres_id: str | None, kind: DeckKind = BREACH) -> str:
+    """The page as --stamp writes it: every deck line of this kind removed,
+    then, when pres_id is given, one deck line where the kind puts it (for
+    breach pages, right after the last pm-link line in inc-header). Raises
+    ValueError when the page holds deck markup that is not a whole deck
+    line, the id is not a Drive file id, or there is nothing to put the deck
+    line after."""
+    loose = loose_deck_markup(html, kind)
     if loose:
         raise ValueError(
-            f"{loose} {DECK_ATTR} mention(s) outside a whole deck line (one <p> "
-            "alone on its line, closed on that line); fix the markup by hand"
+            f"{loose} {kind.deck_attr} mention(s) outside a whole deck line "
+            f"{_line_shape(kind)}; fix the markup by hand"
         )
     if pres_id is not None and not PRES_ID_RE.fullmatch(pres_id):
         raise ValueError(f"{pres_id!r} is not a Google Slides presentation id")
-    bare = DECK_LINE_RE.sub("", html)
-    return bare if pres_id is None else _insert_deck_line(bare, pres_id)
+    bare = deck_line_re(kind.deck_attr, kind.deck_line_tags).sub("", html)
+    return bare if pres_id is None else kind.insert_deck_line(bare, pres_id)
 
 
 def _entry_id(entry) -> str | None:
@@ -1036,20 +1278,21 @@ def _entry_id(entry) -> str | None:
     return pres_id if isinstance(pres_id, str) and PRES_ID_RE.fullmatch(pres_id) else None
 
 
-def link_findings(slug: str, html: str, mapping: dict) -> list[str]:
-    """Disagreements between a breach page's deck markup and the mapping. A
-    page in the mapping must hold exactly the one deck line --stamp writes,
-    right after its last pm-link; a page outside it must hold no deck markup.
-    Any Google Slides link outside the deck line is a finding either way."""
-    page = f"breaches/{slug}.html"
+def link_findings(slug: str, html: str, mapping: dict, kind: DeckKind = BREACH) -> list[str]:
+    """Disagreements between a page's deck markup and the mapping. A page in
+    the mapping must hold exactly the one deck line --stamp writes, where the
+    kind puts it; a page outside it must hold no deck markup. Any Google
+    Slides link outside the deck line is a finding either way."""
+    page = page_rel(slug, kind)
     findings: list[str] = []
-    lines = DECK_LINE_RE.findall(html)
-    rest = DECK_LINE_RE.sub("", html)
-    loose = rest.count(DECK_ATTR)
+    line_re = deck_line_re(kind.deck_attr, kind.deck_line_tags)
+    lines = [m.group(0) for m in line_re.finditer(html)]
+    rest = line_re.sub("", html)
+    loose = rest.count(kind.deck_attr)
     if loose:
         findings.append(
-            f"{page}: {loose} {DECK_ATTR} mention(s) outside a whole deck line "
-            "(one <p> alone on its line, closed on that line)"
+            f"{page}: {loose} {kind.deck_attr} mention(s) outside a whole deck line "
+            f"{_line_shape(kind)}"
         )
     if PRESENTATION_RE.search(rest) and not loose:
         findings.append(f"{page}: links a Google Slides deck outside its deck line")
@@ -1061,67 +1304,70 @@ def link_findings(slug: str, html: str, mapping: dict) -> list[str]:
     pres_id = _entry_id(entry)
     if pres_id is None:
         return findings  # mapping_findings reports the entry itself
-    want = deck_line_html(pres_id).strip()
+    want = [w.strip() for w in deck_line_html(pres_id, kind=kind).splitlines()]
     if not lines and not loose:
         findings.append(f"{page}: {slug!r} is in the mapping but the page has no deck line")
-    elif len(lines) > 1:
-        findings.append(f"{page}: has {len(lines)} deck lines; it must have exactly one")
-    elif lines and lines[0].strip() != want:
+    elif len(lines) > len(want):
+        exactly = "one" if len(want) == 1 else str(len(want))
+        findings.append(f"{page}: has {len(lines)} deck lines; it must have exactly {exactly}")
+    elif lines and [x.strip() for x in lines] != want:
         findings.append(
             f"{page}: deck line is not the one --stamp writes for mapping id {pres_id!r}"
         )
     elif lines and not loose:
         try:
-            if _insert_deck_line(rest, pres_id) != html:
+            if kind.insert_deck_line(rest, pres_id) != html:
                 findings.append(
-                    f"{page}: deck line is not where --stamp puts it (right after the "
-                    "last pm-link line in inc-header); run --stamp"
+                    f"{page}: deck line is not where --stamp puts it ({kind.deck_line_place}); run --stamp"
                 )
         except ValueError as e:
             findings.append(f"{page}: {e}")
     return findings
 
 
-def read_mapping() -> tuple[dict, str | None]:
+def read_mapping(kind: DeckKind = BREACH) -> tuple[dict, str | None]:
     """The mapping and None, or {} and why it cannot be read. A missing file
     is an empty mapping."""
-    if not MAPPING.exists():
+    path = mapping_path(kind)
+    if not path.exists():
         return {}, None
     try:
-        mapping = json.loads(MAPPING.read_text(encoding="utf-8"))
+        mapping = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
-        return {}, f"{_rel(MAPPING)}: cannot be read as JSON: {e}"
+        return {}, f"{_rel(path)}: cannot be read as JSON: {e}"
     if not isinstance(mapping, dict):
-        return {}, f"{_rel(MAPPING)}: must be a JSON object keyed by slug"
+        return {}, f"{_rel(path)}: must be a JSON object keyed by slug"
     return mapping, None
 
 
-def save_mapping(mapping: dict) -> None:
-    MAPPING.write_text(json.dumps(mapping, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+def save_mapping(mapping: dict, kind: DeckKind = BREACH) -> None:
+    mapping_path(kind).write_text(json.dumps(mapping, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def mapping_findings(mapping: dict, outlines: set[str], pages: set[str]) -> list[str]:
+def mapping_findings(mapping: dict, outlines: set[str], pages: set[str], kind: DeckKind = BREACH) -> list[str]:
     """Every mapping entry that is malformed or names a deck the repo cannot
-    account for: a slug with no outline or no breach page, an id that is not
-    a Drive file id, a date that is not ISO, or a hash that is not sha256."""
+    account for: a slug with no outline or no page, an id that is not a
+    Drive file id, a date that is not ISO, a hash that is not sha256, or a
+    field of hashes that does not map names to sha256 digests."""
     findings: list[str] = []
-    name = _rel(MAPPING)
+    name = _rel(mapping_path(kind))
+    keys = kind.entry_keys
     for slug in sorted(mapping):
         entry = mapping[slug]
         where = f"{name}: {slug!r}"
         if not SLUG_RE.fullmatch(slug):
-            findings.append(f"{where}: not a breach slug (lowercase letters, digits, hyphens)")
+            findings.append(f"{where}: not a {kind.name} slug (lowercase letters, digits, hyphens)")
             continue
         if slug not in outlines:
-            findings.append(f"{where}: has no outline {_rel(DECKS_DIR)}/{slug}.deck")
+            findings.append(f"{where}: has no outline {_rel(outline_dir(kind))}/{slug}.deck")
         if slug not in pages:
-            findings.append(f"{where}: names no breach page")
+            findings.append(f"{where}: names no {kind.name} page")
         if not isinstance(entry, dict):
-            findings.append(f"{where}: entry must be an object with keys {', '.join(ENTRY_KEYS)}")
+            findings.append(f"{where}: entry must be an object with keys {', '.join(keys)}")
             continue
-        if sorted(entry) != sorted(ENTRY_KEYS):
+        if sorted(entry) != sorted(keys):
             findings.append(
-                f"{where}: entry keys must be exactly {', '.join(ENTRY_KEYS)}; "
+                f"{where}: entry keys must be exactly {', '.join(keys)}; "
                 f"got {', '.join(sorted(entry)) or 'none'}"
             )
         if "id" in entry and _entry_id(entry) is None:
@@ -1129,10 +1375,19 @@ def mapping_findings(mapping: dict, outlines: set[str], pages: set[str]) -> list
         published = entry.get("published")
         if "published" in entry and not _is_iso_date(published):
             findings.append(f"{where}: published {published!r} is not a YYYY-MM-DD date")
-        for key in ("outline_sha256", "page_sha256"):
-            sha = entry.get(key)
-            if key in entry and not (isinstance(sha, str) and SHA256_RE.fullmatch(sha)):
-                findings.append(f"{where}: {key} {sha!r} is not a sha256 hex digest")
+        for key in keys:
+            if key in ("id", "published") or key not in entry:
+                continue
+            value = entry[key]
+            if key.endswith("_sha256"):
+                if not (isinstance(value, str) and SHA256_RE.fullmatch(value)):
+                    findings.append(f"{where}: {key} {value!r} is not a sha256 hex digest")
+            elif not (
+                isinstance(value, dict) and value
+                and all(isinstance(k, str) and isinstance(v, str) and SHA256_RE.fullmatch(v)
+                        for k, v in value.items())
+            ):
+                findings.append(f"{where}: {key} must map names to sha256 hex digests")
     return findings
 
 
@@ -1141,34 +1396,35 @@ def mapping_findings(mapping: dict, outlines: set[str], pages: set[str]) -> list
 # ---------------------------------------------------------------------------
 
 
-def outline_paths() -> list[Path]:
-    return sorted(DECKS_DIR.glob("*.deck"))
+def outline_paths(kind: DeckKind = BREACH) -> list[Path]:
+    return sorted(outline_dir(kind).glob("*.deck"))
 
 
-def breach_pages() -> list[Path]:
-    return sorted(PAGES_DIR.glob("*.html"))
+def breach_pages(kind: DeckKind = BREACH) -> list[Path]:
+    """Every page the kind gates: for breach decks, breaches/*.html."""
+    return kind.pages()
 
 
-def tree_problem() -> str | None:
-    """Why the outlines or breach pages cannot be found, or None. Every mode
-    that reads the tree stops on this rather than report on nothing."""
-    if not outline_paths():
-        return f"no outlines found in {DECKS_DIR}"
-    if not breach_pages():
-        return f"no breach pages found in {PAGES_DIR}"
+def tree_problem(kind: DeckKind = BREACH) -> str | None:
+    """Why the outlines or pages cannot be found, or None. Every mode that
+    reads the tree stops on this rather than report on nothing."""
+    if not outline_paths(kind):
+        return f"no outlines found in {outline_dir(kind)}"
+    if not breach_pages(kind):
+        return f"no {kind.name} pages found in {ROOT / kind.page_dir}"
     return None
 
 
-def outline_findings(path: Path) -> list[str]:
+def outline_findings(path: Path, kind: DeckKind = BREACH) -> list[str]:
     """Every finding for one outline: a parse error, the style limits, and
-    what the deck says that its breach page does not. --check reports these
-    and --build refuses an outline that has any."""
+    what the deck says that its page does not. --check reports these and
+    --build refuses an outline that has any."""
     try:
-        deck = parse_outline(path)
+        deck = parse_outline(path, kind)
     except OutlineError as e:
         return [str(e)]
-    findings = style_findings(deck)
-    want = f"breaches/{deck.slug}.html"
+    findings = style_findings(deck, kind)
+    want = page_rel(deck.slug, kind)
     if deck.page != want:
         findings.append(f"{path.name}: page must be {want}, got {deck.page}")
         return findings
@@ -1177,46 +1433,47 @@ def outline_findings(path: Path) -> list[str]:
         findings.append(f"{path.name}: page {deck.page} does not exist")
         return findings
     try:
-        page = parse_breach_page(page_path.read_text(encoding="utf-8"), deck.page)
+        return findings + kind.page_findings(deck, page_path.read_text(encoding="utf-8"))
     except OutlineError as e:
         findings.append(f"{deck.page}: {e}")
         return findings
-    return findings + page_findings(deck, page)
 
 
-def check_all() -> int:
-    problem = tree_problem()
+def check_all(kind: DeckKind = BREACH) -> int:
+    problem = tree_problem(kind)
     if problem:
-        print(f"breach decks: {problem}; nothing was checked")
+        print(f"{kind.name} decks: {problem}; nothing was checked")
         return 1
     findings: list[str] = []
-    mapping, map_problem = read_mapping()
+    mapping, map_problem = read_mapping(kind)
     if map_problem:
         findings.append(map_problem)
-    outlines = outline_paths()
+    outlines = outline_paths(kind)
     for path in outlines:
-        findings += outline_findings(path)
-    pages = breach_pages()
-    findings += mapping_findings(mapping, {p.stem for p in outlines}, {p.stem for p in pages})
+        findings += outline_findings(path, kind)
+    pages = breach_pages(kind)
+    findings += mapping_findings(mapping, {p.stem for p in outlines}, {p.stem for p in pages}, kind)
     # An unreadable mapping would make every deck line read as unmapped.
     if not map_problem:
         for page in pages:
-            findings += link_findings(page.stem, page.read_text(encoding="utf-8"), mapping)
+            findings += link_findings(page.stem, page.read_text(encoding="utf-8"), mapping, kind)
+        if kind.extra_findings:
+            findings += kind.extra_findings(mapping)
     for f in findings:
         print(f)
     print(
-        f"breach decks: {len(outlines)} outlines checked, {len(pages)} breach pages checked, "
+        f"{kind.name} decks: {len(outlines)} outlines checked, {len(pages)} {kind.name} pages checked, "
         f"{len(findings)} findings"
     )
     return 1 if findings else 0
 
 
-def _stale_reasons(slug: str, entry, path: Path | None) -> list[str]:
+def _stale_reasons(slug: str, entry, path: Path | None, kind: DeckKind = BREACH) -> list[str]:
     """Why a published deck no longer matches its outline or its page, or []."""
     if path is None:
-        return [f"published, but {_rel(DECKS_DIR)}/{slug}.deck is missing"]
+        return [f"published, but {_rel(outline_dir(kind))}/{slug}.deck is missing"]
     try:
-        deck = parse_outline(path)
+        deck = parse_outline(path, kind)
     except OutlineError as e:
         return [f"outline does not parse, so whether it changed is unknown: {e}"]
     entry = entry if isinstance(entry, dict) else {}
@@ -1226,34 +1483,29 @@ def _stale_reasons(slug: str, entry, path: Path | None) -> list[str]:
         reasons.append(
             f"outline changed since it was published on {when}; the public deck needs re-publishing"
         )
-    page_path = PAGES_DIR / f"{slug}.html"
+    page_path = ROOT / page_rel(slug, kind)
     try:
-        page_hash = page_sha256(page_path.read_text(encoding="utf-8"))
+        reasons += kind.page_changes(deck, entry, page_path.read_text(encoding="utf-8"))
     except (OSError, OutlineError) as e:
         reasons.append(f"page cannot be read, so whether it changed is unknown: {e}")
-    else:
-        if entry.get("page_sha256") != page_hash:
-            reasons.append(
-                f"page changed since it was published on {when}; review the deck against the page"
-            )
     return reasons
 
 
-def stale_report(published_only: bool = False) -> int:
+def stale_report(published_only: bool = False, kind: DeckKind = BREACH) -> int:
     """Print one line per reason a published deck is behind (its outline or
     its page changed since --record) and, unless published_only, one per
     outline never published, then a summary line starting "stale check:".
     Staleness never fails: it exits 0 whether or not decks are stale, and 1
-    only when the outlines, the breach pages or the mapping cannot be read."""
-    problem = tree_problem()
+    only when the outlines, the pages or the mapping cannot be read."""
+    problem = tree_problem(kind)
     if problem:
         print(f"stale check: {problem}")
         return 1
-    mapping, problem = read_mapping()
+    mapping, problem = read_mapping(kind)
     if problem:
         print(f"stale check: {problem}")
         return 1
-    outlines = {p.stem: p for p in outline_paths()}
+    outlines = {p.stem: p for p in outline_paths(kind)}
     stale = unpublished = 0
     for slug in sorted(set(outlines) | set(mapping)):
         if slug not in mapping:
@@ -1261,7 +1513,7 @@ def stale_report(published_only: bool = False) -> int:
             if not published_only:
                 print(f"{slug}: not published")
             continue
-        reasons = _stale_reasons(slug, mapping[slug], outlines.get(slug))
+        reasons = _stale_reasons(slug, mapping[slug], outlines.get(slug), kind)
         if reasons:
             stale += 1
             for reason in reasons:
@@ -1273,29 +1525,29 @@ def stale_report(published_only: bool = False) -> int:
     return 0
 
 
-def status_report() -> int:
-    problem = tree_problem()
+def status_report(kind: DeckKind = BREACH) -> int:
+    problem = tree_problem(kind)
     if problem:
         print(f"status: {problem}")
         return 1
-    mapping, problem = read_mapping()
+    mapping, problem = read_mapping(kind)
     if problem:
         print(f"status: {problem}")
         return 1
-    outlines = {p.stem for p in outline_paths()}
-    for page in breach_pages():
+    outlines = {p.stem for p in outline_paths(kind)}
+    for page in breach_pages(kind):
         has_outline = "yes" if page.stem in outlines else "no"
         published = "yes" if page.stem in mapping else "no"
         print(f"{page.stem}: outline {has_outline}, published {published}")
     return 0
 
 
-def plan_stamps(mapping: dict) -> tuple[dict[Path, str], list[str]]:
-    """The new text of every breach page --stamp would change, and every page
-    it cannot stamp. Nothing is written."""
+def plan_stamps(mapping: dict, kind: DeckKind = BREACH) -> tuple[dict[Path, str], list[str]]:
+    """The new text of every page --stamp would change, and every page it
+    cannot stamp. Nothing is written."""
     changes: dict[Path, str] = {}
     errors: list[str] = []
-    for page in breach_pages():
+    for page in breach_pages(kind):
         html = page.read_text(encoding="utf-8")
         entry = mapping.get(page.stem)
         pres_id = None
@@ -1305,23 +1557,27 @@ def plan_stamps(mapping: dict) -> tuple[dict[Path, str], list[str]]:
                 errors.append(f"{_rel(page)}: its mapping entry has no valid id, so it cannot be stamped")
                 continue
         try:
-            new = stamp_page(html, pres_id)
+            new = stamp_page(html, pres_id, kind)
         except ValueError as e:
             errors.append(f"{_rel(page)}: {e}")
             continue
         if new != html:
             changes[page] = new
+    if kind.extra_plan:
+        more, more_errors = kind.extra_plan(mapping)
+        changes.update(more)
+        errors += more_errors
     return changes, errors
 
 
-def _write_stamps(mapping: dict, label: str, save: bool) -> int:
+def _write_stamps(mapping: dict, label: str, save: bool, kind: DeckKind = BREACH) -> int:
     """Check the mapping and plan every page first. On any error, print them
     all and write nothing, so no run leaves some pages stamped and others
     not, or a mapping its pages disagree with. Otherwise save the mapping
     when asked, then write the changed pages."""
-    pages = {p.stem for p in breach_pages()}
-    errors = mapping_findings(mapping, {p.stem for p in outline_paths()}, pages)
-    changes, stamp_errors = plan_stamps(mapping)
+    pages = {p.stem for p in breach_pages(kind)}
+    errors = mapping_findings(mapping, {p.stem for p in outline_paths(kind)}, pages, kind)
+    changes, stamp_errors = plan_stamps(mapping, kind)
     errors += stamp_errors
     if errors:
         for e in errors:
@@ -1329,101 +1585,102 @@ def _write_stamps(mapping: dict, label: str, save: bool) -> int:
         print(f"{label}: refused, nothing written; fix the problems above")
         return 1
     if save:
-        save_mapping(mapping)
+        save_mapping(mapping, kind)
     for page, new in changes.items():
         page.write_text(new, encoding="utf-8")
         print(f"stamped {_rel(page)}")
     return 0
 
 
-def stamp_all() -> int:
-    problem = tree_problem()
+def stamp_all(kind: DeckKind = BREACH) -> int:
+    problem = tree_problem(kind)
     if problem:
         print(f"stamp: {problem}")
         return 1
-    mapping, problem = read_mapping()
+    mapping, problem = read_mapping(kind)
     if problem:
         print(f"stamp: {problem}")
         return 1
-    return _write_stamps(mapping, "stamp", save=False)
+    return _write_stamps(mapping, "stamp", save=False, kind=kind)
 
 
-def record(slug: str, pres_id: str) -> int:
-    problem = tree_problem()
+def record(slug: str, pres_id: str, kind: DeckKind = BREACH) -> int:
+    problem = tree_problem(kind)
     if problem:
         print(f"record: {problem}")
         return 1
     errors = []
-    if not SLUG_RE.fullmatch(slug) or not (DECKS_DIR / f"{slug}.deck").is_file():
-        errors.append(f"record: no outline {_rel(DECKS_DIR)}/{slug}.deck")
+    path = outline_dir(kind) / f"{slug}.deck"
+    if not SLUG_RE.fullmatch(slug) or not path.is_file():
+        errors.append(f"record: no outline {_rel(outline_dir(kind))}/{slug}.deck")
     if not PRES_ID_RE.fullmatch(pres_id):
         errors.append(f"record: {pres_id!r} is not a Google Slides presentation id")
     if errors:
         print("\n".join(errors))
         return 1
     # A recorded outline must pass --check, or the publish commit fails CI.
-    findings = outline_findings(DECKS_DIR / f"{slug}.deck")
+    findings = outline_findings(path, kind)
     if findings:
         print("\n".join(findings))
         print("record: refused, nothing written; fix the findings above")
         return 1
     try:
-        deck = parse_outline(DECKS_DIR / f"{slug}.deck")
-        page_hash = page_sha256((PAGES_DIR / f"{slug}.html").read_text(encoding="utf-8"))
+        deck = parse_outline(path, kind)
+        state = kind.page_state(deck, (ROOT / page_rel(slug, kind)).read_text(encoding="utf-8"))
     except (OSError, OutlineError) as e:
         print(f"record: {e}")
         return 1
-    mapping, problem = read_mapping()
+    mapping, problem = read_mapping(kind)
     if problem:
         print(f"record: {problem}")
         return 1
     mapping[slug] = {
         "id": pres_id,
         "outline_sha256": outline_sha256(deck),
-        "page_sha256": page_hash,
+        **state,
         "published": date.today().isoformat(),
     }
-    return _write_stamps(mapping, "record", save=True)
+    return _write_stamps(mapping, "record", save=True, kind=kind)
 
 
-def build_decks(slugs: list[str]) -> int:
-    """Render the named outlines to BUILD_DIR/<slug>.pptx. An unknown slug
-    stops the run before anything is built. A deck's old build is removed
-    first, so a refused or failed build never leaves a file that looks
-    current. An outline with any finding --check reports is refused; a
-    written file is reopened and verified, and removed when verification
-    finds anything. Every .pptx in the build directory therefore passed
-    verification when it was written."""
-    known = {p.stem: p for p in outline_paths()}
+def build_decks(slugs: list[str], kind: DeckKind = BREACH) -> int:
+    """Render the named outlines to <outline dir>/build/<slug>.pptx with the
+    kind's renderer. An unknown slug stops the run before anything is built.
+    A deck's old build is removed first, so a refused or failed build never
+    leaves a file that looks current. An outline with any finding --check
+    reports is refused; a written file is reopened and verified, and removed
+    when verification finds anything. Every .pptx in the build directory
+    therefore passed verification when it was written."""
+    known = {p.stem: p for p in outline_paths(kind)}
     unknown = [sl for sl in slugs if sl not in known]
     if unknown:
         for sl in unknown:
-            print(f"build: no outline {_rel(DECKS_DIR)}/{sl}.deck")
+            print(f"build: no outline {_rel(outline_dir(kind))}/{sl}.deck")
         return 1
     try:
-        import breach_deck_render as render
+        render = importlib.import_module(kind.renderer)
     except ImportError as e:
         print(f"build: cannot import the renderer (pip install python-pptx): {e}")
         return 1
     bad = 0
     outlines = [known[sl] for sl in dict.fromkeys(slugs)]
     for path in outlines:
-        out = BUILD_DIR / f"{path.stem}.pptx"
+        out = outline_dir(kind) / "build" / f"{path.stem}.pptx"
         out.unlink(missing_ok=True)
-        findings = outline_findings(path)
+        findings = outline_findings(path, kind)
         if findings:
             print("\n".join(findings))
             print(f"{path.name}: refused, fix the findings above")
             bad += 1
             continue
-        deck = parse_outline(path)
+        deck = parse_outline(path, kind)
         try:
             render.render_deck(deck, out)
         except render.LayoutError as e:
             print(e)
             bad += 1
             continue
-        problems = render.verify_pptx(out, deck)
+        problems = render.verify_pptx(out, deck, pictures=kind.pictures)
         if problems:
             print("\n".join(problems))
             out.unlink(missing_ok=True)
@@ -1955,6 +2212,15 @@ def _case_page_hash_stable(tmp: Path) -> None:
         f'  <p class="deck-line" {DECK_ATTR}="x"><a href="d.pptx">Deck</a></p>\n  <div class="kill-chain">', 1)
     assert decked != base and page_sha256(decked) == h
     assert page_sha256(_breach_page(nav="Other nav 123")) == h
+    found = base.replace(
+        '  <div class="kill-chain">',
+        '  <!-- page-finder -->\n  <div class="page-finder" role="search">'
+        '<label>Find on this page 2026</label><button>&darr;</button></div>\n  <!-- /page-finder -->\n'
+        '  <div class="kill-chain">', 1)
+    assert found != base and page_sha256(found) == h
+    # Control: the same field without its markers is page text.
+    unmarked = found.replace("<!-- page-finder -->", "").replace("<!-- /page-finder -->", "")
+    assert unmarked != found and page_sha256(unmarked) != h
     changed = base.replace("credentials", "secrets", 1)
     assert changed != base and page_sha256(changed) != h
     # A deck line not alone on its line is page content, so it is not removed.
@@ -3408,7 +3674,9 @@ def _matrix_marks(slide) -> set[tuple[str, str]]:
 def _case_render_diagrams(tmp: Path) -> None:
     import breach_deck_render as r
 
-    assert set(r.RENDERERS) == set(LAYOUTS), set(r.RENDERERS) ^ set(LAYOUTS)
+    # Every breach layout has a renderer here; topic_deck_render.py registers
+    # the renderers of the layouts only topic decks take (figure, list).
+    assert set(r.RENDERERS) == BREACH.layouts, set(r.RENDERERS) ^ BREACH.layouts
     deck = _diagram_sample()
     assert tuple(s.layout for s in deck.slides) == DIAGRAMS
     # The sample is at every maximum: line counts and fields per line.
@@ -3751,7 +4019,7 @@ def _case_build_refuses_and_cleans(tmp: Path) -> None:
     def raises(deck, out):
         raise r.LayoutError("aa.deck:5: planted overflow")
 
-    def problems(path, deck):
+    def problems(path, deck, **_kw):
         return [f"{path.name} slide 2: planted problem"]
 
     real = (r.render_deck, r.verify_pptx)
@@ -4006,6 +4274,81 @@ def _case_timeline_lines_measured(tmp: Path) -> None:
     whens(three, "June 2026", "May 27", "July 1", "August 2", "June 3")
 
 
+def _case_heading_lines_measured(tmp: Path) -> None:
+    """A heading's lines are counted from its width in Space Grotesk Bold,
+    kerned, the way Google Slides sets it, and its box holds them: a
+    heading the character estimate calls one line but Slides wraps gets
+    two, and the text under it starts below the second."""
+    import breach_deck_render as r
+
+    # Whole headings in thousandths of an em, as a browser canvas measures
+    # them in Space Grotesk Bold (fonts/space-grotesk-700.woff2) with
+    # kerning. Google Slides wrapped the first at 36 pt across the 12.1 in
+    # heading box, kept the second on one line there, and kept the third on
+    # one line at 32 pt beside a stage tile. The last is this wide in a
+    # browser's default shaping, whose forms around "tt" its pairs miss.
+    wraps = "ignore_changes can quietly unmanage a resource"
+    fits = "Envelope encryption: how every cloud KMS works"
+    stage_fits = "Azure DevOps, replayed tokens and Run Command"
+    em = {wraps: 24200, fits: 23937, stage_fits: 24173, "Patterns for getting secrets in": 14516}
+    for text, want in em.items():
+        got = round(r._heading_face_width(text, 72) * 1000)
+        assert got >= want, (text, got, want)
+    for text in (wraps, fits, stage_fits):
+        assert round(r._heading_face_width(text, 72) * 1000) == em[text], text
+
+    pt = r.STYLE["heading_pt"]
+    line = r._line_h(pt, heading=True)
+    # The character estimate calls the wrapped heading one line, so the
+    # measure is what gives it two.
+    assert r._rows(wraps, r._per_line(r.W, pt, heading=True)) == 1
+    assert r.heading_rows(wraps, r.W, pt) == 2 and r.heading_rows(fits, r.W, pt) == 1
+
+    def text_slide(heading: str):
+        s = _rslide(heading, "text", where="h.deck:4",
+                    paragraphs=["A clean plan is evidence about the config, not about production."])
+        (sl,) = _rendered(tmp, BDeck("h", "T", RENDER_PAGE, "2026-11-20", "P.", [s], ""))
+        return _one(sl, "heading"), _one(sl, "body")
+
+    for heading, rows in ((wraps, 2), (fits, 1)):
+        box, body = text_slide(heading)
+        held = (box.height / 914400 - 0.1) / line
+        assert abs(held - rows) < 0.01, (heading, held)
+        assert body.top >= box.top + box.height, (heading, body.top, box.top + box.height)
+
+    # Beside a stage tile the heading stays one line, centred on the tile,
+    # although the wider of Space Grotesk and Arial glyph by glyph, the
+    # measure the other boxes use, calls it wider than its box.
+    s = _rslide(stage_fits, "stage", where="h.deck:4", stage="07", phase="Lateral Movement",
+                items={"technique": [["T1550.001", "Application Access Token"]],
+                       "fact": [["VMs", "Run Command called through an OAuth app"]]},
+                paragraphs=["Rotation is not enough on its own."])
+    (sl,) = _rendered(tmp, BDeck("h", "T", RENDER_PAGE, "2026-11-20", "P.", [s], ""))
+    tile = _one(sl, "stage-number")
+    box = _one(sl, "heading")
+    room = box.width / 914400
+    spt = r.LOOK["stage_heading_pt"]
+    assert r._glyph_width(stage_fits, spt, "heading_font", True) > room
+    assert r.heading_rows(stage_fits, room, spt) == 1
+    assert box.height == tile.height, (box.height, tile.height)
+
+    # The cover title is counted the same way. Five words of five wide
+    # letters are within the cover's character count but wider than its
+    # title box in the heading face ("m" 854 and a space 254 thousandths of
+    # an em, unkerned, as a browser canvas measures Space Grotesk Bold), so
+    # they get two lines and the promise starts below them; five words of
+    # narrow letters keep one.
+    tpt = r.STYLE["cover_title_pt"]
+    assert (25 * 854 + 4 * 254) / 1000 * tpt / 72 > r.COVER_W
+    for title, rows in ((" ".join(["mmmmm"] * 5), 2), (" ".join(["lllll"] * 5), 1)):
+        deck = BDeck("h", title, RENDER_PAGE, "2026-11-20", "P.", [s], "")
+        cover = _reopen(r.render_deck(deck, tmp / "c.pptx")).slides[0]
+        head, promise = _one(cover, "title"), _one(cover, "promise")
+        held = (head.height / 914400 - 0.1) / r._line_h(tpt, heading=True)
+        assert abs(held - rows) < 0.01, (title, held)
+        assert promise.top >= head.top + head.height, (title, promise.top)
+
+
 def _case_unbroken_words_refused(tmp: Path) -> None:
     """A word with no space in it that is wider than the text box it sits
     in is refused, naming the slide and the word: Google Slides breaks it
@@ -4124,6 +4467,7 @@ RENDER_CASES: list = [
     ("timeline_even", _case_timeline_even),
     ("timeline_labels_hold_text", _case_timeline_labels_hold_text),
     ("timeline_lines_measured", _case_timeline_lines_measured),
+    ("heading_lines_measured", _case_heading_lines_measured),
     ("unbroken_words_refused", _case_unbroken_words_refused),
     ("checklist_even", _case_checklist_even),
     ("type_labels_cannot_wrap", _case_type_labels_cannot_wrap),
@@ -4148,10 +4492,11 @@ def self_test_render() -> int:
     return _run_cases(RENDER_CASES, "self-test-render")
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+def arg_parser(kind: DeckKind = BREACH, description: str | None = None) -> argparse.ArgumentParser:
+    """The command line every deck kind shares; a kind's own tool may add to it."""
+    ap = argparse.ArgumentParser(description=description or __doc__.split("\n\n")[0])
     ap.add_argument("--self-test", action="store_true", help="run the built-in cases")
-    ap.add_argument("--check", action="store_true", help="check outlines and breach-page links")
+    ap.add_argument("--check", action="store_true", help=f"check outlines and {kind.name}-page links")
     ap.add_argument("--build", nargs="+", metavar="SLUG", help="render the named outlines to .pptx")
     ap.add_argument(
         "--self-test-render", action="store_true", help="run the renderer cases (needs python-pptx)"
@@ -4162,31 +4507,41 @@ def main() -> int:
         help="with --stale, leave out outlines that were never published",
     )
     ap.add_argument("--status", action="store_true", help="list outline and publish state")
-    ap.add_argument("--stamp", action="store_true", help="rewrite breach pages from the mapping")
+    ap.add_argument("--stamp", action="store_true", help=f"rewrite {kind.name} pages from the mapping")
     ap.add_argument(
         "--record", nargs=2, metavar=("SLUG", "PRES_ID"), help="record a published deck"
     )
-    args = ap.parse_args()
+    return ap
+
+
+def run_mode(ap: argparse.ArgumentParser, args: argparse.Namespace, kind: DeckKind,
+             self_test_fn: Callable[[], int], self_test_render_fn: Callable[[], int]) -> int:
+    """Run the one mode args names, for kind."""
     if args.published_only and not args.stale:
         ap.error("--published-only goes with --stale")
     if args.self_test:
-        return self_test()
+        return self_test_fn()
     if args.self_test_render:
-        return self_test_render()
+        return self_test_render_fn()
     if args.check:
-        return check_all()
+        return check_all(kind)
     if args.build:
-        return build_decks(args.build)
+        return build_decks(args.build, kind)
     if args.stale:
-        return stale_report(args.published_only)
+        return stale_report(args.published_only, kind)
     if args.status:
-        return status_report()
+        return status_report(kind)
     if args.stamp:
-        return stamp_all()
+        return stamp_all(kind)
     if args.record:
-        return record(*args.record)
+        return record(*args.record, kind=kind)
     ap.print_help()
     return 2
+
+
+def main() -> int:
+    ap = arg_parser()
+    return run_mode(ap, ap.parse_args(), BREACH, self_test, self_test_render)
 
 
 if __name__ == "__main__":
