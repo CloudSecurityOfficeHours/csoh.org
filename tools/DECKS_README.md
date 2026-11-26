@@ -332,15 +332,35 @@ Speaker notes run to the next "== " line. Every slide has them.
   of its skip zones, because each tool's `--check` requires a deck line to be
   exactly the text its `--stamp` writes.
 
-Publishing follows the how-to steps: build, upload privately, export and
-inspect the PDF, fact-review against the page, get the owner's approval, then
-on the owner's go share it publicly, run `--record SLUG PRES_ID`, run
-`--check` and commit. Uploading, sharing publicly and deleting superseded
+Publishing follows the how-to steps, with one difference in where the file
+sits (see [Public deck folders](#public-deck-folders)): build, upload
+privately to the staging folder, export and inspect the PDF, fact-review
+against the page, get the owner's approval, then on the owner's go share it
+publicly, move it into the "CSOH breach decks" folder, run
+`--record SLUG PRES_ID`, run `--check` and commit. Uploading, sharing publicly and deleting superseded
 copies each need the owner's explicit go. A changed deck is uploaded as a new
 file with a new ID, and the breach page's link is rewritten from the mapping.
 
 Breach decks are CC BY-NC 4.0 and the pages stay CC BY-NC-ND 4.0. The first
 and last slides carry "Cloud Security Office Hours, csoh.org" and the licence.
+
+## Public deck folders
+
+`breach-kill-chain-decks.html` and `topics.html` each open with a callout
+(`.deck-folder`) whose button links a Google Drive folder holding every deck
+of that kind: "CSOH breach decks" and "CSOH topic decks". Both folders are
+shared view-only with anyone who has the link, so anything placed in them is
+public at once and appears in the folder a reader is browsing. A deck that
+has not passed its render check and review must never be there.
+
+So new and replacement decks are uploaded to the private "CSOH deck staging
+(private)" folder. After the checks and the owner's go, share the deck with
+anyone who has the link, then move it into its public folder (the Drive
+connector's `update_file` with `parentId`; a file the connector uploaded can
+be moved). A superseded deck goes to the trash, not to the public folder.
+Each public folder should hold exactly the decks in its `published.json`.
+The "CSOH how-to decks" folder is not linked from any page and stays
+private, so how-to decks still upload straight into it.
 
 ## The deck list page
 
@@ -608,8 +628,8 @@ everything afresh.
   line, at exactly the how-to code sizes, with the expected tab or none, and
   that no other slide carries a code box.
 
-Publishing follows the breach steps, to the "CSOH topic decks" Drive folder:
-build, upload privately, check every picture in Google's render, fact-review
-the slides against the sections they cite, get the owner's approval, then on
-the owner's go share it publicly, run `--record SLUG PRES_ID`, run `--check`
-and commit. Topic decks are CC BY-NC 4.0 and the pages stay CC BY-NC-ND 4.0.
+Publishing follows the breach steps, ending in the "CSOH topic decks" Drive
+folder: build, upload privately to the staging folder, check every picture in
+Google's render, fact-review the slides against the sections they cite, get
+the owner's approval, then on the owner's go share it publicly, move it into
+"CSOH topic decks", run `--record SLUG PRES_ID`, run `--check` and commit. Topic decks are CC BY-NC 4.0 and the pages stay CC BY-NC-ND 4.0.
