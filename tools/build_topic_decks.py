@@ -1853,6 +1853,38 @@ def _case_record_writes_sections(tmp: Path) -> None:
     assert section_hashes(stamped) == want
 
 
+def _case_hub_wired_into_stamp_and_check(tmp: Path) -> None:
+    _topic_tree(tmp, {"kube": _clean_outline()}, {"kube.html": PAGE}, {})
+    hub, page, mpath = tmp / "topics.html", tmp / "kube.html", tmp / "tools/decks/topics/published.json"
+    plain_hub = hub.read_text(encoding="utf-8")
+    with _rooted(tmp):
+        rc, out = _capture(bbd.record, "kube", ID_A, TOPIC)
+        assert rc == 0, out
+        decked = hub.read_text(encoding="utf-8")
+        assert decked != plain_hub and decked == stamp_hub(plain_hub, {"kube": {"id": ID_A}}), decked
+        # A hub out of step with the mapping fails --check, naming the hub.
+        hub.write_text(_plant(decked, f"d/{ID_A}/embed", f"d/{ID_B}/embed"), encoding="utf-8")
+        rc, out = _capture(bbd.check_all, TOPIC)
+        assert rc == 1 and "topics.html" in out, out
+        # With the mapping moved to a new id, a malformed hub stops --stamp
+        # before it writes the hub or the page.
+        m = json.loads(mpath.read_text(encoding="utf-8"))
+        m["kube"]["id"] = ID_B
+        mpath.write_text(json.dumps(m, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        page_before = page.read_text(encoding="utf-8")
+        broken = _plant(decked, "<summary>Preview the slides</summary>", "<summary>Preview the slides</summary>\n")
+        hub.write_text(broken, encoding="utf-8")
+        rc, out = _capture(bbd.stamp_all, TOPIC)
+        assert rc != 0, out
+        assert page.read_text(encoding="utf-8") == page_before and hub.read_text(encoding="utf-8") == broken
+        # Control: with the hub mended, the same --stamp moves both to the new id.
+        hub.write_text(decked, encoding="utf-8")
+        rc, out = _capture(bbd.stamp_all, TOPIC)
+        assert rc == 0, out
+        assert ID_B in page.read_text(encoding="utf-8") and ID_A not in page.read_text(encoding="utf-8")
+        assert hub.read_text(encoding="utf-8") == stamp_hub(plain_hub, {"kube": {"id": ID_B}})
+
+
 def _case_check_empty_tree(tmp: Path) -> None:
     _topic_tree(tmp, {}, {"kube.html": PAGE}, {})
     with _rooted(tmp):
@@ -1956,6 +1988,7 @@ CASES: list = [
     ("hub_findings", _case_hub_findings),
     ("crosslink_skips_hub_deck_lines", _case_crosslink_skips_hub_deck_lines),
     ("record_writes_sections", _case_record_writes_sections),
+    ("hub_wired_into_stamp_and_check", _case_hub_wired_into_stamp_and_check),
     ("check_empty_tree", _case_check_empty_tree),
     ("real_pages", _case_real_pages),
     ("stale_sees_cover", _case_stale_sees_cover),
