@@ -926,6 +926,37 @@ def _case_code_too_tall(tmp: Path) -> None:
     assert verify_pptx(out, deck, page_html=btd.CODE_PAGE) == []
 
 
+def _case_heading_wrap_moves_content(tmp: Path) -> None:
+    """A heading Google Slides wraps gets two lines' height on a topic text
+    slide and a code slide, so the prose and the code box start below its
+    second line rather than under it. The heading wrapped in Slides at 36
+    pt across the 12.1 in box (build_breach_decks.py's
+    heading_lines_measured case holds the measurements)."""
+    wraps = "ignore_changes can quietly unmanage a resource"
+    line = r._line_h(STYLE["heading_pt"], heading=True)
+
+    def shapes(heading: str | None) -> list:
+        deck = _code_deck()
+        if heading:
+            deck.slides[0].heading = deck.slides[-2].heading = heading
+        out = _render(tmp, deck, _art(tmp), html=btd.CODE_PAGE)
+        assert verify_pptx(out, deck, page_html=btd.CODE_PAGE) == []
+        slides = list(r.reopen(out).slides)
+        return [(_one(sl, "heading"), _one(sl, "body"),
+                 [sh for sh in sl.shapes if sh.name in ("code", "code-label")])
+                for sl in (slides[2], slides[4])]
+
+    before, after = shapes(None), shapes(wraps)
+    for (h0, b0, c0), (h1, b1, c1) in zip(before, after):
+        assert abs((h0.height / 914400 - 0.1) / line - 1) < 0.01, h0.height
+        assert abs((h1.height / 914400 - 0.1) / line - 2) < 0.01, h1.height
+        assert b1.top >= h1.top + h1.height, (b1.top, h1.top + h1.height)
+        assert abs((b1.top - b0.top) / 914400 - line) < 0.001, (b0.top, b1.top)
+        for k0, k1 in zip(c0, c1):
+            assert abs((k1.top - k0.top) / 914400 - line) < 0.001, (k0.top, k1.top)
+    assert after[1][2], "the code slide drew no code box"
+
+
 RENDER_CASES: list = [
     ("figure_fits_and_keeps_ratio", _case_figure_fits_and_keeps_ratio),
     ("figure_resolution", _case_figure_resolution),
@@ -940,6 +971,7 @@ RENDER_CASES: list = [
     ("code_box_from_howto", _case_code_box_from_howto),
     ("code_verified", _case_code_verified),
     ("code_too_tall", _case_code_too_tall),
+    ("heading_wrap_moves_content", _case_heading_wrap_moves_content),
 ]
 
 

@@ -4274,6 +4274,81 @@ def _case_timeline_lines_measured(tmp: Path) -> None:
     whens(three, "June 2026", "May 27", "July 1", "August 2", "June 3")
 
 
+def _case_heading_lines_measured(tmp: Path) -> None:
+    """A heading's lines are counted from its width in Space Grotesk Bold,
+    kerned, the way Google Slides sets it, and its box holds them: a
+    heading the character estimate calls one line but Slides wraps gets
+    two, and the text under it starts below the second."""
+    import breach_deck_render as r
+
+    # Whole headings in thousandths of an em, as a browser canvas measures
+    # them in Space Grotesk Bold (fonts/space-grotesk-700.woff2) with
+    # kerning. Google Slides wrapped the first at 36 pt across the 12.1 in
+    # heading box, kept the second on one line there, and kept the third on
+    # one line at 32 pt beside a stage tile. The last is this wide in a
+    # browser's default shaping, whose forms around "tt" its pairs miss.
+    wraps = "ignore_changes can quietly unmanage a resource"
+    fits = "Envelope encryption: how every cloud KMS works"
+    stage_fits = "Azure DevOps, replayed tokens and Run Command"
+    em = {wraps: 24200, fits: 23937, stage_fits: 24173, "Patterns for getting secrets in": 14516}
+    for text, want in em.items():
+        got = round(r._heading_face_width(text, 72) * 1000)
+        assert got >= want, (text, got, want)
+    for text in (wraps, fits, stage_fits):
+        assert round(r._heading_face_width(text, 72) * 1000) == em[text], text
+
+    pt = r.STYLE["heading_pt"]
+    line = r._line_h(pt, heading=True)
+    # The character estimate calls the wrapped heading one line, so the
+    # measure is what gives it two.
+    assert r._rows(wraps, r._per_line(r.W, pt, heading=True)) == 1
+    assert r.heading_rows(wraps, r.W, pt) == 2 and r.heading_rows(fits, r.W, pt) == 1
+
+    def text_slide(heading: str):
+        s = _rslide(heading, "text", where="h.deck:4",
+                    paragraphs=["A clean plan is evidence about the config, not about production."])
+        (sl,) = _rendered(tmp, BDeck("h", "T", RENDER_PAGE, "2026-11-20", "P.", [s], ""))
+        return _one(sl, "heading"), _one(sl, "body")
+
+    for heading, rows in ((wraps, 2), (fits, 1)):
+        box, body = text_slide(heading)
+        held = (box.height / 914400 - 0.1) / line
+        assert abs(held - rows) < 0.01, (heading, held)
+        assert body.top >= box.top + box.height, (heading, body.top, box.top + box.height)
+
+    # Beside a stage tile the heading stays one line, centred on the tile,
+    # although the wider of Space Grotesk and Arial glyph by glyph, the
+    # measure the other boxes use, calls it wider than its box.
+    s = _rslide(stage_fits, "stage", where="h.deck:4", stage="07", phase="Lateral Movement",
+                items={"technique": [["T1550.001", "Application Access Token"]],
+                       "fact": [["VMs", "Run Command called through an OAuth app"]]},
+                paragraphs=["Rotation is not enough on its own."])
+    (sl,) = _rendered(tmp, BDeck("h", "T", RENDER_PAGE, "2026-11-20", "P.", [s], ""))
+    tile = _one(sl, "stage-number")
+    box = _one(sl, "heading")
+    room = box.width / 914400
+    spt = r.LOOK["stage_heading_pt"]
+    assert r._glyph_width(stage_fits, spt, "heading_font", True) > room
+    assert r.heading_rows(stage_fits, room, spt) == 1
+    assert box.height == tile.height, (box.height, tile.height)
+
+    # The cover title is counted the same way. Five words of five wide
+    # letters are within the cover's character count but wider than its
+    # title box in the heading face ("m" 854 and a space 254 thousandths of
+    # an em, unkerned, as a browser canvas measures Space Grotesk Bold), so
+    # they get two lines and the promise starts below them; five words of
+    # narrow letters keep one.
+    tpt = r.STYLE["cover_title_pt"]
+    assert (25 * 854 + 4 * 254) / 1000 * tpt / 72 > r.COVER_W
+    for title, rows in ((" ".join(["mmmmm"] * 5), 2), (" ".join(["lllll"] * 5), 1)):
+        deck = BDeck("h", title, RENDER_PAGE, "2026-11-20", "P.", [s], "")
+        cover = _reopen(r.render_deck(deck, tmp / "c.pptx")).slides[0]
+        head, promise = _one(cover, "title"), _one(cover, "promise")
+        held = (head.height / 914400 - 0.1) / r._line_h(tpt, heading=True)
+        assert abs(held - rows) < 0.01, (title, held)
+        assert promise.top >= head.top + head.height, (title, promise.top)
+
+
 def _case_unbroken_words_refused(tmp: Path) -> None:
     """A word with no space in it that is wider than the text box it sits
     in is refused, naming the slide and the word: Google Slides breaks it
@@ -4392,6 +4467,7 @@ RENDER_CASES: list = [
     ("timeline_even", _case_timeline_even),
     ("timeline_labels_hold_text", _case_timeline_labels_hold_text),
     ("timeline_lines_measured", _case_timeline_lines_measured),
+    ("heading_lines_measured", _case_heading_lines_measured),
     ("unbroken_words_refused", _case_unbroken_words_refused),
     ("checklist_even", _case_checklist_even),
     ("type_labels_cannot_wrap", _case_type_labels_cannot_wrap),

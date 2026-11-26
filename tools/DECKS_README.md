@@ -74,7 +74,12 @@ credit: <source and licence>
 The limits keep slides readable but do not guarantee that a slide fits.
 `--build` is the layout check. It refuses an outline with any style or guide
 finding. The renderer estimates every element's height and refuses a slide
-whose content would end below the bottom limit, then reopens the saved file
+whose content would end below the bottom limit. A heading or cover title
+gets the lines Google Slides wraps it to, measured in Space Grotesk Bold with
+its kerning (`heading_rows` in `tools/breach_deck_render.py`), when that is
+more than the character count gives, so a heading within 46 characters that
+Slides still wraps pushes the slide down a line rather than printing its
+second line over the text below. The renderer then reopens the saved file
 and verifies the slide count and size, font sizes, footers and speaker notes,
 that no shape ends below the limit, and that no slide holds an en or em dash.
 A deck that fails either step has no .pptx left in `tools/decks/build/`.
@@ -309,7 +314,14 @@ Speaker notes run to the next "== " line. Every slide has them.
   A table column is first widened to hold its widest word. And it names a
   timeline label that wraps past three lines (the when) or eight (the
   what); timeline lines are counted from measured glyph widths, so a label
-  that wraps in Google Slides has its lines reserved.
+  that wraps in Google Slides has its lines reserved. Slide headings and the
+  cover title are counted the same way, in Space Grotesk Bold alone with its
+  kerning, the way Google Slides sets them, and get the more of that and the
+  character count's lines; Slides wraps a heading line that reaches its
+  box's width, and the count holds a line fitting only when it leaves 0.4 pt
+  free (`HEADING_WRAP_SLACK_PT`). A heading that takes two lines moves the
+  slide down, so the `LayoutError` for a full slide can come from the
+  heading; shorten it.
 - `--stamp` removes every deck line and writes one after the last `pm-link`
   line of each mapped page, planning every page before writing any.
   `--record` refuses an outline with any finding `--check` reports, and

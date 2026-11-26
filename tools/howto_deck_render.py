@@ -62,7 +62,8 @@ STYLE = {
     "body_chars_per_line": 72,
     # Space Grotesk at 36 pt fits about 46 characters across the content
     # width; estimating more lets a heading that wraps overprint the line
-    # below it.
+    # below it. The renderers also measure each heading in its face and
+    # reserve the lines it wraps to when those are more (_heading_rows).
     "heading_chars_per_line": 46,
     "cover_title_chars_per_line": 30,
     "cover_promise_chars_per_line": 64,
@@ -125,8 +126,17 @@ def _code_height(lines: list[str]) -> float:
     return code_visual_rows(lines) * STYLE["code_pt"] * STYLE["line_code"] / 72 + 2 * STYLE["code_pad"]
 
 
+def _heading_rows(text: str, chars_per_line: int, width: float, pt: float) -> int:
+    """Lines a heading takes: the lines Google Slides wraps it to, measured
+    in its face (breach_deck_render.heading_rows), or the character
+    estimate when that is more, as breach_deck_render._heading counts them."""
+    from breach_deck_render import heading_rows
+
+    return max(_lines(text, chars_per_line), heading_rows(text, width, pt))
+
+
 def _heading_height(text: str) -> float:
-    n = _lines(text, STYLE["heading_chars_per_line"])
+    n = _heading_rows(text, STYLE["heading_chars_per_line"], STYLE["w"], STYLE["heading_pt"])
     return n * STYLE["heading_pt"] * STYLE["line_heading"] / 72 + 0.1
 
 
@@ -275,7 +285,8 @@ def _cover(prs, deck, total: int) -> None:
     pg = _Page(prs, f"{deck.slug}.deck (cover)", dark=True)
     x, w = 0.9, 11.5
     y = 1.4
-    title_h = _lines(deck.title, STYLE["cover_title_chars_per_line"]) * STYLE["cover_title_pt"] * STYLE["line_heading"] / 72 + 0.1
+    title_rows = _heading_rows(deck.title, STYLE["cover_title_chars_per_line"], w, STYLE["cover_title_pt"])
+    title_h = title_rows * STYLE["cover_title_pt"] * STYLE["line_heading"] / 72 + 0.1
     pg.text("title", x, y, w, title_h, [deck.title], STYLE["heading_font"], STYLE["cover_title_pt"], STYLE["white"], bold=True)
     y += title_h + 0.3
     promise_h = _lines(deck.promise, STYLE["cover_promise_chars_per_line"]) * STYLE["cover_promise_pt"] * STYLE["line_body"] / 72 + 0.1
