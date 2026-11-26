@@ -1,7 +1,7 @@
 title: Data Security, KMS & Secrets
 page: data-security.html
 as-of: 2026-11-25
-promise: In cloud data security, cryptography is solved and key management is where every breach involving "encrypted" data fails.
+promise: In cloud data security, cryptography is solved and key management is where every cloud breach involving "encrypted" data fails.
 
 == The 30-second version
 layout: text
@@ -21,7 +21,7 @@ row: Tier | Examples | Handling
 row: Public | Marketing pages, open-source code, published research | Integrity, not confidentiality
 row: Internal | Internal documents, employee directories | Default encryption, SSO access, standard logging
 row: Confidential | Customer data, source code, financial records, employee PII | Customer-managed keys, logged access, egress monitoring, DLP
-row: Restricted | Cardholder data, PHI, authentication secrets, signing keys | Tokenized or vaulted, HSM-backed keys, field-level encryption
+row: Restricted | Cardholder data, PHI, authentication secrets, signing keys | Tokenized or vaulted where possible, HSM-backed keys, field-level encryption
 Classify by data owner and storage location, not by record. Tag the resource, carry the tag through IaC, and let policy key off it.
 notes:
 Every other control on the page is downstream of one question: what is this data, and how bad is it if the wrong person sees it? An org that has never classified its data ends up either over-protecting everything, which is expensive, slow and so painful that engineers route around the controls, or under-protecting everything, which is cheap right up until the incident. The page calls classification the cheapest upstream investment in a data-security program.
@@ -52,7 +52,7 @@ The landscape has standalone tools such as Cyera, Sentra, Symmetry and Varonis, 
 layout: figure
 section: at-rest
 figure: key-custody
-Every major cloud encrypts managed storage by default. That protects against disk theft, not against an IAM principal who can read the bucket.
+All three major clouds encrypt managed storage by default. That protects against disk theft, not against an IAM principal who can read the bucket.
 notes:
 All three major clouds encrypt managed storage at rest by default, with provider-owned keys, using AES-256: S3, DynamoDB, Azure Blob, Azure Disks, Azure SQL, GCS, Persistent Disks, BigQuery and Spanner. The page calls this necessary and insufficient. "Encrypted at rest" in the marketing sense is not what an auditor or regulator means by the same phrase.
 
@@ -96,7 +96,7 @@ Server-only TLS verifies the server to the client. Mutual TLS verifies both side
 
 For certificates, ACM, Azure Key Vault Certificates and Google Cloud Certificate Manager cover managed endpoints, cert-manager handles the lifecycle in Kubernetes, and the page calls Let's Encrypt the right answer for most public-facing services that don't need EV or OV validation.
 
-Then the boring parts. Redirect at the edge. Database engines support TLS, but it is not always on by default. Check the assumption for any replication path that crosses a region or VPC boundary. And monitor expiry: the residual risk is internal services using uploaded certificates nobody renewed.
+Then the boring parts. Redirect at the edge. RDS, Aurora, Cloud SQL and Azure SQL all support TLS, but it is not always on by default, so enforce it at the parameter-group level. Check the assumption for any replication path that crosses a region or VPC boundary. And monitor expiry: the residual risk is internal services using uploaded certificates nobody renewed.
 
 == CA trust: as safe as the weakest CA
 layout: table
@@ -110,7 +110,7 @@ Any trusted CA allowed to issue TLS certificates can issue one for any domain, u
 notes:
 A TLS client accepts a certificate when it chains, through intermediates, to a root in the client's trust store. Any CA chaining to one of those roots, and allowed to issue TLS certificates, can issue one the client accepts for any domain.
 
-A certificate for your domain issued to someone else lets them run a man-in-the-middle attack. They can get one by stealing or recovering a CA's private key, or by fooling the CA's domain validation: an attacker who hijacks the BGP route to the domain's addresses can answer the CA's challenge in its place. Princeton researchers demonstrated this against major CAs in 2018. The Baseline Requirements now require multi-perspective issuance corroboration, which the requirements say can improve protection against equally-specific prefix BGP hijacks. Two controls sit with the domain owner. A CAA record names the CAs allowed to issue for your domain, though it does nothing against someone who already holds a CA's key. Certificate Transparency logs let you watch for certificates for your domains that you did not expect.
+A certificate for your domain issued to someone else lets them run a man-in-the-middle attack. They can get one by stealing or recovering a CA's private key, or by fooling the CA's domain validation: an attacker who hijacks the BGP route to the domain's addresses can answer the CA's challenge in its place. Princeton researchers demonstrated this against major CAs in 2018. The Baseline Requirements now require multi-perspective issuance corroboration for most validation methods, which the requirements say can improve protection against equally-specific prefix BGP hijacks. Two controls sit with the domain owner. A CAA record names the CAs allowed to issue for your domain, though it does nothing against someone who already holds a CA's key. Certificate Transparency logs let you watch for certificates for your domains that you did not expect.
 
 Revocation through CRLs or OCSP often does not reach the client. Chrome does not generally make online OCSP or CRL checks, and Let's Encrypt turned off its OCSP service on August 6, 2025, citing privacy.
 
@@ -207,7 +207,7 @@ Use the cloud KMS for almost everything. Step up to a dedicated HSM when a regul
 notes:
 An HSM is a dedicated cryptographic appliance that stores keys and performs operations without exposing key material to general-purpose compute. AWS KMS backs every key with multi-tenant HSMs, and Azure Key Vault and Cloud KMS do the same for their HSM-protected key types. Dedicated HSM services give you a single-tenant boundary.
 
-The offerings: AWS CloudHSM, single-tenant FIPS 140-2 Level 3. Azure Key Vault Managed HSM, single-tenant FIPS 140-3 Level 3, which the page calls the 2026 default for regulated Azure workloads needing a dedicated HSM. Google Cloud HSM, FIPS 140-2 Level 3, where you choose the HSM protection level on the key, and Single-tenant Cloud HSM is the dedicated option. Azure Dedicated HSM, full Thales Luna HSMs in a VNet, less common now that Managed HSM exists.
+AWS CloudHSM provides single-tenant FIPS 140-2 Level 3 HSMs. Azure Key Vault Managed HSM provides single-tenant FIPS 140-3 Level 3 HSMs, and the page calls it the 2026 default for regulated Azure workloads needing a dedicated HSM. Google Cloud HSM is FIPS 140-2 Level 3 and built into Cloud KMS: you choose the HSM protection level when you create the key, that level is multi-tenant, and Single-tenant Cloud HSM is the dedicated option. Azure Dedicated HSM puts full Thales Luna HSMs in a VNet, and it is less common now that Managed HSM exists.
 
 FIPS 140 level numbers don't compose simply; they describe distinct properties. A software cryptographic library can be Level 1. Level 3 means the device actively responds to tampering by zeroizing keys or locking down. Level 4 adds protection against voltage and temperature outside the normal range. FIPS 140-3 supersedes 140-2, and new validations are 140-3. Most cloud HSM services validate at Level 3, which is what regulated industries typically require.
 
@@ -252,7 +252,7 @@ The page names four surfaces where secrets are consumed. On workstations, cloud 
 layout: table
 section: rotation
 row: Key type | What rotation does | Cadence
-row: KEK | Creates a new key version; data is not re-encrypted | Annual; automatic for symmetric CMKs on all three clouds
+row: KEK | Creates a new key version; data is not re-encrypted | Annual; automatic rotation offered for symmetric CMKs on all three clouds
 row: DEK | A new DEK for the next write | Per object or per session
 row: Secret | The credential value changes; every consumer needs it | Restricted 30-90 days; confidential 90; internal when needed
 Eliminating long-lived static credentials returns the most for the effort: a credential that lives for 15 minutes doesn't need a rotation policy.
@@ -278,7 +278,7 @@ RSA and elliptic-curve cryptography, which underpin almost every TLS handshake, 
 
 The standards are FIPS 203, ML-KEM, for key establishment, and FIPS 204, ML-DSA, and FIPS 205, SLH-DSA, for signatures. They take over the roles RSA and ECC fill today, though not as drop-in replacements: NIST expects some protocols to need significant changes. Symmetric crypto such as AES-256 is already considered quantum-resistant, so the migration is about public-key crypto, not your KMS envelope encryption's AES core.
 
-AWS, Google and Cloudflare have already shipped the key-exchange half in hybrid mode, a classical curve plus ML-KEM, so you are never worse off than today. The page says turning it on is often a client or config flag with no downside. Signatures are the slower, harder half, because long-lived signed artifacts have to stay verifiable for years. NSA's CNSA 2.0 timeline pushes software and firmware signing first and general adoption by the early 2030s; NIST plans to deprecate RSA-2048 and ECC-256 around 2030 and disallow them by 2035.
+AWS, Google and Cloudflare have already shipped the key-exchange half in hybrid mode, a classical curve plus ML-KEM, so you are never worse off than today. The page says that on AWS, GCP or Cloudflare-fronted TLS, turning it on is often a client or config flag with no downside. Signatures are the slower, harder half, because long-lived signed artifacts have to stay verifiable for years. NSA's CNSA 2.0 timeline pushes software and firmware signing first and general adoption by the early 2030s; NIST plans to deprecate RSA-2048 and ECC-256 around 2030 and disallow them by 2035.
 
 Migrating cryptography has historically taken large organizations a decade. The aim is that when your dependencies ship PQC support, flipping to it is a config change, not a re-platforming.
 
@@ -327,7 +327,7 @@ Intel SGX gives application-level enclaves with a small TCB and strong isolation
 
 AWS Nitro Enclaves are a different model: isolated CPU and memory carved out of a parent EC2 instance, with no networking and no persistent storage, and attestation through the Nitro hypervisor. They are popular for signing services, decryption gated by KMS key policies that check the enclave's attestation, private LLM inference and multi-party computation. Azure offers Confidential VMs and Confidential Containers; Google offers Confidential VMs and Confidential GKE Nodes, which the page calls the easiest entry path on GCP.
 
-The named use cases: sovereign and similar workloads where the provider must not be able to read data even in theory; two distrustful parties computing on combined data; signing services or LLM inference on proprietary models; and proof that code runs on given hardware in a given configuration. The page calls it overkill for most workloads. Its costs are instance-type restrictions, slightly higher pricing and attestation overhead. Without a named requirement, default to good IAM, good KMS and good network controls.
+The named use cases: a regulatory or contractual requirement that the provider not be able to read data even in theory, as in sovereign workloads and certain financial-services and healthcare deployments; two distrustful parties computing on combined data; signing services or LLM inference on proprietary models; and proof that code runs on given hardware in a given configuration. The page calls it overkill for most workloads. Its costs are instance-type restrictions, slightly higher pricing and attestation overhead. Without a named requirement, default to good IAM, good KMS and good network controls.
 
 == What "encrypt the database" means
 layout: table
@@ -384,7 +384,7 @@ These are the pitfalls the page lists. Secrets in environment variables committe
 
 An AWS KMS key with only the default key policy grants the whole account root and admin IAM access, so a compromised developer with admin IAM means compromised keys. Tighten key policies to specific principals. S3 encryption does not stop a public-read bucket policy from serving plaintext to the internet: "encrypted" and "private" are independent properties, and both must be enforced. Automatic KEK rotation doesn't rotate database passwords, API keys, certificates or service account keys, so inventory every secret category and define a cadence for each.
 
-A single account-level CMK for every workload is one access-policy mistake away from a blast-radius incident, and per-workload CMKs cost cents per month. A production database on your CMK with a cross-region snapshot on the default key can't be revoked, so check every replica, snapshot and backup. A 4-year-old service account JSON file in CI is a finding waiting to happen; eliminate it with Workload Identity Federation, OIDC or IRSA.
+A single account-level CMK for every workload is one access-policy mistake away from a blast-radius incident, and per-workload CMKs cost cents per month. When the production database uses your CMK and its cross-region snapshot uses the default key, the audit log says "encrypted" but you can't revoke the snapshot, so check every replica, snapshot and backup. A 4-year-old service account JSON file in CI is a finding waiting to happen; eliminate it with Workload Identity Federation, OIDC or IRSA.
 
 TDE protects against disk theft, not credential compromise: if the auditor asks whether a rogue DBA can read the data, the answer is column-level encryption or tokenization. Treating kind: Secret as encrypted is one of the closing questions. Expired internal certificates cause outages and self-signed ones prevent meaningful trust verification, so run a proper internal CA, with cert-manager or an equivalent handling the lifecycle.
 
@@ -416,10 +416,10 @@ The last question is also from the page's FAQ. Ask it before showing the answer.
 == Usually the cloud KMS is enough
 layout: answer
 section: faq
-For the vast majority of workloads, the default KMS is enough. Step up to a dedicated HSM for single-tenant key isolation, or for legacy PKCS#11, JCE or KSP/CNG access. Pay for one only when the requirement is named.
+For the vast majority of workloads, the cloud KMS is enough. FIPS 140-3 Level 3 alone does not call for a dedicated HSM on AWS or Azure. Step up for single-tenant key isolation or legacy PKCS#11, JCE or KSP/CNG access.
 notes:
 For the vast majority of workloads, the cloud's default KMS is enough. AWS KMS protects every key with FIPS 140-3 Level 3 validated HSMs. Keys in Azure Key Vault Standard, and Cloud KMS keys at the SOFTWARE protection level, the default when you create a key yourself, are software-protected and validated to FIPS 140 Level 1. For HSM-protected keys without a dedicated HSM, create HSM key types in Key Vault Premium, or choose the Cloud KMS HSM protection level.
 
 Step up to CloudHSM, Azure Key Vault Managed HSM or Google Single-tenant Cloud HSM when you need single-tenant key isolation. A legacy application that needs PKCS#11, JCE or KSP/CNG access points to AWS CloudHSM or Azure Cloud HSM, which expose those interfaces; Managed HSM uses the same API as Key Vault.
 
-A FIPS 140-3 Level 3 requirement alone does not call for a dedicated HSM on AWS or Azure: outside the China Regions, AWS KMS already uses HSMs validated at that level, and so does Key Vault Premium's current HSM platform. Dedicated HSMs cost meaningfully more and have lower availability guarantees than shared KMS.
+A FIPS 140-3 Level 3 requirement alone does not call for a dedicated HSM on AWS or Azure: outside the China Regions, AWS KMS already uses HSMs validated at that level, and so does Key Vault Premium's current HSM platform. Dedicated HSMs cost meaningfully more and have lower availability guarantees than shared KMS, so pay for one only when the requirement is named.
