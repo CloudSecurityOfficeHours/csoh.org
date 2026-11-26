@@ -48,13 +48,13 @@ What the page explicitly does not defend against, because none of it applies to 
 layout: figure
 section: architecture
 figure: arch-title
-Every origin setting, Cloudflare rule and IAM permission is code in infra/terraform/, one directory per cloud. The consoles are read-only for normal operation.
+caption: Left: what a request reaches (three production origins behind the load balancer, and the staging copy that shares the same edge but sits deliberately outside the pool). Right: the release path, read top to bottom.
 notes:
 On the left is the production request path. A reader's browser reaches Cloudflare's edge, which load-balances across three cloud origins: AWS S3 plus CloudFront, GCP Cloud Run, and Azure Blob static website. Below them is the staging copy at qa.csoh.org, a fourth origin behind a Cloudflare Access login. It shares the same edge but sits deliberately outside the load balancer pool.
 
 On the right is the release path, read top to bottom. A push to the qa branch builds and scans a container image and deploys it to the QA service. A gated manual promotion fast-forwards main. That triggers a single production build, which fans out to three keyless OIDC publish jobs, with the GCP job reusing the image staging already ran rather than rebuilding it. Nothing reaches production that staging didn't run first. An observability layer spans the bottom.
 
-Nobody clicks around in a cloud console to make changes. This is infrastructure as code, and the page calls it how you keep a real multi-cloud setup from drifting into three different snowflakes nobody can rebuild.
+Every origin setting, Cloudflare rule and IAM permission is code in infra/terraform/, one directory per cloud, and the consoles are read-only for normal operation. Nobody clicks around in a cloud console to make changes. This is infrastructure as code, and the page calls it how you keep a real multi-cloud setup from drifting into three different snowflakes nobody can rebuild.
 
 == Layer 1: Cloudflare is the one edge
 layout: compare
