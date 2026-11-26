@@ -6,7 +6,7 @@ promise: Containers share one host kernel, so the boundary is real but thin, and
 == The 30-second version
 layout: text
 section: top
-Containers share one host kernel, so the boundary is real but thin. In the cloud, a compromised container that can reach IMDS gets the whole VM's cloud permissions. That is identity chaining, the dominant cloud-container risk.
+Containers share one host kernel, so the boundary is real but thin. In the cloud, a compromised container that can reach the instance metadata service (IMDS) gets the whole VM's cloud permissions: identity chaining, the dominant cloud-container risk.
 notes:
 This is the page's 30-second version. A container is a Linux process, or set of processes, isolated by namespaces and cgroups and packaged with its dependencies into an immutable image. Multiple containers share one host kernel, so the boundary is real but thin.
 
@@ -31,7 +31,7 @@ That is the entire abstraction. Containers are not VMs. They start in millisecon
 == Why containers fill the cloud
 layout: text
 section: why-cloud
-The security cost is a shared kernel and network on the host.
+The security cost of this efficiency: a shared kernel and network on the host.
 - Containers start in 50ms; VMs take 30-90 seconds
 - Hundreds of containers per VM
 - The same image hash in staging and prod
@@ -61,7 +61,7 @@ layout: table
 section: boundary
 row: Platform | Where the boundary sits
 row: AWS Fargate | Each task in its own isolated virtual environment
-row: Cloud Run | Each instance in a VMM-enforced sandbox, plus a software kernel layer
+row: Cloud Run | Each instance sandboxed by a virtual machine monitor, plus a software kernel layer
 row: Azure Container Apps | The environment: apps sharing one get no hardware or network isolation
 row: Self-hosted EKS, AKS, GKE or VMs | Where you put it: sandbox runtimes or separate node pools
 Check where the boundary sits before two tenants share one.
@@ -79,10 +79,10 @@ layout: table
 section: risks
 row: Category | What it means
 row: Container escape | A container affects the host or other containers
-row: Identity chaining | A container steals the VM's IAM credentials from IMDS
+row: Identity chaining | A compromised container steals the VM's IAM credentials from IMDS
 row: Lateral network movement | Flat networking lets one container scan the rest
 row: Supply chain | Compromise the image and you compromise every deploy
-row: Secrets exposure | Secrets in images, env vars or the API server
+row: Secrets exposure | In images or env vars, or readable via the API server
 row: Runtime visibility gap | Without instrumentation, you only know it is running
 The names differ across vendors; the threats don't.
 notes:
@@ -115,7 +115,7 @@ layout: table
 section: escapes
 row: Compute | Who keeps kernels and runtimes patched
 row: Fargate, EKS Auto Mode | The cloud
-row: EKS managed node groups, GKE Standard | The provider publishes images; you roll them out or keep auto-upgrade on
+row: EKS managed node groups, GKE Standard | The provider publishes patched images; you roll them out or keep auto-upgrade on
 row: Self-managed nodes | You
 Runtime bugs are not kernel bugs, so patching the kernel does not close flaws like Leaky Vessels in runc and BuildKit.
 notes:
@@ -131,13 +131,13 @@ section: escapes
 check: Run as non-root: USER 1000, runAsNonRoot: true
 check: Read-only root filesystem, writable paths mounted explicitly
 check: Drop all capabilities; add back the minimum
-check: RuntimeDefault seccomp, or a tighter custom profile
+check: RuntimeDefault seccomp; a tighter custom profile for sensitive workloads
 check: AppArmor or SELinux on top of capabilities
 check: gVisor or Kata for untrusted code
 notes:
 These are the page's defenses, in layers. Run as non-root, with USER 1000 in the Dockerfile and runAsNonRoot: true in the pod spec, because root inside a container is one CVE away from root on the host. Set readOnlyRootFilesystem: true and mount writable paths explicitly with tmpfs or volumes. Drop all capabilities in the security context and add back the minimum.
 
-The RuntimeDefault seccomp profile blocks about 50 risky syscalls, such as ptrace, keyctl and raw socket creation; use a tighter custom profile for sensitive workloads. AppArmor or SELinux layers mandatory access control on top of capabilities, and both managed and self-managed clusters can run with profiles enabled.
+The RuntimeDefault seccomp profile blocks about 50 risky syscalls, such as ptrace, keyctl and raw socket creation; use a tighter custom profile for sensitive workloads. AppArmor or SELinux layers mandatory access control on top of capabilities. Distros vary, but both managed and self-managed clusters can run with profiles enabled.
 
 For untrusted code, use a sandboxed runtime: gVisor intercepts syscalls in user space, and Kata gives each container a micro-VM. The page calls the performance cost slight and the escape-prevention benefit significant.
 
@@ -255,7 +255,7 @@ row: Echo | Continuously rebuilt replacements for common images
 row: Wiz secured images | Hardened images bundled with Wiz's CNAPP
 row: RapidFort | Strips what the workload never touches
 row: Docker Hardened Images | Minimal, signed, rebuilt, sold through Docker Hub
-Calibrate against your own evaluation (disclosure: the site's author works at Wiz).
+Calibrate these descriptions against your own evaluation (disclosure: the site's author works at Wiz).
 notes:
 The minimal-image category has grown into a small market of its own. Each vendor takes a slightly different cut at the same problem: ship the smallest, most current, most trustworthy base image possible, so the application is the only thing left to harden.
 
@@ -309,7 +309,7 @@ row: Building block | AWS | Azure | GCP
 row: Serverless containers | Fargate, App Runner | Container Apps | Cloud Run
 row: Per-workload identity | IRSA, EKS Pod Identity | AKS workload identity | GKE workload identity
 row: Signing enforcement | AWS Signer + Kyverno | Image integrity policies | Binary Authorization
-row: Runtime detection | GuardDuty | Defender for Containers | SCC Container Threat Detection
+row: Runtime detection | GuardDuty | Defender for Containers | Security Command Center Container Threat Detection
 Where a workload needs no cluster primitives, serverless is dramatically simpler to secure.
 notes:
 Every cloud ships an orchestrator, which is managed Kubernetes (EKS, AKS and GKE), a serverless container runtime and a registry, and the capabilities map closely. This is an excerpt of the page's table, which also covers simple container services, registries, image scanning and sandboxed runtimes, and lists Container Instances beside Container Apps on Azure. Per-workload identity also includes ECS task roles on AWS and Cloud Run service accounts on GCP.
@@ -323,7 +323,7 @@ layout: table
 section: hardening
 row: Area | Non-negotiables
 row: Image | Minimal base, pinned digest, no secrets, scanned, signed and verified at deploy
-row: Runtime config | Non-root, read-only root, all capabilities dropped, RuntimeDefault seccomp, no --privileged
+row: Runtime config | Non-root, read-only root, all capabilities dropped, RuntimeDefault seccomp, no --privileged, hostPath or hostNetwork
 row: Identity | Per-workload identity, IMDS unreachable, no long-lived cloud credentials
 row: Network | Default-deny, egress allow-list, mTLS, no direct public IPs
 Layer admission control, runtime detection, central logs and an SBOM database on top.
