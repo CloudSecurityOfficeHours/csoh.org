@@ -47,7 +47,8 @@ Outline format (what differs from a breach outline):
   figure once.
 - A figure slide's optional caption: line prints instead of the whole
   caption. It holds whole sentences of that caption, each word for word
-  and in the page's order; findings about it name its line.
+  and in the page's order, or "none" to print no caption when every
+  sentence points at the page; findings about it name its line.
 - A code slide holds one fenced code block, as a how-to outline writes it:
   whole, consecutive lines of one <pre> in a section the slide cites, at
   most 12 rows once long lines wrap. The builder draws it in the how-to
@@ -914,11 +915,19 @@ def caption_sentences(text: str) -> list[str]:
     return [x for x in SENTENCE_END_RE.split(_norm(text)) if x]
 
 
+# A caption: line holding only this prints no caption under the picture,
+# for a caption whose every sentence points at the page.
+NO_CAPTION = "none"
+
+
 def slide_caption(fig: Figure, s: bbd.BSlide) -> str:
     """What a figure slide prints under its picture: the sentences its
-    caption: line selects, whitespace collapsed, else the page's whole
-    <figcaption>."""
-    return _norm(s.caption) if s.caption else fig.caption
+    caption: line selects, whitespace collapsed, nothing for
+    caption: none, else the page's whole <figcaption>."""
+    if s.caption is None:
+        return fig.caption
+    sel = _norm(s.caption)
+    return "" if sel == NO_CAPTION else sel
 
 
 def _caption_findings(s: bbd.BSlide, fig: Figure, page: TopicPage) -> list[str]:
@@ -926,6 +935,8 @@ def _caption_findings(s: bbd.BSlide, fig: Figure, page: TopicPage) -> list[str]:
     each word for word and in the page's order, so the slide prints only
     what the page says. The finding names the caption: line."""
     where = s.caption_where
+    if _norm(s.caption or "") == NO_CAPTION:
+        return []
     if not fig.caption:
         return [f"{where}: figure {fig.id} has no caption on {page.path}, so caption: has nothing to select"]
     have = caption_sentences(fig.caption)
@@ -1657,6 +1668,13 @@ def _case_figure_caption_selected(tmp: Path) -> None:
     plain = _tparse(_tslide(*FIG_LINES, "Five checks."))
     assert plain.slides[0].caption is None
     assert slide_caption(fig, plain.slides[0]) == fig.caption and fig.caption.endswith("is numbered!")
+    # caption: none prints no caption, and is no finding even where the
+    # page has none to select from. Control: "None." is a sentence to find.
+    none = _tparse(_tslide(*FIG_LINES, "caption: none", "Five checks."))
+    assert slide_caption(fig, none.slides[0]) == "", slide_caption(fig, none.slides[0])
+    assert _caption_check("caption: none") == []
+    assert _caption_check("caption: none", html=nocap) == []
+    _only(_caption_check("caption: None."), "not a whole sentence")
     # The Wiz gate reads the caption the slide prints, not the page's.
     wiz_page = _plant(CAPTION_PAGE, "Each check is numbered!", "Each check is numbered, says Wiz.")
 
@@ -1666,6 +1684,7 @@ def _case_figure_caption_selected(tmp: Path) -> None:
 
     _only(wiz("Each check is numbered, says Wiz."), "first slide to show Wiz")
     assert wiz("The cluster runs more than your code.") == []
+    assert wiz(NO_CAPTION) == []
     # caption: is a topic control: a breach outline refuses it.
     assert "caption" in TOPIC.control_keys and "caption" not in bbd.BREACH.control_keys
     _raises(lambda: bbd.parse_outline_text(

@@ -312,7 +312,7 @@ def _checked(where: str, path: Path) -> tuple[int, int]:
 def _render_figure(page: _TopicPage, s) -> None:
     """The heading, the slide's prose, then the figure on its panel with its
     caption under it (the page's, or the sentences the slide's caption: line
-    selects), the two centred in the room left."""
+    selects, or none for caption: none), the two centred in the room left."""
     fig = page.ctx.page.figures.get(s.figure)
     path = page.ctx.art.get(s.figure)
     if fig is None or path is None:
@@ -680,6 +680,18 @@ def _case_caption_selected(tmp: Path) -> None:
     full = btd.figures(html)["cluster-supply-chain"].caption
     assert full != picked and _one(list(r.reopen(again).slides)[3], "figure-caption").text_frame.text == full
     f = verify_pptx(out, whole, page_html=html)
+    assert any("caption" in x and "slide 4" in x for x in f), f
+    # caption: none draws the picture with no caption under it.
+    bare = _deck(FIG_A, FIG_B)
+    bare.slides[1].caption = btd.NO_CAPTION
+    none = _render(tmp, bare, _art(tmp), html=html, name="n.pptx")
+    sl = list(r.reopen(none).slides)[3]
+    assert not any(sh.name == "figure-caption" for sh in sl.shapes)
+    assert len(_pics(sl)) == 1
+    assert verify_pptx(none, bare, page_html=html) == [], verify_pptx(none, bare, page_html=html)
+    # Control: verify of a render that printed the caption, against the
+    # caption: none deck, names slide 4.
+    f = verify_pptx(again, bare, page_html=html)
     assert any("caption" in x and "slide 4" in x for x in f), f
 
 

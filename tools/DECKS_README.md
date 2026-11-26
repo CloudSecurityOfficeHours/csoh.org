@@ -457,9 +457,10 @@ Speaker notes, on every slide.
   or more whole sentences of the figure's caption (the `(caption: ...)` in
   the extract), each word for word and in the page's order; a sentence ends
   at `.`, `?` or `!` followed by a space or the end, and runs of whitespace
-  count as one space. `--check` reports any other text, naming the
-  `caption:` line; an empty `caption:` line, or one on another layout, is a
-  parse error. Breach outlines take no `caption:` line.
+  count as one space. `caption: none` prints no caption, for a caption
+  whose every sentence points at the page. `--check` reports any other
+  text, naming the `caption:` line; an empty `caption:` line, or one on
+  another layout, is a parse error. Breach outlines take no `caption:` line.
 - A `code` slide shows an excerpt of one of the page's code blocks, written
   as a how-to outline writes one: a fence line of three backticks (a
   language after them is allowed and ignored), the excerpt, then a line that
