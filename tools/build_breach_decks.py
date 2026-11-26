@@ -134,6 +134,9 @@ CONTROL_KEYS = ("layout", "stage", "stages", "phase", "source", "credit")
 MIN_GROUP, MAX_GROUP = 2, 6
 # A flow step's technique field for a stage the page maps to no technique.
 NO_TECHNIQUE = "-"
+# How many page sections one section: line may cite, so the page gate and a
+# review of the slide stay scoped to the part of the page it draws on.
+MAX_SECTIONS = 2
 
 
 @dataclass(frozen=True)
@@ -484,6 +487,11 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str, kind: DeckKind
                 cur.stages = rest.split()
             elif key == "section":
                 cur.section = _fields(name, lineno, key, rest)
+                if len(cur.section) > MAX_SECTIONS:
+                    raise _err(
+                        name, lineno,
+                        f"section: cites {len(cur.section)} sections; a slide cites one or two",
+                    )
             else:
                 setattr(cur, key, rest)
         elif key in typed_keys:

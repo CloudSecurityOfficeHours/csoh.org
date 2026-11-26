@@ -36,8 +36,10 @@ Outline format (what differs from a breach outline):
   figure once.
 - Every number, technique ID and link in a slide's text and notes appears in
   the sections it cites; the title and promise are held to the whole page.
-- On a page that carries the Wiz disclosure, the first slide that names Wiz
-  carries it too.
+- On a page that carries the Wiz disclosure, the first slide that shows Wiz
+  carries it on the slide, where the audience sees it; notes that name Wiz
+  before any slide shows it carry it too.
+- A slide cites one or two sections; three or more is a parse error.
 
 published.json maps each slug to its id, outline_sha256, page_sha256, the
 hash of each section the deck cites (sections) and the publish date. A
@@ -664,30 +666,44 @@ def _slide_findings(s: bbd.BSlide, page: TopicPage) -> list[str]:
 NEED_DISCLOSURE = "\"(disclosure: the site's author works at Wiz)\""
 
 
+def _names_wiz(texts: list[str]) -> bool:
+    return any(WIZ_RE.search(t) for t in texts)
+
+
+def _discloses(texts: list[str]) -> bool:
+    return any(DISCLOSURE_RE.search(t) for t in texts)
+
+
 def _wiz_findings(deck: bbd.BDeck, page: TopicPage) -> list[str]:
-    """On a page that carries the Wiz disclosure, the first place the deck
-    names Wiz carries it too: the cover's promise, or the first such slide's
-    text, or its notes when only the notes name Wiz."""
+    """On a page that carries the Wiz disclosure, two checks that do not
+    depend on each other. The first place the audience sees Wiz named (the
+    cover's title or promise, else the first slide whose own text names it)
+    carries the disclosure there; notes are not shown, so they never satisfy
+    it. And notes that name Wiz before any slide shows it carry it too, for
+    the presenter who reads them out."""
     if not DISCLOSURE_RE.search(page.text):
         return []
-    cover = [deck.title, deck.promise]
-    if any(WIZ_RE.search(t) for t in cover):
-        if any(DISCLOSURE_RE.search(t) for t in cover):
-            return []
-        return [f"{deck.slug}.deck: title or promise names Wiz first, so the promise carries "
-                f"{NEED_DISCLOSURE}, as {page.path} does"]
+    out: list[str] = []
+    shown_yet = _names_wiz([deck.title, deck.promise])
+    if shown_yet and not _discloses([deck.title, deck.promise]):
+        out.append(f"{deck.slug}.deck: title or promise names Wiz first, so the promise carries "
+                   f"{NEED_DISCLOSURE}, as {page.path} does")
+    notes_done = shown_yet
     for s in deck.slides:
+        if shown_yet and notes_done:
+            break
         shown = bbd._slide_text_fields(s, notes=False) + ([s.source[0]] if s.source else [])
-        on_slide = any(WIZ_RE.search(t) for t in shown)
-        if not on_slide and not any(WIZ_RE.search(t) for t in s.notes):
-            continue
-        texts = shown if on_slide else shown + s.notes
-        if any(DISCLOSURE_RE.search(t) for t in texts):
-            return []
-        where = "its text" if on_slide else "its text or notes"
-        return [f"{s.where}: the first slide to name Wiz carries {NEED_DISCLOSURE} in {where}, "
-                f"as {page.path} does"]
-    return []
+        if not shown_yet and _names_wiz(shown):
+            shown_yet = notes_done = True
+            if not _discloses(shown):
+                out.append(f"{s.where}: the first slide to show Wiz carries {NEED_DISCLOSURE} on the "
+                           f"slide, as {page.path} does; the notes do not count")
+        elif not notes_done and _names_wiz(s.notes):
+            notes_done = True
+            if not _discloses(s.notes):
+                out.append(f"{s.where}: these notes name Wiz before any slide shows it, so they carry "
+                           f"{NEED_DISCLOSURE}")
+    return out
 
 
 def topic_page_findings(deck: bbd.BDeck, html: str, today: date | None = None,
@@ -1032,14 +1048,42 @@ def _case_wiz_disclosure(tmp: Path) -> None:
     f = wiz(_tparse(_tslide("section: why-cloud", "Wiz publishes reports.", notes=f"Note {DISCLOSURE}.")))
     _only(f, "disclosure")
     # Named only in the notes, and disclosed there: clean.
-    assert wiz(_tparse(_tslide("section: why-cloud", "Vendors publish reports.",
-                               notes=f"Wiz is one {DISCLOSURE}."))) == []
+    noted = _tslide("section: why-cloud", "Vendors publish reports.", notes=f"Wiz is one {DISCLOSURE}.")
+    assert wiz(_tparse(noted)) == []
+    # Notes that name Wiz earlier do not excuse the first slide that shows
+    # it: the audience sees that slide, not the notes.
+    deck = _tparse(noted + plain)
+    f = wiz(deck)
+    _only(f, "first slide to show Wiz", "notes do not count")
+    assert f[0].startswith(deck.slides[1].where + ":"), f
+    # Control: the same deck with the shown slide disclosed is clean.
+    assert wiz(_tparse(noted + later)) == []
+    # Notes that name Wiz before any slide shows it carry it too.
+    bare_notes = _tslide("section: why-cloud", "Vendors publish reports.", notes="Wiz is one.")
+    deck = _tparse(bare_notes + later)
+    f = wiz(deck)
+    _only(f, "notes name Wiz before any slide shows it")
+    assert f[0].startswith(deck.slides[0].where + ":"), f
+    # Control: notes naming Wiz after a slide has shown it need nothing.
+    assert wiz(_tparse(later + bare_notes)) == []
     # A word that contains the name is not a mention.
     assert wiz(_tparse(_tslide("section: why-cloud", "A setup wizard."))) == []
     # The cover counts: a promise naming Wiz needs it there.
     cover = bbd.parse_outline_text(THEADER.replace("What a managed", "Wiz on what a managed") + plain, "d.deck", TOPIC)
     f = wiz(cover)
     assert len(f) == 1 and f[0].startswith("d.deck: title or promise"), f
+
+
+def _case_section_cap(tmp: Path) -> None:
+    """A slide cites one or two sections. Three or more is a parse error
+    naming the section: line, so a drafter cannot clear a number finding by
+    citing most of the page."""
+    assert _tparse(_tslide("section: what-is | why-cloud", "Text.")).slides[0].section == ["what-is", "why-cloud"]
+    for ids in ("what-is | why-cloud | top",
+                "what-is | why-cloud | supply-chain | comparison | where-next | top"):
+        # THEADER is five lines, so the slide opens on line 6 and section: is line 7.
+        e = _raises(lambda ids=ids: _tparse(_tslide(f"section: {ids}", "Text.")), "one or two")
+        assert str(e).startswith("d.deck:7:"), e
 
 
 def _case_layout_not_allowed(tmp: Path) -> None:
@@ -1376,6 +1420,7 @@ CASES: list = [
     ("number_outside_section", _case_number_outside_section),
     ("link_outside_section", _case_link_outside_section),
     ("wiz_disclosure", _case_wiz_disclosure),
+    ("section_cap", _case_section_cap),
     ("layout_not_allowed", _case_layout_not_allowed),
     ("page_not_a_topic", _case_page_not_a_topic),
     ("figure_unknown", _case_figure_unknown),

@@ -424,8 +424,10 @@ Speaker notes, on every slide.
 ```
 
 - `page:` names a page from the topic page set.
-- Every slide carries `section: <id>` or `section: <id> | <id>`. An id is the
-  `id` of the `<section>` that wraps an h2 in `<main>`. An h2 with no such
+- Every slide carries `section: <id>` or `section: <id> | <id>`: one or two
+  ids, so the gate and the review stay scoped to the part of the page the
+  slide draws on. Three or more is a parse error naming the line. An id is
+  the `id` of the `<section>` that wraps an h2 in `<main>`. An h2 with no such
   section gets a slug of its text (`Where next` is `where-next`). The text
   above the first h2 is section `top`. The ids are the `{#id}` marks in the
   extract.
@@ -446,9 +448,11 @@ Speaker notes, on every slide.
   the sections it cites. The title and promise, which the cover shows, are
   held to the whole page.
 - On a page that carries "(disclosure: the site's author works at Wiz)", the
-  first slide that names Wiz carries it too, in the slide's text when the
-  text names Wiz, or in its notes when only the notes do. A title or promise
-  that names Wiz puts it in the promise.
+  first slide that shows Wiz carries the disclosure on the slide, where the
+  audience sees it. The notes never count for this: they are not shown, and
+  the PDF leaves them out. A title or promise that names Wiz puts it in the
+  promise. Separately, notes that name Wiz before any slide shows it carry
+  the disclosure too, for the presenter who reads them out.
 - Limits: 15 to 30 slides counting the generated cover, how-to-use and
   closing slides; at most 40 words of prose per slide (25 on a `figure`
   slide), 14 per typed field, 12 in a heading and 300 in the notes; no U+2013

@@ -558,8 +558,18 @@ class _Page:
     above, and the floor that elements pinned to the bottom leave, so an
     overflow is reported before the file is written."""
 
-    # How the last line of every slide's notes names the page.
+    # The words the generated slides use for the page. A deck kind's page
+    # class sets its own; the slides' layout stays this module's.
     NOTES_LINK = "Full kill chain"
+    PAGE_NOUN = "kill chain"
+    HOW_TO_INTRO = (
+        "Read it on your own or present it. Every fact about the incident comes from "
+        "the csoh.org kill chain and the sources it cites.",
+        "Slides marked Background explain a general idea and name their own source. "
+        "The speaker notes are a presenter's script.",
+    )
+    CLOSING_HEADING = CLOSING_HEADING
+    CLOSING_LEAD = "Every step, source and defense in detail: "
 
     def __init__(self, prs, deck, where: str, dark: bool = False):
         self.slide = prs.slides.add_slide(prs.slide_layouts[6])
@@ -1383,20 +1393,29 @@ RENDERERS = {
 # ---------------------------------------------------------------------------
 
 
-def _render_cover(page) -> None:
+# The cover text's width when it has the slide to itself. STYLE's cover
+# character counts are calibrated across it.
+COVER_W = 11.5
+
+
+def cover_text(page, x: float, y: float, w: float, title_pt: float, promise_pt: float) -> None:
+    """The cover's title, promise, as-of, attribution and licence lines in a
+    column w inches wide from (x, y), the characters per line scaled from
+    STYLE's calibration to that width and those sizes."""
     deck = page.deck
-    x, w, y = 0.9, 11.5, 1.2
-    tpt, ppt, lpt = STYLE["cover_title_pt"], STYLE["cover_promise_pt"], STYLE["cover_line_pt"]
-    th = _rows(deck.title, STYLE["cover_title_chars_per_line"]) * _line_h(tpt, heading=True) + 0.1
+    lpt = STYLE["cover_line_pt"]
+    t_per = int(STYLE["cover_title_chars_per_line"] * STYLE["cover_title_pt"] / title_pt * w / COVER_W)
+    p_per = int(STYLE["cover_promise_chars_per_line"] * STYLE["cover_promise_pt"] / promise_pt * w / COVER_W)
+    th = _rows(deck.title, t_per) * _line_h(title_pt, heading=True) + 0.1
     page.box("title", x, y, w, th,
-             [_p(deck.title, tpt, STYLE["white"], font="heading_font", bold=True)])
+             [_p(deck.title, title_pt, STYLE["white"], font="heading_font", bold=True)])
     y += th + 0.3
-    ph = _rows(deck.promise, STYLE["cover_promise_chars_per_line"]) * _line_h(ppt) + 0.1
-    page.box("promise", x, y, w, ph, [_p(deck.promise, ppt, STYLE["light"])])
+    ph = _rows(deck.promise, p_per) * _line_h(promise_pt) + 0.1
+    page.box("promise", x, y, w, ph, [_p(deck.promise, promise_pt, STYLE["light"])])
     y += ph + 0.4
     line_h = _line_h(lpt) + 0.1
     for name, text, color in (
-        ("as-of", f"Reflects the csoh.org kill chain as of {deck.as_of}", STYLE["light"]),
+        ("as-of", f"Reflects the csoh.org {page.PAGE_NOUN} as of {deck.as_of}", STYLE["light"]),
         ("attribution", ATTRIBUTION, STYLE["accent"]),
         ("license", LICENSE_LINE, STYLE["light"]),
     ):
@@ -1404,23 +1423,24 @@ def _render_cover(page) -> None:
         y += line_h + 0.05
 
 
+def _render_cover(page) -> None:
+    cover_text(page, 0.9, 1.2, COVER_W, STYLE["cover_title_pt"], STYLE["cover_promise_pt"])
+
+
 def _render_how_to_use(page) -> None:
     deck = page.deck
     y = _heading(page, HOW_TO_HEADING, Y)
     paras = [
-        "Read it on your own or present it. Every fact about the incident comes from "
-        "the csoh.org kill chain and the sources it cites.",
-        "Slides marked Background explain a general idea and name their own source. "
-        "The speaker notes are a presenter's script.",
-        f"Full kill chain: csoh.org/{deck.page}. These slides reflect it as of {deck.as_of}.",
+        *page.HOW_TO_INTRO,
+        f"{page.NOTES_LINK}: csoh.org/{deck.page}. These slides reflect it as of {deck.as_of}.",
     ]
     _body(page, paras, [], y + STYLE["block_gap"])
 
 
 def _render_closing(page) -> None:
     url = f"{SITE}{page.deck.page}"
-    y = _heading(page, CLOSING_HEADING, Y) + STYLE["block_gap"]
-    lead = "Every step, source and defense in detail: "
+    y = _heading(page, page.CLOSING_HEADING, Y) + STYLE["block_gap"]
+    lead = page.CLOSING_LEAD
     pt, color = STYLE["body_pt"], STYLE["text"]
     h = _block_h([lead + url, CLOSING_LICENSE], W, pt)
     paras = [
@@ -1446,22 +1466,22 @@ def _content(prs, deck, s, n: int, total: int, page_cls=_Page, renderers=None) -
     page.notes(s.notes)
 
 
-def render_deck(deck, out: Path, *, page_cls=_Page, renderers=None, cover=_render_cover,
-                how_to=_render_how_to_use, closing=_render_closing) -> Path:
+def render_deck(deck, out: Path, *, page_cls=_Page, renderers=None, cover=_render_cover) -> Path:
     """Write deck as a .pptx at out: a generated cover and "how to use this
     deck", the outline's slides, a generated closing. Raises LayoutError
     before writing if any element would end below the room it has. Another
-    deck kind passes its own page class, generated slides and layout
-    renderers (topic_deck_render.py adds the figure layout and cover art)."""
+    deck kind passes its own page class (which words the generated slides),
+    cover and layout renderers (topic_deck_render.py adds the figure layout
+    and cover art)."""
     prs = Presentation()
     prs.slide_width = Emu(SLIDE_W_EMU)
     prs.slide_height = Emu(SLIDE_H_EMU)
     total = len(deck.slides) + GENERATED
     _generated(prs, deck, "cover", cover, 1, total, dark=True, page_cls=page_cls)
-    _generated(prs, deck, "how to use", how_to, 2, total, page_cls=page_cls)
+    _generated(prs, deck, "how to use", _render_how_to_use, 2, total, page_cls=page_cls)
     for n, s in enumerate(deck.slides, start=3):
         _content(prs, deck, s, n, total, page_cls, renderers)
-    _generated(prs, deck, "closing", closing, total, total, page_cls=page_cls)
+    _generated(prs, deck, "closing", _render_closing, total, total, page_cls=page_cls)
     out.parent.mkdir(parents=True, exist_ok=True)
     prs.save(str(out))
     return out

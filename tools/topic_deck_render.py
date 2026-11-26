@@ -12,7 +12,8 @@ with a topic page class and topic generated slides. This module adds:
   it and the SVG's <title> as its alt text;
 - cover art: the page's hero illustration, or its tile from topics.html
   when it has none;
-- the generated how-to and closing slides worded for a topic page.
+- the words of the generated how-to and closing slides, set on its page
+  class; the slides themselves are breach_deck_render.py's.
 
 Diagrams render with Playwright: the page loads from the working tree
 through a routed origin, with integrity attributes stripped (a stale SRI
@@ -60,11 +61,6 @@ MIN_PX_PER_PT = 1.5
 RATIO_TOLERANCE = 0.01
 DEVICE_SCALE = 2
 ORIGIN = "http://csoh.test"
-HOW_TO_HEADING = r.HOW_TO_HEADING
-CLOSING_HEADING = "Read the full page"
-# The breach cover's text width, which STYLE's cover character counts are
-# calibrated against.
-BREACH_COVER_W = 11.5
 
 LOOK = {
     # The page's caption under a figure; the slide's own prose above it is
@@ -258,7 +254,19 @@ class _Context:
 
 
 class _TopicPage(r._Page):
+    """A topic slide: the breach page with the generated slides worded for a
+    topic page, and pictures."""
+
     NOTES_LINK = "Full page"
+    PAGE_NOUN = "page"
+    HOW_TO_INTRO = (
+        "Read it on your own or present it. Every slide draws on the csoh.org page and the "
+        "sources it cites.",
+        "The diagrams are the page's own, with the page's captions. The speaker notes are a "
+        "presenter's script.",
+    )
+    CLOSING_HEADING = "Read the full page"
+    CLOSING_LEAD = "Every section, source and diagram in detail: "
 
     def __init__(self, prs, deck, where: str, dark: bool = False, *, ctx: _Context):
         super().__init__(prs, deck, where, dark)
@@ -309,58 +317,15 @@ def _render_figure(page: _TopicPage, s) -> None:
 
 
 def _render_cover(page: _TopicPage) -> None:
-    """The breach cover's lines in a narrower column, and the art beside them."""
-    deck = page.deck
+    """The art in a box on the right, and the breach cover's lines in the
+    narrower column beside it."""
     path, alt = page.ctx.cover
     px_w, px_h = _checked(page.where, path)
     w, h = _fit(px_w, px_h, LOOK["art_w"], LOOK["art_h"])
     page.picture("cover-art", path, LOOK["art_x"] + (LOOK["art_w"] - w) / 2,
                  LOOK["art_y"] + (LOOK["art_h"] - h) / 2, w, h, alt)
-    x, w, y = LOOK["cover_x"], LOOK["cover_text_w"], LOOK["cover_y"]
-    tpt, ppt, lpt = LOOK["cover_title_pt"], LOOK["cover_promise_pt"], STYLE["cover_line_pt"]
-    scale = w / BREACH_COVER_W
-    t_per = int(STYLE["cover_title_chars_per_line"] * STYLE["cover_title_pt"] / tpt * scale)
-    p_per = int(STYLE["cover_promise_chars_per_line"] * STYLE["cover_promise_pt"] / ppt * scale)
-    th = r._rows(deck.title, t_per) * r._line_h(tpt, heading=True) + 0.1
-    page.box("title", x, y, w, th, [r._p(deck.title, tpt, STYLE["white"], font="heading_font", bold=True)])
-    y += th + 0.3
-    ph = r._rows(deck.promise, p_per) * r._line_h(ppt) + 0.1
-    page.box("promise", x, y, w, ph, [r._p(deck.promise, ppt, STYLE["light"])])
-    y += ph + 0.4
-    line_h = r._line_h(lpt) + 0.1
-    for name, text, color in (
-        ("as-of", f"Reflects the csoh.org page as of {deck.as_of}", STYLE["light"]),
-        ("attribution", r.ATTRIBUTION, STYLE["accent"]),
-        ("license", r.LICENSE_LINE, STYLE["light"]),
-    ):
-        page.box(name, x, y, w, line_h, [r._p(text, lpt, color)])
-        y += line_h + 0.05
-
-
-def _render_how_to_use(page: _TopicPage) -> None:
-    deck = page.deck
-    y = r._heading(page, HOW_TO_HEADING, r.Y)
-    paras = [
-        "Read it on your own or present it. Every slide draws on the csoh.org page and the "
-        "sources it cites.",
-        "The diagrams are the page's own, with the page's captions. The speaker notes are a "
-        "presenter's script.",
-        f"Full page: csoh.org/{deck.page}. These slides reflect it as of {deck.as_of}.",
-    ]
-    r._body(page, paras, [], y + STYLE["block_gap"])
-
-
-def _render_closing(page: _TopicPage) -> None:
-    url = f"{r.SITE}{page.deck.page}"
-    y = r._heading(page, CLOSING_HEADING, r.Y) + STYLE["block_gap"]
-    lead = "Every section, source and diagram in detail: "
-    pt, color = STYLE["body_pt"], STYLE["text"]
-    h = r._block_h([lead + url, r.CLOSING_LICENSE], r.W, pt)
-    paras = [
-        [r._Run(lead, pt, color), r._Run(url, pt, STYLE["bar"], link=url)],
-        r._p(r.CLOSING_LICENSE, pt, color),
-    ]
-    page.box("body", r.X, y, r.W, h, paras, gap=r.LOOK["para_gap"])
+    r.cover_text(page, LOOK["cover_x"], LOOK["cover_y"], LOOK["cover_text_w"],
+                 LOOK["cover_title_pt"], LOOK["cover_promise_pt"])
 
 
 RENDERERS = {**r.RENDERERS, "figure": _render_figure}
@@ -402,7 +367,7 @@ def render_deck(deck, out: Path, page_html: str | None = None, art: dict[str, Pa
                           "topics.html card has no tile image to show instead")
     ctx = _Context(page, art, cover)
     return r.render_deck(deck, out, page_cls=functools.partial(_TopicPage, ctx=ctx), renderers=RENDERERS,
-                         cover=_render_cover, how_to=_render_how_to_use, closing=_render_closing)
+                         cover=_render_cover)
 
 
 # ---------------------------------------------------------------------------
