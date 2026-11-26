@@ -1,12 +1,12 @@
 title: Serverless Function Security
 page: serverless.html
 as-of: 2026-11-25
-promise: The platform owns the OS, runtime, scaling and host isolation; you own the code, IAM role, event configuration and dependencies.
+promise: The platform owns the OS, runtime, scaling and host-level isolation; you own the code, IAM role, event configuration and dependencies.
 
 == The 30-second version
 layout: text
 section: top
-A serverless function is code the cloud runs in response to an event, without you managing a server. The platform owns the OS, runtime, scaling and host isolation. You own the code, IAM role, event configuration and dependencies.
+A serverless function is code the cloud runs in response to an event, without you managing a server. The platform owns the OS, runtime, scaling and host-level isolation. You own the code, IAM role, event configuration and dependencies.
 notes:
 A serverless function, also called FaaS, is code the cloud runs in response to an event: an HTTP request, a queue message, a file upload or a schedule. You do not provision, patch or manage a server. Examples are AWS Lambda, Azure Functions and Google Cloud Run functions, formerly Cloud Functions.
 
@@ -17,7 +17,7 @@ Security shifts accordingly. Kernel-level attack surface largely disappears. Wha
 == A serverless function is three things
 layout: compare
 section: what-is
-col: Code | One entry point takes an event, returns a result | Ships as a zip, container image or managed runtime layer
+col: Code | Usually one entry point that takes an event and returns a result | Ships as a zip, container image or managed runtime layer
 col: Event configuration | Declares what makes it run | HTTP routes, queues, object events, timers, streams
 col: Execution role | The cloud identity it runs as | Permissions for the services the code calls
 notes:
@@ -67,7 +67,7 @@ row: Cost | Pennies at low traffic | At sustained high traffic, a container or V
 row: Operations | No nodes, patches or OS to manage | Harder production debugging: only logs and traces
 row: Scaling | Zero to thousands in seconds | Cold starts, concurrency limits, downstream throttling
 row: Latency | Warm calls add single-digit ms | Cold starts add 100ms to several seconds
-row: Security surface | No host kernel, no nodes to compromise | Shifts to identity, events, dependencies and cost
+row: Security surface | No host kernel to share, no nodes to compromise | Shifts to identity, events, dependencies and cost
 notes:
 This is an excerpt of the page's tradeoff matrix. At low traffic the cost is pennies, truly free at small scale. Above a few thousand QPS continuously, a long-running container or VM is usually 3-10× cheaper.
 
@@ -80,8 +80,8 @@ The full table also covers stateful work, local testing and vendor lock: the cod
 == A working heuristic
 layout: compare
 section: good-bad
-col: Serverless is usually the right default | Event-driven | Intermittent | Mostly stateless | Finishes in under 15 minutes
-col: Containers or VMs usually fit better | Sustained throughput | Long-running | A hard latency budget under 100ms p99
+col: Serverless is usually the right default when all hold | Event-driven | Intermittent | Mostly stateless | Finishes in under 15 minutes
+col: Containers or VMs usually fit better when any holds | Sustained throughput | Long-running | A hard latency budget under 100ms p99
 notes:
 The page offers a working heuristic. If your workload is event-driven, intermittent, mostly stateless, and finishes in under 15 minutes, serverless is usually the right default.
 
@@ -91,7 +91,7 @@ If it is sustained throughput, long-running, or has a hard latency budget under 
 layout: table
 section: boundary
 row: Part | What it means
-row: Execution environment | Short-lived and hypervisor-isolated
+row: Execution environment | Short-lived and hypervisor-isolated; Lambda Managed Instances work differently
 row: Identity | The execution role, with no node identity to fall back to
 row: Entry point | The event source; untrusted input arrives in the payload
 row: Outbound calls | Bounded by the role: that is the blast radius
@@ -117,7 +117,7 @@ item: An observability gap: if you didn't log it, it didn't happen
 notes:
 Serverless security in the cloud collapses into seven categories. The names differ across vendors; the threats don't.
 
-Event injection: untrusted data lands in the function through an event payload such as S3 object metadata, an SQS message body, an API Gateway request or an EventBridge event. The OWASP injection classes are the same, with new entry points. Identity sprawl means hundreds of functions, each with its own role, each accumulating just-in-case permissions. They are hard to audit, with a high blast radius when one role escalates. Supply chain: every npm, pip or Maven dependency is loaded into the runtime on every cold start, so a poisoned package is in production within one deploy.
+Event injection: untrusted data lands in the function through an event payload such as S3 object metadata, an SQS message body, an API Gateway request or an EventBridge event. The OWASP injection classes are the same, with new entry points. Identity sprawl means hundreds of functions, each with its own role, each accumulating just-in-case permissions. They are hard to audit, with a high blast radius when one role escalates. Supply chain: every npm, pip or Maven dependency is loaded into the runtime on every cold start, and a poisoned package is in production within one deploy.
 
 Secrets in env vars are visible through the console, logs, error stacks and any code that prints process.env. Default egress to the internet is the standard, and nothing in the platform stops a compromised function calling home unless you put it in a VPC with restricted egress. Denial of wallet comes from public function URLs, unrate-limited APIs and recursive event loops, and a weekend of fuzzing can produce a five-figure bill. Finally, there is no shell and no host-level forensics, and an attacker who knows that has every reason to keep their activity inside the gap.
 
@@ -125,7 +125,7 @@ Secrets in env vars are visible through the console, logs, error stacks and any 
 layout: table
 section: event-injection
 row: Source | What can be attacker-controlled
-row: S3 or Blob events | The object key, with a path or shell metacharacters
+row: S3 or Blob events | The object key of a file an attacker can upload
 row: Queue messages | The body, if outsiders can write to the queue
 row: HTTP requests | Headers, body, path, query and cookies
 row: Event-bus events | Events from compromised or unexpected sources
@@ -172,9 +172,9 @@ layout: checklist
 section: identity
 check: One role per function, generated through IaC
 check: Cut permissions unused in the last N days
-check: Scope to the bucket ARN and key prefix, not *
+check: Scope to the bucket ARN, not *; add a key prefix if possible
 check: A permission boundary on every function role, on AWS
-check: Alert on new permissions and out-of-pattern role use
+check: Alert on new permissions, or role use outside usual region or time
 notes:
 Generate one role per function through IaC such as Terraform, SAM, Bicep or CDK, so authoring is automatic and consistent. Each cloud now has a tool, such as Access Analyzer, that reports which permissions in a role have been used in the last N days. Cut the unused ones.
 
@@ -185,7 +185,7 @@ Detect role drift with SIEM-side detections for a role getting a new permission,
 == Supply chain: every dependency is runtime
 layout: list
 section: supply-chain
-Every dependency loads on every fresh execution environment, and short deploy cycles ship upgrades fast.
+Every dependency loads on every fresh execution environment. The attack window matches a long-lived container's; shorter deploy cycles ship upgrades faster.
 item: Typosquatted packages, one letter off
 item: Dependency confusion: a public name shadows an internal package
 item: Compromised maintainer accounts, such as event-stream and Shai-Hulud
@@ -292,7 +292,7 @@ layout: table
 section: comparison
 row: Building block | AWS Lambda | Azure Functions | Cloud Run functions
 row: Max execution time | 15 min | 5 min Consumption; unlimited Premium and Dedicated | 60 min (HTTP)
-row: Isolation | Firecracker micro-VM | Sandboxed worker; container on Premium | gVisor or microVM, by generation
+row: Isolation | Firecracker micro-VM | Sandboxed worker on Consumption; container on Premium | gVisor or microVM, by generation
 row: Identity | IAM execution role per function | Managed identity per function app | Per-function service account
 row: Runtime threat detection | GuardDuty Lambda Protection | Defender for Cloud / App Service | Security Command Center, Cloud Run-shared signals
 notes:
@@ -306,7 +306,7 @@ The page says the three converge over time as each picks up the others' best ide
 layout: table
 section: hardening
 row: Area | Non-negotiables
-row: Identity | One role per function, resource-level permissions, permission boundaries, no wildcards
+row: Identity | One role per function, resource-level permissions where possible, permission boundaries, no wildcards in prod
 row: Input | Schema-validate every event; "system" fields are untrusted too; constrain sources
 row: Supply chain | Hash-pinned lockfiles, CI scans failing on HIGH or CRITICAL, signed deployments
 row: Operational guardrails | Reserved concurrency, throttling, budget auto-pause, central logs, auth on public functions
@@ -357,7 +357,7 @@ layout: question
 section: faq
 Consider what runs on a fresh execution environment that a warm one skips.
 notes:
-This is the second FAQ question. Again, ask it before showing the answer.
+This is another question from the page's FAQ. Again, ask it before showing the answer.
 
 == Dependencies reload, and init code runs differently
 layout: answer
