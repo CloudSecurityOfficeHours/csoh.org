@@ -1,0 +1,249 @@
+title: Working a Finding
+page: working-a-finding.html
+as-of: 2026-11-25
+promise: Before you open a ticket, answer four questions: is it reachable, who owns the identity, what is the smallest fix, and how will you know it stayed fixed.
+
+== Four questions before a ticket
+layout: figure
+section: top
+figure: finding-questions
+Answer four questions before you open a ticket. If you cannot, the finding is a backlog item, not an incident: label it that way.
+notes:
+The figure shows the four questions: reachable, owner, smallest fix, and how you know it stayed fixed.
+
+Is it reachable by anyone you do not already trust? Who owns the identity that would have to change? What is the smallest fix that removes the exposure, rather than a new alert about it? How will you know it stayed fixed after the ticket is closed?
+
+A finding you cannot answer those for is a backlog item, not an incident, and it should be labelled that way. The rest of the deck takes the questions one at a time, as the page does.
+
+== A finding is a statement a tool stands behind
+layout: text
+section: what
+It can be right and still be the wrong thing to do next. All three of these are true:
+- Public storage with no data
+- An admin role nothing can assume
+- A critical CVE in a library the process never loads
+notes:
+A finding is a statement a tool is willing to stand behind: this resource has this property, or this package has this advisory, or this identity took this action. The statement can be right and still be the wrong thing to do next.
+
+Public storage with no data, an admin role that nothing can assume, and a critical CVE in a library the process never loads are all true. They are not the same amount of work, and they are not the same amount of risk.
+
+== Three tools, three different questions
+layout: compare
+section: what
+col: CSPM | The configuration allows something
+col: Vulnerability scanner | The code contains something
+col: Detector | Something happened
+Working the finding starts by writing down which of the three you are holding. The evidence differs; the shape of the decision does not.
+notes:
+Tools disagree with each other because they are answering different questions. A CSPM says the configuration allows something. A vulnerability scanner says the code contains something. A detector says something happened.
+
+Working the finding starts by writing down which of those three you are holding. The page asks the same four questions of all three. The evidence you need differs between them, but the shape of the decision stays the same.
+
+== Is it reachable?
+layout: text
+section: reachable
+Reachable means someone you do not already trust can exercise the condition without first becoming you. That is a higher bar than "the resource exists" and a lower bar than "we have seen it exploited."
+notes:
+This is the first question. Reachable means someone you do not already trust can exercise the condition without first becoming you. That is a higher bar than the resource existing, and a lower bar than having seen it exploited.
+
+The page tests reach four ways: through the network, through identity, through the data the thing grants, and, for a vulnerability, through the code path. The next two slides take them in turn.
+
+== Reach through the network, identity and data
+layout: table
+section: reachable
+row: Lens | Reach that matters | A different finding
+row: Network | 0.0.0.0/0 on a database port | Same port, private subnet, no route (until someone adds one)
+row: Identity | An over-privileged role any workload in the account can assume | An over-privileged role that nothing trusts
+row: Data | A public bucket of database backups | A public bucket of a marketing site
+A role that nothing trusts is a loaded gun in a drawer: still worth unloading, but not the same page as the first.
+notes:
+For the network, ask whether the port, the bucket, the cluster API or the function URL is on a path from the internet, from a partner, or only from inside a network you control. A security group of 0.0.0.0/0 on a database port is reachable. The same port on a private subnet with no route is not, until someone adds the route.
+
+If the network is closed, ask who can still call the API. An over-privileged role that any workload in the account can assume is reachable by every person who can compromise any workload. An over-privileged role that nothing trusts is a loaded gun in a drawer: still worth unloading, but not the same page as the first one.
+
+Then ask what the reachable thing grants. A public bucket of a marketing site is a different finding from a public bucket of database backups. The configuration defect can be identical, while the reach, in the sense that matters, differs.
+
+== For a bug, reach means the code path
+layout: compare
+section: reachable
+col: Reachability | Is the vulnerable function on a path the process takes? | With an input an outsider can influence?
+col: KEV and EPSS | Is the bug being used in the world? | Silent on whether your build calls it
+Both facts belong in the ticket. Neither one replaces the other.
+notes:
+For a vulnerability, reachability is whether the vulnerable function is on a path the process takes, with an input an outsider can influence.
+
+KEV and EPSS tell you whether the bug is being used in the world. They do not tell you whether your build calls it. Both facts belong in the ticket, and neither one replaces the other.
+
+== Write the reach in one checkable sentence
+layout: text
+section: reachable
+"Internet to TCP 443 on the load balancer, then to this task role, which can read the production bucket." If you cannot write one, you do not yet know it is reachable. Find out; do not declare an incident.
+notes:
+Write the answer in one sentence a reviewer can check, such as: internet to TCP 443 on the load balancer, then to this task role, which can read the production bucket.
+
+If you cannot write the sentence, you do not yet know that it is reachable, and the next action is to find out, not to declare an incident.
+
+== Who owns the identity?
+layout: layers
+section: owner
+layer: Resource | What the tool shows you
+layer: Role | Created the resource
+layer: Assumed by | A pipeline | A person | A workload
+layer: Team | Owns the person's IdP group
+Every finding is attached to an identity, even when the tool shows a resource. If you cannot name the team, the finding underneath is that the identity has no owner.
+notes:
+This is the second question. Every finding is attached to an identity, even when the tool shows you a resource. The resource was created by a role. The role is assumed by a pipeline, a person, or a workload. The person is in an IdP group that some team owns.
+
+If you cannot name that team, the finding underneath the finding is that the identity has no owner.
+
+== Look for the owner in this order
+layout: table
+section: owner
+row: Look at | What you find there
+row: The cloud identity | The role, service account, managed identity or access key's user
+row: What can become it | Trust policy, service-account annotation, federated issuer, group membership
+row: The deploy path | The repository and pipeline that last applied the change
+row: The human | Only after the three above
+What can become the identity is usually the real owner: the role itself is a costume. "Security team" is not an owner. Neither is the vendor who sold the scanner.
+notes:
+Look in this order. First, look at the cloud identity on the event or the resource: the role, the service account, the managed identity, the access key's user.
+
+Second, look at what is allowed to become that identity: a trust policy, a Kubernetes service-account annotation, a federated issuer, a group membership. This is usually the real owner, because the role itself is a costume.
+
+Third, look at the deploy path: the repository and the pipeline that last applied the change. A finding in a resource that Terraform owns will come back if you click-fix it in the console. The owner is the module, not the console user.
+
+Look at the human only after those three. "Security team" is not an owner. Neither is the vendor who sold the scanner.
+
+== Fix the ownership before the permission
+layout: text
+section: owner
+A workload identity with no tag, no repository and no group is the case to stop and fix ownership first. Otherwise you will "remediate" it, and the pipeline nobody owns will put it back on Thursday.
+notes:
+A workload identity with no tag, no repository, and no group is the case to stop and fix the ownership before you fix the permission. Otherwise you will "remediate" it, and the pipeline that nobody owns will put it back on Thursday.
+
+The page points to its IAM guide for why these identities sprawl. Working a finding only needs you to name one of them per finding.
+
+== The smallest fix removes the reach
+layout: checklist
+section: smallest
+Make the change that removes the reach, and nothing else. That is almost never a new product, and almost never a detection so you notice next time.
+check: Remove the permission the identity does not need
+check: Close the path, if you are allowed to, rather than monitor it
+check: Shorten the credential instead of rotating a long-lived key forever
+check: Upgrade or remove the dependency when the vulnerable function is reachable
+check: Grant an exception with an expiry when the business truly needs it
+notes:
+This is the third question. The smallest fix is the change that removes the reach, and nothing else.
+
+Remove the permission the identity does not need. Close the path: block public access, delete the 0.0.0.0/0 rule, make the cluster API private. Do not monitor a path you are allowed to close.
+
+Shorten the credential instead of rotating a long-lived key forever, with federation, workload identity, or an OIDC trust for the pipeline. Rotation is what you do for the keys you have not eliminated yet.
+
+Upgrade or remove the dependency when the vulnerable function is reachable. Pinning a scanner exception on a library you can bump is how the exception becomes the permanent state.
+
+When the business truly needs the condition, grant an exception with an expiry. The expiry is part of the fix. An exception with no date is a finding you have agreed to stop looking at.
+
+== Fix it in the system that owns the resource
+layout: table
+section: smallest
+row: Situation | The fix | Not the fix
+row: Terraform applied it | The pull request | A console click, which is drift
+row: A person needs the access once a quarter | Just-in-time elevation | A standing admin role, the finding you would recreate
+notes:
+Prefer the fix in the system that owns the resource. If Terraform applied it, the pull request is the fix and the console click is a drift.
+
+If a person needs the access once a quarter, just-in-time elevation is the fix, and a standing admin role is the finding you are about to recreate.
+
+== Watch the blast radius of the fix
+layout: text
+section: smallest
+Tightening a role a production deploy uses, on a Friday afternoon, without the owner in the room, is how a security change becomes the outage. Smallest means smallest safe change, applied by the owner, with a way back.
+notes:
+Watch the blast radius of the fix itself. Tightening a role that a production deploy uses, on a Friday afternoon, without the owner in the room, is how a security change becomes the outage.
+
+Smallest means smallest safe change, applied by the owner, with a way back.
+
+== How you know it stayed fixed
+layout: checklist
+section: stayed
+A green scanner is not the same as the condition staying gone. Scanners look on a schedule; pipelines apply on a commit, and the commit wins. Keep the fix with a preventive control above the account:
+check: Make the bad shape undeployable: SCP, Azure Policy deny, GCP org policy, admission policy
+check: Add a pipeline check on the module that produced the resource
+check: Alert when the control itself is detached, exempted or not enforced
+notes:
+This is the fourth question. Closing the ticket because the scanner went green is not the same as the condition staying gone. Scanners look on a schedule. Pipelines apply on a commit. The commit wins.
+
+The control that keeps a fix is preventive, and it lives above the account that has the bad habit. A service control policy, an Azure Policy deny, a GCP organization policy, or an admission policy makes the bad shape undeployable. The scanner will go quiet because the shape cannot return, not because someone promised.
+
+A pipeline check on the module that produced the resource means the next apply fails in review instead of in production. And alert on the control itself being detached: a policy exemption, a detached SCP, or an organization policy set to "not enforced" is the new finding, and it is a smaller list than the original one.
+
+== When you cannot prevent, say so
+layout: text
+section: stayed
+Re-detect on purpose and say so in the ticket: "no org policy exists for this; the scanner runs nightly; reopen if the resource returns." That is an honest residual. Pretending the scan is a control is how it returns.
+notes:
+Where you cannot prevent, you re-detect on purpose and you say so in the ticket: no org policy exists for this; the scanner runs nightly; reopen if the resource returns. That is an honest residual.
+
+Pretending the nightly scan is a control is how the same finding comes back with a new id and a new owner and gets worked from the top.
+
+The log of the fix belongs in the same place as the log of the original change. If you cannot see the policy attachment or the pull request in the control-plane log, you will not be able to answer "who undid this" when it happens.
+
+== What the ticket should say
+layout: table
+section: ticket
+row: Line | What it holds
+row: Reach | One sentence: who can exercise this, from where, and what it grants
+row: Owner | The team, the repository and the identity; "Unowned" is acceptable
+row: Fix | The smallest change, where it is made, what it breaks if wrong
+row: Stays fixed | The preventive control, or a statement that there is none and how it reopens
+The ticket has four lines, one per question. Anything the tool already put in the description can stay as an appendix.
+notes:
+The ticket has four lines, matching the four questions. Anything the tool already put in the description can stay as an appendix.
+
+Reach is one sentence: who can exercise this, from where, and what it grants. Owner is the team, the repository, and the identity. "Unowned" is an acceptable value, and it changes the first task.
+
+Fix is the smallest change, where it will be made (pull request, policy or console), and what it will break if you are wrong. Stays fixed is the preventive control, or the explicit statement that there isn't one and how it will be reopened.
+
+== Some findings are incidents
+layout: text
+section: ticket
+In those, the reach has already been used. That is incident response, and the four questions still apply on a shorter clock.
+- A credential authenticated from somewhere it should not
+- A trail stopped
+- An unknown identity listed a bucket
+notes:
+Some findings are incidents. You can tell because the reach has already been used: a credential that authenticated from somewhere it should not, a trail that stopped, a bucket that was listed by an identity you do not know.
+
+That is incident response, and the four questions still apply, on a shorter clock, with the owner in the call rather than in the ticket queue.
+
+== Alert on the read, or remove the permission?
+layout: question
+section: smallest
+A role that deploys code holds s3:GetObject on a bucket it does not need to read.
+notes:
+This case comes from the page's section on the smallest fix. Ask the room which is the better fix, and let them answer before you show the next slide.
+
+== Remove the permission
+layout: answer
+section: smallest
+A detective control that fires when the identity reads the bucket is a worse fix than deleting s3:GetObject from a role that deploys code. The smallest fix removes the reach.
+notes:
+The page says a detective control that fires when the identity reads the bucket is a worse fix than deleting s3:GetObject from a role that deploys code.
+
+The smallest fix is the change that removes the reach, and it is almost never a detection added so you notice next time.
+
+== How should these two findings be ordered?
+layout: question
+section: ticket
+The vendor's badge says critical for a CVE that is not reachable, and low for an anonymous production bucket.
+notes:
+This case comes from the page's section on what the ticket should say. Ask how the room would order them, and let them argue before you show the answer.
+
+== Severity comes after the four lines
+layout: answer
+section: ticket
+They should not be ordered by the badge the vendor printed. If a dashboard needs a number, derive it from reach and data, and keep the vendor's number beside it.
+notes:
+Severity comes after the reach, owner, fix and stays-fixed lines, not before. A critical CVE that is not reachable and a low finding that is an anonymous production bucket should not be ordered by the badge the vendor printed.
+
+If you need a number for a dashboard, derive it from reach and data, and keep the vendor's number beside it so you can explain the disagreement.
