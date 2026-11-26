@@ -1,7 +1,7 @@
 title: Logging & Telemetry
 page: cloud-logging.html
 as-of: 2026-11-25
-promise: Send the control plane from every account somewhere the workload cannot delete, add identity logs next, and turn on data-plane and full-fidelity network logs only where you would page a human.
+promise: Turn on the control plane in every account and send it somewhere the workload cannot delete, add identity logs next, and turn on data-plane and full-fidelity network logs only for the systems you would page a human about.
 
 == The 30-second version
 layout: checklist
@@ -34,7 +34,7 @@ section: planes
 row: Plane | What it tells you | Sources
 row: Control plane | Who called the cloud API, from where, and whether it succeeded | CloudTrail management events, Azure Activity Log, GCP Admin Activity
 row: Identity | Who signed in, with what factor, and which app they consented to | Entra ID, Okta, Google Workspace
-row: Data plane | What happened to the data after the API allowed it | S3 data events, GCS Data Access logs, database audit logs
+row: Data plane | What happened to the data after the API allowed it | S3 data events, GCS Data Access logs, Azure Storage diagnostics, database audit logs
 row: Network | Useful when you are reconstructing a path | VPC flow, DNS query, load balancer and firewall logs
 row: Workload | Process, file and container runtime telemetry | From an agent or the orchestrator, not app stdout
 notes:
@@ -86,7 +86,7 @@ On Azure it is Activity Log diagnostic settings at the subscription, preferably 
 
 On GCP it is Admin Activity audit logs, which are on by default, exported from the organization to a sink the project owners do not control. Data Access audit logs are not on by default. The page says that distinction matters, and that it is a problem for a later section, not this one.
 
-== Two properties matter more than the brand
+== Two properties matter more than the log store's brand
 layout: checklist
 section: control
 check: The log exists before you need it
@@ -100,7 +100,7 @@ Object lock, a retention policy, or a bucket policy that denies delete from the 
 == Identity, second
 layout: text
 section: identity
-Control-plane logs show that an access key was used, not that the session behind it was stolen at the IdP. IAM abuse that never touches the cloud API is invisible to CloudTrail.
+Control-plane logs show an access key was used, not a session stolen at the IdP or an OAuth app consented with mail-read. IAM abuse that never touches the cloud API is invisible to CloudTrail.
 notes:
 Control-plane logs tell you an access key was used. They do not tell you that the human behind the federated role had their session stolen at the IdP an hour earlier. Nor do they tell you that someone consented an OAuth application with mail-read and then never signed into the cloud at all.
 
@@ -131,7 +131,7 @@ Log the change when the trust is created. You will not get a useful "sign-in" fo
 == Data events, on purpose
 layout: text
 section: data-network
-Data events answer "who read this object." You want that for the stores that would hurt if they left. Turned on organization-wide, they bring a bill that gets them switched off everywhere, including the one bucket that mattered.
+Data events answer "who read this object." You want that for the stores that would hurt if they left. The failure mode is turning them on organization-wide, then off everywhere once the bill arrives, including the one bucket that mattered.
 notes:
 Data events answer "who read this object." You want that answer for the buckets, tables and secrets that would hurt if they left. You do not want it for every build artifact, every temporary object and every health-check GET.
 
@@ -156,7 +156,7 @@ layout: compare
 section: data-network
 col: Sensitive subnets | Flow logs in the SIEM or the detection pipeline
 col: Everything else | Flow logs sampled, in cheap object storage | For the investigation you do not know you will have
-col: DNS query logs | Worth more per byte than flow logs for command-and-callback questions | Where workloads can make arbitrary outbound calls
+col: DNS query logs | Worth more per byte than flow logs for command-and-callback questions, still not free | Turn on where workloads can make arbitrary outbound calls, not where egress is denied
 Full-fidelity flow logs from every interface, in a SIEM priced per gigabyte, are how a logging program gets cancelled.
 notes:
 Network logs are the same shape of decision as data events. Flow logs are how you prove a path existed, or that it did not. Full-fidelity flow logs from every interface, ingested into a SIEM priced per gigabyte, are how a logging program gets cancelled.
@@ -190,7 +190,7 @@ layout: table
 section: not
 row: Instead of | Do this
 row: Credentials in logs | Redact at the source; do not rely on the SIEM later
-row: Debug logs for forensics | Log request id, caller identity, route and status; leave the body out
+row: Debug logs as a security control | For forensics, log request id, caller identity, route and status; no body
 row: Alerting on flows | Alert on the control-plane change that opened the path
 row: A third copy just in case | One durable copy in object storage, one hot copy of detection fields
 row: Keeping only findings | Keep the underlying event too
@@ -235,7 +235,7 @@ section: first-events
 figure: first-alerts
 Start with events that are rare, high impact, and hard for an attacker to avoid if they want to stay.
 notes:
-Start with events that are rare, high impact, and hard for an attacker to avoid if they want to stay. Do not start with a content pack of four hundred rules. The page treats detection engineering as the lifecycle after you have a source; these are the sources' first questions.
+Start with events that are rare, high impact, and hard for an attacker to avoid if they want to stay. Do not start with a content pack of four hundred rules. The site's detection engineering page covers the lifecycle after you have a source; these are the sources' first questions.
 
 The figure shows six rare, high-impact events, the ones on the next slide. Its caption says to start here, and that a missing control-plane log is itself the alert.
 
@@ -247,7 +247,7 @@ item: A long-lived credential created, or a new root or break-glass use
 item: A sign-in without MFA, a new factor, or a broad-scope app consent
 item: A trust policy, workload identity binding or federated issuer changed
 item: A closed network path opened, or storage made anonymous
-item: A crown-jewel store read by an identity that does not usually read it
+item: Logging bucket, secrets or production data read by an identity that rarely does
 The last one needs the data-plane log, which is why the crown-jewel list exists.
 notes:
 The first is the organization trail, diagnostic setting, or audit sink being stopped, deleted, or pointed somewhere new.
@@ -262,7 +262,7 @@ The fifth is a network path opening that was closed: 0.0.0.0/0 or a public IP on
 
 The sixth is the logging bucket, the secrets store, or a production data store being read by an identity that does not usually read it. This one needs the data-plane log, which is why the crown-jewel list exists.
 
-== Where does a logging bill come from?
+== Which part of the logging bill surprises people?
 layout: question
 section: retention
 Think about storing logs, ingesting them, and what a vendor quote means by "all logs."
@@ -272,9 +272,9 @@ Ask this and let the room answer before moving on.
 == Ingest, not storage
 layout: answer
 section: retention
-Storing compressed logs is close to free at the scale of a single organization trail. The cost is ingest into a tool that charges per gigabyte analyzed, dominated by data events and flow logs.
+Storing compressed logs is close to free at the scale of a single organization trail. The number that surprises people is ingest into a tool that charges per gigabyte analyzed, dominated by data events and flow logs.
 notes:
-The page says the number that surprises people is ingest, not storage. Storage of compressed logs is close to free at the scale of a single organization trail. Ingest into a tool that charges per gigabyte analyzed is where the cost goes, and data events and flow logs dominate it.
+The page says the number that surprises people is ingest, not storage. Storage of compressed logs is close to free at the scale of a single organization trail. The number is ingest into a tool that charges per gigabyte analyzed, and data events and flow logs dominate that number.
 
 If a vendor quote assumes "all logs," ask which plane. A quote that does not separate control plane from data plane is not a quote you can compare.
 
@@ -288,7 +288,7 @@ Ask this and let the room answer before moving on.
 == It stays quiet, so make the absence the alert
 layout: answer
 section: first-events
-That detection sits quiet through the week someone turned the trail off. The first events fail closed: the control plane is non-optional, so a missing log is itself the alert.
+That detection sits quiet through the week someone turned the trail off. The first events fail closed in a useful way: you already decided the control plane is non-optional, so a missing log is itself the alert.
 notes:
 A detection that only fires when a particular field is present will sit quiet through the week someone turned the trail off.
 
