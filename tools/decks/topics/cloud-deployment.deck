@@ -42,7 +42,7 @@ Before designing controls you need a threat model: a list of what could go wrong
 
 The table ranks what is left. Build tampering means an attacker compromises the base image, a GitHub Action or a CI token and slips malicious bytes into the deploy, so the site looks normal but ships malware to readers. Stolen deploy credentials were historically the worst single way to compromise a website, and the answer here is to have no deploy password at all. DNS or TLS tampering, such as a misissued certificate, an on-path HTTPS downgrade or a DNS hijack, is also met by allowing modern TLS only. For defacement, every Cloud Run revision is pinned to a specific image hash, so going back to yesterday's deploy is a single CLI call. Three independent origins behind a health-checked load balancer mean an entire cloud can fail and the site keeps serving from the other two. The WAF and rate limit drop bot probes at the edge, so they never reach any origin.
 
-What the page explicitly does not defend against: authenticated session theft, broken access control, business-logic abuse and privilege escalation from an application server. If you copy this design for a site with logged-in users, you need more than what is here.
+What the page explicitly does not defend against, because none of it applies to a static site: authenticated session theft, broken access control, business-logic abuse and privilege escalation from an application server. If you copy this design for a site with logged-in users, you need more than what is here.
 
 == The whole system in one picture
 layout: figure
@@ -118,7 +118,7 @@ Each origin answers on its own hostname. If Cloudflare forwarded the public Host
 
 The www redirect is written the boring way on purpose. The clever-looking version matches a www pattern against the full request URL and hands back whatever the wildcard captured. But the edge runs its features in a fixed order, and dynamic redirects run before Always Use HTTPS. A plaintext request to the www hostname fires the rule, fails the HTTPS pattern, and gets a 301 back to the exact URL it requested. The browser loops until it gives up, in cleartext the whole time, so it never receives an HSTS header for the www hostname.
 
-Building the target from the request path, with the scheme and host hardcoded, removes the failure mode. The general rule: at a CDN edge, know which phase your rule runs in. State the scheme and host outright, and take only the path from the caller.
+Building the target from the request path, with the scheme and host hardcoded, removes the failure mode. The rule's preserve_query_string setting brings any query string along. The general rule: at a CDN edge, know which phase your rule runs in. State the scheme and host outright, and take only the path from the caller.
 
 == Layer 3: TLS on both legs
 layout: compare
@@ -201,14 +201,14 @@ Object storage has no request-time rules: whatever you upload is world-readable.
 
 A label like nginx:1.27-alpine or actions/checkout@v4 looks specific, but whoever owns it can repoint it at different bytes tomorrow. Pinning replaces it with an immutable identifier: the image digest, or the full commit SHA for an Action. If anyone tampers upstream, the hash no longer matches and the build fails closed. The trade-off is that somebody updates the pin by hand, and that friction is the feature.
 
-A digest pinned months ago carries months of CVEs, so apk upgrade fetches current packages in the build. Trivy then scans every package against public CVE databases, ignoring CVEs with no fix yet, which would only train people to ignore the scan.
+A digest pinned months ago carries months of CVEs, so apk upgrade fetches current packages in the build. Trivy then scans every package against public CVE databases and skips CVEs with no fix yet, because including them would only train people to ignore the scan.
 
-Each deploy resolves the tag to its digest. Immutable tags had to go: Artifact Registry will not delete a tagged artifact while they are on, so immutability and deletion-based retention are mutually exclusive. The honest trade is that two workflows racing the same tag now end in a silent overwrite. Rollback is one CLI command, and the registry keeps the newest ten images.
+Each deploy resolves the tag to its digest and hands Cloud Run that, so moving a tag afterwards can't change the bytes a revision runs. Immutable tags had to go: Artifact Registry will not delete a tagged artifact while they are on, so immutability and deletion-based retention are mutually exclusive. The honest trade is that two workflows racing the same tag now end in a silent overwrite. Rollback is one CLI command. The registry keeps only the newest ten images, so plan on rolling back that far at most; further back, redeploy the older commit from git.
 
 == What Cloud Run will run
 layout: code
 section: supply-chain
-IAM authorizes the verb, not the argument, so a deploy identity can name any image. Binary Authorization allowlists our one repository and denies everything else.
+IAM authorizes the verb, not the argument, so a deploy identity can name any image it can pull. Binary Authorization allowlists our one repository and denies everything else.
 ```
 admission_whitelist_patterns {
   name_pattern = "us-central1-docker.pkg.dev/csoh-org-495800/csoh-containers/**"
@@ -275,7 +275,7 @@ The part to remember: two workflows read input nobody here controls, the weekly 
 == Layer 7: guarding the workflow file
 layout: checklist
 section: pipeline
-deploy.yml can ship code to three production clouds, so the file is as sensitive as a production secret.
+deploy.yml can ship code to three production clouds, so the file is as sensitive as a production secret. Three entries on the bypass list can still push straight to main.
 check: CODEOWNERS review on workflows, infra, the Dockerfile and security docs
 check: Branch protection on main: a code-owner approval and six status checks
 check: Environment gates on every job that talks to a cloud
@@ -305,7 +305,7 @@ A change reaches a reader through three workflow files. deploy-qa.yml fires on e
 
 promote-qa.yml is manual and designed to refuse. main must be an ancestor of qa, so the fast-forward can't discard housekeeping commits, and the exact commit being promoted must have a successful Deploy QA run. That second gate is only trustworthy because every push to qa produces a run.
 
-Both build workflows tag the image with the short commit SHA, and production's publish step skips the push when the tag is already there, then deploys the digest it resolves to. That holds only while the two produce identical images, so staging-specific settings live at the Cloudflare edge, outside the image. A staging environment is only evidence if the thing it tested is the thing that ships.
+Both build workflows tag the image with the short commit SHA, and production's publish step skips the push when the tag is already there, then deploys the digest it resolves to. So production runs the identical bytes staging ran. That holds only while the two produce identical images, so staging-specific settings live at the Cloudflare edge, outside the image. A staging environment is only evidence if the thing it tested is the thing that ships.
 
 deploy.yml holds one concurrency lock and never cancels a run in flight. Cancelling between a publish job's asset pass and its HTML pass would leave an origin serving the new style.css beside HTML naming the old hash, which SRI then blocks. The last job re-derives the hash of every versioned asset the home page references from what the edge returns, compares it with the page's integrity attribute, and compares the live security headers with the Terraform. Either mismatch fails the deploy. Everything before it verifies intent; only these checks verify the result. It fetches one page, so per-page scripts are not covered.
 
@@ -318,9 +318,9 @@ check: Mint the repo-write token after the model runs
 check: Set persist-credentials: false on the checkout
 check: Open a pull request; never publish
 notes:
-The job's allowlist is exactly Read, Edit, Glob, Grep, WebSearch and WebFetch, all in-process tools, with no Bash pattern at all. The page states it flatly: an allowlist that contains a shell or an interpreter is not an allowlist, because python3 -c executes anything. A harmless-looking utility is no better. grep takes a path, so allowlisting grep grants a general read primitive over the runner's filesystem, including that step's own environment and secrets. An entry naming a command that accepts a path is a file-read capability. If the job ever needs Python, it gets a checked-in script allowlisted by its exact path.
+The job's allowlist is exactly Read, Edit, Glob, Grep, WebSearch and WebFetch, all in-process tools, with no Bash pattern at all. The page states it flatly: an allowlist that contains a shell or an interpreter is not an allowlist, because python3 -c executes anything. A harmless-looking utility is no better. grep takes a path, so allowlisting Bash(grep:*) grants a general read primitive over the runner's filesystem, including that step's own environment and secrets. The built-in Grep tool on the list is different: it searches the checked-out workspace and is not a shell. An entry naming a command that accepts a path is a file-read capability. If the job ever needs Python, it gets a checked-in script allowlisted by its exact path.
 
-The csoh-ci App token could change the repository, and the App sits on the bypass list, so it is a production credential. It is issued in a step below the model step, right before the create-PR step that uses it, so during the research pass it does not exist on the runner. What is reachable then is the model's own OAuth token, which buys inference and nothing else. Step order is the control that keeps a successful injection cheap.
+The csoh-ci App token could change the repository, and the App sits on the bypass list, so it is a production credential. It is issued in a step below the model step, right before the create-PR step that uses it, so during the research pass it does not exist on the runner. What is reachable then is the model's own OAuth token, which buys inference and nothing else. That is the residual risk, priced deliberately: WebFetch is unqualified and Read takes absolute paths, because researching the open web is the job. Step order is the control that keeps a successful injection cheap.
 
 actions/checkout writes its token into .git/config by default and leaves it there for the job. In a job that processes web pages, that's a gift you don't want to give, so it is turned off. A credential should live as briefly and in as few places as the work allows.
 
@@ -351,7 +351,7 @@ Each is defensible for a small static site and less so as the threat surface gro
 row: Not done | Why
 row: Signed-image enforcement | Staging builds images before anything approves them
 row: Origins locked to Cloudflare IPs | An IP allowlist to maintain for three vendors
-row: SLSA provenance, cosign | On the to-do list
+row: SLSA provenance, cosign | On the to-do list; cosign is best done with SLSA
 row: Full OWASP CRS | Mostly demonstrative without a database or login
 row: Multi-region within a cloud | Cross-cloud failover covers the realistic outage
 row: SIEM, real-time alerting | Logs are kept; the right call for a community site
@@ -370,7 +370,7 @@ check: Pick how many clouds you want, then start with one
 check: Stand up each origin from its Terraform directory
 check: Feed each origin's hostname into the Cloudflare directory
 check: Copy deploy.yml and stage_site.sh; set resource IDs as repo Variables
-check: Production environment, CODEOWNERS, branch protection, secret scanning, Dependabot
+check: Create a production environment and CODEOWNERS; enable branch protection, secret scanning, Dependabot
 check: Add a staging environment once an origin runs containers
 check: Cut over with the old origin kept as a fallback
 notes:
