@@ -1,0 +1,412 @@
+title: Cloud Network Security
+page: network-security.html
+as-of: 2026-11-25
+promise: With no perimeter, cloud network security is four things stacked: VPC design, private API connectivity, controlled egress and an identity-aware overlay.
+
+== The 30-second version: four things stacked
+layout: figure
+section: top
+figure: network-stack
+There is no perimeter. The network is software-defined, every workload has a public-by-default API edge, and the most common modern attack path runs outbound.
+notes:
+The page opens with a 30-second version. Cloud network security is what's left after you accept that there's no perimeter. The network is software-defined, every workload has a public-by-default API edge, and the most common modern attack path runs outbound, with a compromised workload calling an attacker-owned domain, rather than inbound.
+
+The figure shows the discipline as four things stacked. Good VPC or VNet design: tiered subnets, hub-and-spoke, and no default VPC in prod. Private connectivity to cloud APIs: PrivateLink, Private Link or PSC, with endpoint policies. Controlled egress: Network Firewall, FQDN allow-lists and DNS firewall. And an identity-aware overlay: ZTNA, service mesh mTLS and microsegmentation.
+
+This page covers the network mechanics. Zero trust, the architectural pattern that sits on top, has its own page. This one is the wires, rules and primitives that make zero trust enforceable in AWS, Azure and GCP.
+
+== Cloud breaks the perimeter model three ways
+layout: compare
+section: why-different
+col: The perimeter is gone | Managed services have public endpoints by default | Thousands of edges, one per resource | Identity becomes the trust anchor
+col: Software-defined network | Every change is an API call | Fast, audited, expressible as code | Detect misconfigs at once; prevent them in CI
+col: Egress is the new ingress | Attacks often start with SSRF or a leaked credential | Then call out to an attacker domain | Outbound filtering stops them
+Most programs are inbound-heavy and egress-blind: exactly backwards from where the attacks happen.
+notes:
+On-prem networking is built around a perimeter and a small number of choke points: a firewall at the edge, a DMZ behind it, an internal LAN behind that. The perimeter is the policy plane. Cloud breaks that model in three ways.
+
+The perimeter is gone. Every VPC has an internet-routable edge unless you actively block it, every managed service such as S3, Cosmos DB or Cloud Storage has a public endpoint by default, and every IAM principal can be assumed from anywhere on earth if its credentials leak. There is no single edge: there are thousands, one per resource.
+
+The network is software-defined. CIDR blocks, route tables, security groups, NSGs and transit gateway attachments are all API calls, so they change in seconds, leave a CloudTrail, Activity Log or Cloud Audit Log record, and can be expressed as code. A single misconfigured security group rule can expose a database to the internet in one API call, but you can detect that misconfig the moment it happens and write policy-as-code that prevents it in CI.
+
+Egress is the new ingress. The classic on-prem attack went in through a firewall and moved laterally. The modern cloud attack often starts with an SSRF or a leaked credential and works out: the compromised workload calls an attacker-controlled domain to exfiltrate data or pull down a second-stage payload. Outbound filtering stops it: FQDN allow-lists, DNS sinkholing and VPC endpoint policies.
+
+== Plan the IP space before you build
+layout: checklist
+section: vpc-design
+check: Use RFC1918 space, 10.0.0.0/8 for a multi-region, multi-account program
+check: Never overlap CIDRs across accounts
+check: Allocate from one IPAM source of truth
+check: Size for growth: in Kubernetes, every pod takes an IP
+check: Reserve a non-overlapping range for the transit VPC
+The mistakes are recoverable but expensive.
+notes:
+Before any of the security controls work, the topology has to be sane, and that starts with the IP space. The page's rules are practical.
+
+Use RFC1918 space. 10.0.0.0/8 is the standard choice for a multi-region, multi-account program; reserve 172.16.0.0/12 and 192.168.0.0/16 for special cases such as a lab, on-prem overlap or partner peering.
+
+Never overlap. Overlapping CIDRs across accounts are the largest source of "we can't peer these VPCs" pain. Keep an IP address management source of truth, such as AWS VPC IPAM, Azure IPAM solutions, Infoblox, BlueCat, NetBox or phpIPAM, and allocate from it.
+
+Size for growth. A /16 per VPC gives you 65k addresses and a /24 per subnet gives you 256. Cloud-native workloads, Kubernetes especially, burn through IPs quickly because every pod takes one, so plan large.
+
+Finally, the transit or inspection VPC needs its own range that doesn't overlap with anything it will route between.
+
+== Three subnet tiers per AZ
+layout: layers
+section: vpc-design
+layer: Public | Load balancers, NAT Gateways, bastions if you must | No workloads
+layer: Private | Application tier: Kubernetes nodes, instances, functions | Egress through NAT, better behind a Network Firewall
+layer: Data | RDS, Cloud SQL, Cosmos DB, caches | No internet route, in or out
+The tiers keep blast radius small and make the routing and firewall policy legible.
+notes:
+The reference pattern is three tiers per availability zone. The public subnet routes to the internet through an Internet Gateway and holds public-facing load balancers, NAT Gateways, bastion hosts if you must have them, though ZTNA is better, and nothing else.
+
+The private subnet has no direct internet route. Its egress goes through a NAT Gateway, or better, a Network Firewall in front of NAT. It holds the application tier: EKS, AKS or GKE nodes, instances, functions with VPC config and container services.
+
+The data subnet is the strictest, with no internet route at all, in either direction. It holds RDS, Aurora, Cosmos DB, Cloud SQL, ElastiCache and Memorystore, and its security groups admit only the application tier's security group.
+
+The tiers do two jobs. A compromised public-tier load balancer can't directly reach the database. And the policy is legible: the private tier's route table always sends egress through Network Firewall, and the data tier never has an egress route.
+
+For resilience, run any production workload in at least two AZs per region; three is the standard when the service supports it. Replicate the same subnet tiering in each AZ.
+
+== Hub-and-spoke, and no default VPC
+layout: compare
+section: vpc-design | aws-primitives
+col: Full-mesh peering | O(n²) connections | No central inspection point | Unmanageable past three or four VPCs
+col: Hub-and-spoke | Workload VPCs peer only to a transit hub | The hub runs the firewall, internet egress, on-prem and cross-region links
+col: The default VPC | Ships in every region, routable to the internet | Permissive default security groups | Disable its creation in your landing zone
+The hub becomes the policy choke-point: one Network Firewall inspects everything that crosses VPC boundaries.
+notes:
+Past three or four VPCs or VNets, full-mesh peering becomes unmanageable: the connections grow as O(n²) and there is no central inspection point. The standard pattern is hub-and-spoke. Every workload VPC peers only to a central transit or inspection VPC, which runs the Network Firewall, the egress to the internet, the on-prem connectivity and the cross-region links. AWS implements it with Transit Gateway, Azure with Virtual WAN and GCP with Network Connectivity Center.
+
+On AWS, the page's multi-account reference architecture is a transit and inspection account holding the Transit Gateway and the Network Firewall, workload accounts each with a VPC attached to the Transit Gateway, and all internet egress flowing through the inspection VPC. VPC Peering is non-transitive and doesn't scale, so use it only for two-VPC cases.
+
+Every cloud account also ships a default VPC in every region, with default subnets routable to the internet and permissive default security groups. Disable its creation in your landing zone: AWS Control Tower has a guardrail for this, Azure does it through Policy, and GCP through the Organization Policy compute.skipDefaultNetworkCreation. The page calls the number of accidental "public Redis on the default VPC" incidents non-trivial.
+
+== Where Azure and GCP differ
+layout: compare
+section: azure-primitives | gcp-primitives
+col: Azure: NSGs at two layers | NSGs apply to NICs and subnets, and both are evaluated | A permissive layer can mask a restrictive one | Document which layer holds policy
+col: GCP: VPCs are global | One VPC spans all regions; subnets are regional | No peering needed between its regions | A misconfiguration has a wider blast radius
+GCP's Hierarchical Firewall Policies set org or folder rules, such as no workload exposing port 22 to the internet.
+notes:
+Most primitives map across the three clouds with vocabulary differences. Two differences matter for security.
+
+On Azure, an NSG is a stateful 5-tuple ACL applied at a NIC or a subnet, and rules at both layers are evaluated. A permissive subnet NSG can mask a restrictive NIC NSG, and the reverse, so document which layer holds policy. Two related Azure points: user-defined routes are required to force-tunnel egress through a firewall instead of the default internet route, and Service Endpoints are mostly superseded by Private Link.
+
+GCP's VPCs are global, not regional. A single VPC spans all GCP regions and subnets are regional within it. That makes some patterns simpler, since there is no peering between regions of the same network, and some harder, because the blast radius of a VPC misconfiguration is wider. Avoid auto-mode VPCs in production, since they create subnets in every region; use custom mode. Firewall rules are global, applied by tags or service accounts at the VPC level, and Hierarchical Firewall Policies are org-scoped or folder-scoped rules that override or apply alongside them.
+
+The page names one GCP combination as most worth knowing: VPC Service Controls plus Private Service Connect plus Cloud NAT with disabled egress, which it calls the strongest "data can't leave" posture available in any cloud out of the box.
+
+== Security groups, NACLs and network firewalls
+layout: table
+section: sg-vs-nacl
+row: Dimension | Security group, NSG | NACL, subnet NSG | Network Firewall
+row: State | Stateful | Stateless (AWS NACL) | Stateful, deep packet inspection
+row: Layer | L3-L4 | L3-L4 | L3-L7: FQDN, IDS, TLS
+row: Rules | Allow only | Allow and deny, ordered | Allow, deny, alert, drop
+row: References | SG IDs or CIDRs | CIDRs only | FQDNs, prefix lists, threat intel
+row: Best for | Default microseg, app-to-DB scoping | Broad subnet denylist | Egress FQDN filtering, IDS, TLS inspection
+notes:
+These are three different objects with overlapping but distinct uses, and the page says picking the wrong one is the source of most "I added a rule and it still doesn't work" tickets. Security groups and NSGs apply per ENI or NIC, NACLs at the subnet boundary, and a network firewall inline in the traffic flow as a VPC route target. Security groups and NACLs are free. AWS Network Firewall costs about $0.395 an hour per AZ plus data, and Azure and GCP are comparable.
+
+The practical layering uses all three. Security groups are the primary policy: default-deny, allow only what's needed, and reference security group IDs rather than CIDRs. NACLs are a narrow, blunt instrument: block known-bad CIDRs and hard-deny RDP and SSH from the internet at the subnet edge as belt-and-suspenders. Network Firewall goes on egress and east-west inspection, where FQDN allow-lists and IDS earn their keep. Don't try to do all your policy in one layer.
+
+== Reach cloud APIs privately
+layout: table
+section: private-endpoints
+row: Cloud | Primitive | How to use it
+row: AWS | Gateway endpoints for S3 and DynamoDB, free | Use unconditionally if a VPC calls either
+row: AWS | Interface endpoints (PrivateLink), ~$0.01/hr/AZ plus data | KMS, STS, Secrets Manager, ECR, SSM and more
+row: Azure | Private Endpoint: a private IP for the PaaS service | Needs private DNS zones; DNS is the common misconfiguration
+row: GCP | Private Service Connect | Pair with VPC Service Controls
+The security value is the endpoint policy: a network-enforced rule, such as reaching only S3 buckets in our own org's accounts, that IAM alone can't enforce.
+notes:
+The page calls this one of the most rewarding moves for the effort: stop reaching cloud-provider APIs such as S3, Cosmos DB, Cloud Storage, KMS and Secrets Manager over the public internet.
+
+On AWS, gateway endpoints are free and available only for S3 and DynamoDB. Interface endpoints put ENIs in your VPC for about 150 AWS services. VPC endpoint policies are the security feature: a common control restricts STS to your own org's accounts, blocking confused-deputy exfil to attacker AWS accounts. Many SaaS vendors publish PrivateLink endpoints too, which takes them off your egress allow-list.
+
+On Azure, a Private Endpoint is a NIC in your VNet with a private IP, and DNS is overridden so the service's public hostname resolves to it. That needs private DNS zones, and DNS not resolving inside the VNet is the most common Private Link misconfiguration. Service Endpoints are older and cheaper, but give less defense in depth; Private Endpoint is usually the right answer.
+
+On GCP, Private Service Connect reaches Google APIs through a private IP; combined with VPC Service Controls it gives an exfiltration-resistant data plane. Private Google Access is older and still needs the egress route; PSC is stricter.
+
+Private endpoints are often sold as cheaper than NAT egress, and for high-volume cloud-API traffic they are. The security value is separate and larger: IAM is enforced by the principal, an endpoint policy by the network. Pair endpoint policies with VPC Service Controls, Resource Control Policies or storage-account firewall rules and you build a network-level data-exfiltration boundary.
+
+== The path attackers take out
+layout: timeline
+section: egress
+event: SSRF | To the metadata service
+event: Theft | Credentials stolen
+event: Beacon | Out to a C2 server
+event: Exfiltrate | Bulk data to an attacker-controlled S3 bucket
+The cloud's defaults give you wide-open outbound: any private subnet with a NAT Gateway can reach any IP on the internet on any port.
+notes:
+The page calls egress the most-overlooked area in cloud network security. The defaults give you wide-open outbound, and that is the path attackers use after they get in: SSRF to the metadata service, credential theft, then beaconing out to a C2 server, then bulk data egress to an attacker-controlled S3 bucket.
+
+Level 0 on the page's egress ladder is NAT-only: private subnet to NAT Gateway to internet, with no filtering on destinations. It is the default for most cloud accounts. The page says this is not a control but the absence of one: if a workload is compromised, the attacker has full outbound connectivity.
+
+== Egress controls, by strictness and cost
+layout: table
+section: egress
+row: Level | Control | What it adds
+row: 1 | VPC endpoint policies | Scopes cloud-API calls, not other destinations
+row: 2 | Firewall with FQDN allow-list | Drops all but a curated domain list
+row: 3 | TLS inspection | Sees inside TLS; cert-pinning workloads break
+row: 4 | Egress proxy with auth | Stolen credentials can't egress without proxy access
+row: 5 | VPC Service Controls (GCP) | Data can't leave the perimeter, even with valid IAM credentials
+Level 0, NAT-only, is no control at all. Level 2 is the largest improvement, achievable in a few weeks for most environments.
+notes:
+The controls run in order of increasing strictness and cost. Level 1 routes cloud-service traffic through private endpoints with restrictive policies. It is not a general egress control, but for cloud-API calls it is substantial.
+
+Level 2 puts AWS Network Firewall, Azure Firewall, GCP Cloud NGFW or a third-party NGFW inline on egress, with FQDN allow-listing: workloads reach only a curated list of domains such as your SaaS dependencies, package mirrors and OS update servers, and everything else is dropped.
+
+Level 3 runs the firewall in TLS-terminating mode with a per-workload root CA, so it can see inside encrypted traffic for IDS/IPS, data-loss prevention and DNS-over-HTTPS detection. Privacy and certificate-pinning workloads break under it, so pick which traffic to inspect carefully.
+
+Level 4 makes workloads authenticate to an HTTP proxy to reach the internet, which adds identity to the egress flow. The page calls it the strongest pattern, with the most operational tax.
+
+Level 5, GCP only, puts a service perimeter around a set of projects and Google services. The page calls it the strongest data-egress control any cloud offers and the right answer for any regulated workload on GCP. AWS approximates it with Resource Control Policies and VPC endpoint policies; Azure with Private Link, storage firewall and Defender for Cloud's exfil detection.
+
+Inside Kubernetes, Cilium NetworkPolicy, Calico or Kubernetes NetworkPolicy scope egress per pod. Paired with cluster-level egress through a single NAT or Network Firewall, the result is per-pod FQDN allow-listing.
+
+== DNS: the cheapest exfiltration channel
+layout: compare
+section: dns
+col: Block at the resolver | Route 53 Resolver DNS Firewall, with AWS-managed rule groups | Azure DNS Private Resolver, with Defender for DNS | GCP Cloud DNS response policies for sinkholing
+col: Detect exfiltration | High entropy in subdomains | High query volume to one zone | Queries to recently registered domains
+DNS is also the most common C2 covert channel. VPC DNS query logs are off by default on most clouds; make sure they reach your detectors.
+notes:
+The page puts DNS bluntly: block it badly and you break the internet for your workloads; ignore it and attackers love you.
+
+On AWS, Route 53 Resolver DNS Firewall blocks, allows or alerts on queries from your VPCs against managed threat-intel lists, such as newly observed domains, malware and C2, or your own domain lists. The page calls it the single highest-value DNS control on AWS and says to turn it on with the AWS-managed rule groups by default. Azure DNS Private Resolver is newer and integrates with Defender for DNS and Azure Firewall's DNS proxy for FQDN filtering. GCP uses Cloud DNS response policies for sinkholing and allow or block lists. Third-party DNS services fit hybrid environments where one DNS policy has to cover cloud, on-prem and endpoints.
+
+The exfiltration signature is high entropy in subdomains, high query volume to one zone, and queries to recently registered domains. Most modern detection platforms include DNS-exfil detectors, including GuardDuty on AWS, Defender for DNS on Azure and Google SecOps on GCP, plus tools on the workload side. They only help if the DNS query logs flow to them, and those are off by default on most clouds.
+
+== A WAF is useful, but bounded
+layout: text
+section: waf
+It stops OWASP-payload attacks and most untargeted scanning, not a determined attacker with bespoke payloads.
+- If you already have a CDN, use its WAF
+- One WAF as the policy plane, not three stacked
+- Tune rate limits before signature rules
+notes:
+A web application firewall sits in front of your HTTP services and applies L7 rules: SQL injection patterns, OWASP Top 10 attack signatures, rate limits, bot signatures and geographic blocks. The page says it stops the script-kiddie OWASP-payload attacks and most untargeted scanning, but not a determined attacker with bespoke payloads.
+
+The cloud-native options are AWS WAF, Azure WAF on Application Gateway or Front Door, and Cloud Armor on GCP. On AWS the starting baseline is the Common, Known Bad Inputs and Bot Control managed rule groups. CDN-native WAFs from Cloudflare, Akamai, Fastly and others are likely already in front of your app.
+
+If you already have a CDN, use its WAF. Stacking three WAFs, say Cloudflare, then AWS WAF, then app-level ModSecurity, means three teams tuning rules and triple the false-positive surface for one ruleset's worth of protection. The page's pattern is one WAF as the policy plane, ideally co-located with the CDN, with the cloud-native WAF as a thin fall-back that protects the origin by blocking all non-CDN traffic.
+
+The most effective WAF rule is usually a rate limit, not a signature: per IP, per session or per API key, with a CAPTCHA challenge above a threshold. Tune it before tuning the signature rules.
+
+== DDoS protection sits in front of the WAF
+layout: stats
+section: ddos
+stat: 1 Tbps | Regularly crossed | by modern attacks
+stat: 31.4 Tbps | Reached in 2025 | by the largest attack that year
+AWS Shield Advanced, at $3000/month plus data, is worth it only for revenue-critical public surfaces. For most cloud-native organizations, Cloudflare or the cloud's own offering covers the volumetric layer.
+notes:
+The volumetric attack surface, meaning L3 and L4 floods, HTTP floods, slowloris and amplification, sits in front of the WAF. Modern attacks regularly cross 1 Tbps, and the largest in 2025 reached 31.4 Tbps.
+
+AWS Shield Standard protects every AWS resource at no extra cost. Shield Advanced, at $3000 a month plus data, adds a dedicated DDoS response team, cost protection against the surge in data charges from an attack, and health-based detection; the page says it is worth the price only for revenue-critical public surfaces. Azure DDoS Protection gives basic protection free at the platform level, with Network and IP protection plans that add tuning; Network Protection also adds rapid-response team access. On GCP, Cloud Armor's Adaptive Protection uses ML to detect anomalous patterns, and its Edge Security Policies block at the Google network edge before traffic reaches your origin.
+
+Cloudflare offers unmetered DDoS mitigation across all plans. Akamai Prolexic is a BGP-routed scrubbing service, which the page says is right for organizations with non-HTTP critical services. Imperva, F5, Radware and NETSCOUT are further enterprise scrubbing providers.
+
+== Bot management and API security
+layout: compare
+section: bot-api
+col: Bot management | For most workloads, WAF bot-control rules and per-route rate limits are enough | Go dedicated when account takeover, scraping or ad fraud is a measurable line item
+col: API security | A different threat model: BOLA, excessive data exposure, mass assignment | For many, an API gateway with WAF covers 80% of the need | Scanning specs in CI is usually the most cost-effective step
+The OWASP API Security Top 10 is the reference for API threats.
+notes:
+Telling automated traffic from human is its own discipline. The signal is hundreds of behavioral, fingerprinting and reputational features rather than a simple ruleset. Dedicated players include HUMAN, Cloudflare Bot Management, DataDome and Akamai Bot Manager. For most workloads, the WAF's bot-control rule group plus per-route rate limits is enough; dedicated bot management makes sense when account takeover, scraping or ad fraud is a measurable line item.
+
+APIs have a different threat model from web apps: broken object-level authorization, excessive data exposure, mass assignment, and missing rate limits per consumer. Dedicated tools such as Salt Security, Traceable, Akamai API Security, Cequence and Apiiro add runtime API observability and ML-based abuse detection. For many environments, an API gateway such as AWS API Gateway, Azure APIM, Apigee, Kong or Tyk with WAF integration covers 80% of the API-security need at a fraction of the cost of a dedicated tool.
+
+Shift-left tools such as StackHawk, 42Crunch, Apiiro and Escape scan OpenAPI specs and API endpoints in CI for BOLA, BFLA and authentication or authorization gaps. The page says the most cost-effective intervention is usually there, not at runtime.
+
+== Service mesh: mTLS inside the mesh
+layout: compare
+section: service-mesh
+col: What a mesh adds | Encryption, identity, authorization and observability between services | Without each app re-implementing them
+col: Where mTLS stops | Traffic leaving the mesh is unencrypted | Unless wired through a mesh egress gateway
+col: When you may not need one | Single cluster, single team, modest service count | A language with good native TLS and JWT libraries
+AWS has no managed mesh: App Mesh was retired on 30 September 2026.
+notes:
+Inside a Kubernetes cluster, and increasingly across clusters, service-to-service traffic needs the same protections as user-to-service traffic. Meshes provide them as platform features. Istio uses Envoy sidecars or ambient mode, with mTLS by default. Linkerd is a CNCF graduated mesh with a Rust-based proxy, lower resource overhead and simpler config. Cilium Service Mesh is sidecarless and eBPF-based. Google Cloud Service Mesh is managed Istio, AKS has a supported Istio add-on, and Consul Connect spans Kubernetes and VMs. On AWS, App Mesh was retired on 30 September 2026, and AWS points former users at ECS Service Connect for ECS and VPC Lattice for EKS and cross-VPC traffic.
+
+"Mesh gives us mTLS everywhere" is the most common pitch and the most common over-claim. It does, within the mesh. Traffic to a managed database, to a third-party API or from an unmeshed VM is unencrypted unless you wire it through a mesh egress gateway. Plan for the boundary as well as the interior.
+
+The operational tax of sidecar overhead, debug complexity and mesh upgrades is real. Cilium's sidecarless mode and Istio ambient mode both make it lighter, and the page says ambient plus L4 policy is plausibly enough for many teams.
+
+Edge TLS and in-mesh mTLS are also beginning to negotiate hybrid post-quantum key exchange, a classical curve plus NIST's ML-KEM, so today's traffic resists "harvest now, decrypt later". Where your provider or proxy supports it, the page calls enabling it low-risk.
+
+== SASE, SSE and ZTNA
+layout: compare
+section: sase | ztna
+col: SASE | SD-WAN, SWG, CASB, ZTNA and FWaaS from global PoPs | Replaces the MPLS-and-branch-firewall world
+col: SSE | SASE minus SD-WAN | Security only, no networking layer
+col: ZTNA | Replaces client VPN | Per-app access by identity, device posture and context | The app gets no public IP; the user gets no network
+For a cloud-native company with no offices, SASE is mostly the SWG, DNS and ZTNA layer.
+notes:
+SASE, a bundle Gartner coined in 2019, combines SD-WAN, a secure web gateway, a cloud access security broker, ZTNA and firewall-as-a-service, all delivered from a provider's globally distributed points of presence. SSE is the same without SD-WAN: security only. Vendors include Zscaler, Netskope, Palo Alto Prisma Access, Cloudflare One, Cisco Secure Access, Cato Networks and Fortinet.
+
+What SASE replaces is the MPLS-and-branch-firewall world. Offices that backhaul traffic to a central firewall become users connecting to the nearest SASE point of presence, where policy is applied and traffic egresses. For a cloud-native company with no offices, the FWaaS and SD-WAN portions are less load-bearing.
+
+ZTNA is the modern replacement for client VPN. Instead of "VPN in, you're on the corporate network", it brokers per-application access based on user identity, device posture and contextual signals. Both the app and the user connect to the broker. For most cloud-native shops the page suggests Cloudflare Access or Tailscale for engineering ergonomics, Azure App Proxy or GCP IAP, free with the cloud you already use, or Zscaler ZPA for enterprise scale. The bastion host on a public subnet is the wrong answer in 2026: ZTNA does the same job with identity-aware policy and audit logs.
+
+== Microsegmentation: two flavors
+layout: compare
+section: microseg
+col: Host-based | An agent on every workload | Illumio, Akamai Guardicore, ColorTokens, vArmour, Cisco Secure Workload
+col: Network-based | Policy in the cloud or cluster fabric | Cloud-native rules suffice for most environments, used with discipline | Calico, Cilium, Kubernetes NetworkPolicy
+The work is 80% inventory and label hygiene, 20% rule-writing. Tools that auto-map dependencies and recommend rules collapse that 80% considerably.
+notes:
+Microsegmentation is fine-grained policy on east-west traffic between workloads, beyond what security groups or NSGs can express.
+
+Host-based tools put an agent on every workload. Illumio offers label-based policy across hybrid environments and application-dependency mapping. Akamai Guardicore Segmentation brings process-level visibility and a ransomware-containment use case. ColorTokens, vArmour and Cisco Secure Workload are enterprise alternatives.
+
+Network-based microsegmentation puts policy in the cloud or cluster fabric. The cloud-native objects, security groups, NSGs and VPC firewall rules, are adequate for most environments if used with discipline: default-deny plus reference by security group ID. In Kubernetes, Calico, Cilium and Kubernetes NetworkPolicy apply; default deny-all egress plus an allow-list per pod is the minimum bar.
+
+Microsegmentation is only as good as the labels and tags on your workloads. Tools that auto-map dependencies and recommend rules, such as Illumio Core, Guardicore and Cilium Hubble, collapse the inventory work considerably; tools that don't will sit unused.
+
+== eBPF: programmable networking in the kernel
+layout: table
+section: ebpf
+row: Project | What it does
+row: Cilium | CNI, NetworkPolicy, service mesh and Hubble observability
+row: Tetragon | Process, file and network observability at kernel level
+row: Falco | Runtime detection of lateral movement, unusual connections, port scans
+row: Pixie | Auto-instruments HTTP, gRPC, DNS, MySQL, PostgreSQL without sidecars
+eBPF safely runs sandboxed programs in the Linux kernel: programmable packet processing in the data path, at line rate, without sidecar tax.
+notes:
+eBPF, the extended Berkeley Packet Filter, lets you safely run sandboxed programs in the Linux kernel without changing kernel source or loading kernel modules. For networking, that means programmable packet processing in the data path, at line rate, without the sidecar tax.
+
+Cilium is the eBPF CNI for Kubernetes. It replaces kube-proxy and gives identity-aware L3 to L7 NetworkPolicy, a native service mesh with or without sidecars, and Hubble for observability. It is the default CNI on GKE Dataplane V2, EKS Auto Mode and Azure CNI Powered by Cilium. Tetragon is its sibling for runtime security. Falco is a CNCF runtime-detection tool with eBPF data sources whose network rules detect lateral movement, unusual connections and port scanning inside the cluster. Pixie auto-instruments HTTP, gRPC, DNS, MySQL and PostgreSQL traffic without sidecars or code changes. For incident response, Inspektor Gadget, bpftrace and kubectl-trace give packet-level visibility without deploying anything new.
+
+The page's strategic point is that eBPF is the data plane for cloud-native networking and security for the next decade. Programs that have invested in Cilium, Hubble and Tetragon end up with one engine covering CNI, NetworkPolicy, service mesh and runtime detection, instead of four point products with overlapping agents.
+
+== Connecting clouds and on-prem
+layout: table
+section: cross-cloud
+row: Option | Trade-off
+row: Internet and VPN | Cheapest, lowest performance; often right for non-critical paths
+row: Direct Connect, ExpressRoute, Interconnect | Best performance, highest cost
+row: NaaS exchanges: Megaport, Equinix Fabric | Cloud on-ramps and virtual circuits
+row: SD-WAN | Right when branch offices are in the mix
+row: Overlay networks | App-level links, not site-to-site at scale
+Cross-cloud egress costs $0.05-$0.12/GB on most clouds outbound to the internet. Do the math at GB/month scale.
+notes:
+For multi-cloud and hybrid programs, how the clouds and on-prem reach each other is its own discipline.
+
+IPsec tunnels over the public internet are the cheapest option with the lowest performance, and often the right answer for non-critical paths. Direct circuits to the provider's edge, AWS Direct Connect, Azure ExpressRoute and GCP Cloud Interconnect, give the best performance at the highest cost. Network-as-a-service exchanges such as Megaport and Equinix Fabric offer virtual circuits between data centers and the major clouds, and Megaport Cloud Router does cross-cloud routing without on-prem. SD-WAN is right when branch offices are in the mix. Overlay networks such as Tailscale, Twingate, Nebula, Zerotier and Netmaker suit workload-to-workload connectivity across clouds, not site-to-site at scale.
+
+The performance trap is cost. Cross-cloud egress runs $0.05 to $0.12 per GB on most clouds outbound to the internet, sometimes more to specific destinations, and the path matters. A direct interconnect between AWS and GCP via Megaport in a colo can be substantially cheaper at volume than internet egress.
+
+== Flow logs: the audit trail of every connection
+layout: checklist
+section: flow-logs
+check: Enable flow logs on every production VPC at full fidelity
+check: Store them in cheap object storage with 1-2 year retention
+check: Query via Athena, Log Analytics or BigQuery for IR
+check: Stream a sampled or filtered subset to your SIEM
+The page calls flow logs the single highest-value piece of data you control. Cost is meaningful but not prohibitive; the IR value is enormous.
+notes:
+Get flow logs on, get them stored, get them queryable. AWS VPC Flow Logs work per ENI, subnet or VPC, with source and destination IP, port, protocol, packets, bytes and action. Send them to S3, cheap and queried through Athena, or to CloudWatch Logs, more expensive and real-time. Azure VNet Flow Logs work per virtual network, subnet or NIC; they replace NSG flow logs, which can no longer be created and retire on 30 September 2027. GCP VPC Flow Logs are per subnet with a configurable sampling rate, stream to Cloud Logging and export to BigQuery.
+
+For full packet capture, AWS Traffic Mirroring, Azure Virtual Network TAP and GCP Packet Mirroring cover selected workloads. Use them sparingly, because they are expensive at scale, when you need deep packet inspection for incident response or compliance. NDR products such as Arkime, ntopng, Corelight, ExtraHop and Vectra consume mirrored or captured traffic for behavioral analytics, and Hubble and Pixie give Kubernetes-specific flow observability.
+
+The practical defaults are on the slide. For the SIEM, stream a sampled subset, or the rejected flows plus high-value source and destination flows.
+
+== AWS, Azure and GCP side by side
+layout: table
+section: comparison
+row: Capability | AWS | Azure | GCP
+row: Network boundary | VPC (regional) | VNet (regional) | VPC (global)
+row: Private API endpoints | VPC Endpoints, PrivateLink | Private Link, Private Endpoint | Private Service Connect
+row: ZTNA or app proxy | AWS Verified Access | Entra ID App Proxy | Identity-Aware Proxy
+row: Exfil perimeter | Endpoint policies and RCPs (approximate) | Storage firewall and Private Link (approximate) | VPC Service Controls
+The page calls VPC Service Controls the strongest native exfil control (disclosure: the site's author works at Wiz, which Google acquired in March 2026).
+notes:
+This is an excerpt of the page's one-screen comparison of the native network-security capabilities each cloud ships. The full table also covers host firewalls, subnet ACLs, managed L7 firewalls, transit hubs, egress NAT, DNS security, WAF, DDoS, flow logs, packet mirroring and dedicated hybrid links.
+
+The page draws three takeaways. GCP's VPC Service Controls is the strongest single egress and exfil control any cloud offers natively, and if you have a regulated workload and a choice of cloud, the page calls this a real differentiator. Azure's NSG-at-NIC-and-subnet model gives you a layering option AWS doesn't have, but adds confusion to debugging. AWS has the broadest set of network primitives but the least opinionated defaults: you do the assembly.
+
+The page attaches its disclosure to the first of these. The site's author works at Wiz, which Google acquired in March 2026, so a judgement that favours a Google Cloud control comes from someone with an interest in Google. Calibrate it against your own evaluation.
+
+== Five maturity stages
+layout: table
+section: maturity
+row: Stage | Name | What it looks like
+row: 1 | Flat VPC | Default VPC, permissive security groups, no flow logs
+row: 2 | Segmented | Tiered subnets, least-privilege security groups, flow logs, WAF
+row: 3 | Egress-controlled | Hub-and-spoke, FQDN allow-list, DNS firewall
+row: 4 | Microsegmented | NetworkPolicy, mesh mTLS, ZTNA in place of VPN
+row: 5 | Continuous-verified | Identity-aware policy at every hop, policy-as-code in CI
+Most production cloud environments live at Stage 2, with aspirations toward Stage 3. Stage 5 is rare, usually limited to regulated workloads.
+notes:
+Stage 1 is a flat VPC: the default VPC or one big VPC, security groups open to 0.0.0.0/0, no flow logs, no NAT-egress filtering, and public IPs on instances. Most early-stage cloud environments live here longer than they should.
+
+Stage 2 is segmented: custom VPCs with public, private and data tiers, least-privilege security groups that reference group IDs, flow logs enabled and stored, private endpoints for the most-used cloud APIs, NACLs as a backup deny-list, and a WAF in front of public surfaces.
+
+Stage 3 is egress-controlled: hub-and-spoke, Network Firewall inline on egress with an FQDN allow-list, DNS firewall with managed threat-intel rule groups, most cloud-API traffic on PrivateLink with endpoint policies, and CSPM alerting on policy drift.
+
+Stage 4 is microsegmented: Kubernetes NetworkPolicy default-deny with Cilium or Calico per-namespace policy, service mesh mTLS east-west, host-based microsegmentation for hybrid workloads, ZTNA in place of VPN, SASE or SSE in front of user traffic, and flow logs feeding NDR.
+
+Stage 5 is continuous-verified: identity-aware policy at every hop, an exfil boundary such as VPC Service Controls, policy-as-code in CI so misconfigurations never ship, anomaly detection that auto-isolates compromised workloads, and egress policy per workload rather than per VPC.
+
+The page says Stage 4 takes intentional investment, and Stage 5 is rare and usually limited to regulated workloads where it earns its keep.
+
+== Common pitfalls
+layout: list
+section: pitfalls
+The page lists three more: public managed databases, one WAF in front of another, and pods without NetworkPolicy.
+item: NAT-only egress with no filter
+item: Default VPC in production
+item: Security groups open to 0.0.0.0/0 beyond a public load balancer
+item: VPC peering everything to everything
+item: No flow logs
+item: A bastion on a public IP
+item: TLS inspection turned on for everything
+notes:
+NAT-only egress is the default: once a workload is compromised, the attacker has unrestricted outbound. The page calls Network Firewall with an FQDN allow-list the biggest improvement you can ship in a sprint. A default VPC in production has permissive defaults in every region and is often unattributed in IPAM; disable creation org-wide, because one in a prod account is almost certainly accidental.
+
+Security groups open to 0.0.0.0/0 on anything but a public load balancer are the bread-and-butter finding of every CSPM. Peering everything to everything gives O(n²) connections with no transit policy and no inspection, so move to hub-and-spoke by the third VPC. Without flow logs you can't answer "did this host ever talk to this IP?" when an incident happens.
+
+A bastion with port 22 open leads to bastion-credential theft and a full VPC pivot; ZTNA is the modern answer. TLS inspection on everything breaks certificate-pinning apps, mobile SDKs and anything that does its own validation, so inspect by exception.
+
+The other three: managed databases default to public on some configurations, so always put them in a private subnet, security-group-scoped to the app tier, with no public IP and with encryption in transit and at rest. Stacked WAFs mean three sets of false positives, so pick one policy plane. And cluster security groups are not enough: without NetworkPolicy, one compromised pod can talk to every other pod.
+
+== Are NAT Gateway and TLS enough without private endpoints?
+layout: question
+section: faq
+Think about what TLS protects, and where a compromised workload can still send your data.
+notes:
+This is a question from the page's FAQ. Ask it and let the room answer before moving on.
+
+== TLS protects data in flight, not against exfiltration
+layout: answer
+section: faq
+A compromised workload can still exfiltrate to a third-party S3 bucket or an attacker-owned API. Endpoint policies scope which accounts, principals and resources are reachable. Without them, you rely on IAM alone, which has a worse track record.
+notes:
+TLS protects data in flight. It does not stop a compromised workload from exfiltrating to a third-party S3 bucket, a public DNS-over-HTTPS resolver or an attacker-owned API.
+
+Private endpoints let you reach cloud-provider APIs and selected SaaS services without traversing the internet, and, critically, they let you write VPC endpoint policies that scope which accounts, principals and resources can be reached. Combined with a NAT Gateway that has Network Firewall in front of it, you get a deny-by-default egress posture.
+
+Skip the endpoints and you are relying on IAM alone to stop data movement, which the page says has a worse track record than a defense-in-depth design.
+
+== Is SASE worth it for a cloud-native company with no offices?
+layout: question
+section: faq
+Think about where SASE's users and applications sat when it was designed, and where yours sit.
+notes:
+This is the second FAQ question. Again, ask it before showing the answer.
+
+== Maybe: ZTNA plus an SWG often covers it
+layout: answer
+section: faq
+SASE was built for users in branches and apps in a datacenter. For remote-first, cloud-native companies, ZTNA plus an SWG often covers the need. SASE pays off with offices, unmanaged SaaS needing CASB, or DLP for regulated workloads.
+notes:
+The page's answer is maybe. SASE was built for the hub-and-spoke MPLS world, where users sat in branches and applications sat in a datacenter. For a fully cloud-native, remote-first company, ZTNA such as Cloudflare Access, Zscaler ZPA, Tailscale, Twingate, Google IAP or Azure App Proxy, plus an SWG such as Zscaler ZIA, Netskope or Cloudflare Gateway, often gives you what you need without the full SASE bundle.
+
+SASE pays off with a hybrid workforce in offices, lots of unmanaged SaaS that needs CASB, regulated workloads that need data-loss prevention on egress, and any environment that needs a single policy plane across user-to-app and app-to-internet traffic.
+
+If your security model is already that identity is the perimeter, every app sits behind an identity-aware proxy, and workloads egress through Network Firewall with FQDN allow-lists, the page says you may have built most of SASE without buying it.
