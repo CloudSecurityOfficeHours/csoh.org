@@ -1,7 +1,7 @@
 title: Cloud SOC & Threat Monitoring
 page: cloud-soc.html
 as-of: 2026-11-25
-promise: A cloud SOC detects, investigates and responds to security events across your cloud accounts by watching logs, because cloud abstracts the network.
+promise: A cloud SOC detects, investigates and responds to security events across your cloud accounts, and it watches logs because cloud abstracts the network.
 
 == The 30-second version
 layout: text
@@ -31,8 +31,8 @@ section: vs-traditional
 row: Dimension | Traditional SOC | Cloud SOC
 row: Primary signal | Packets, endpoint EDR telemetry, firewall logs | Control-plane audit logs, identity events, app telemetry
 row: Perimeter shape | Network: choke points, DMZ, firewall rules | Identity: every API call has an actor and a permission check
-row: Sensor placement | Span ports, taps, IDS sensors on the network | Logs come free from the provider; you choose what to keep
-row: Asset inventory | Hard problem: devices walk in and out | API-queryable, but tens of thousands of ephemeral resources
+row: Sensor placement | Span ports, taps, IDS sensors on the network | Logs come for free from the provider; you only choose what to keep
+row: Asset inventory | Hard problem: devices walk in and out | API-queryable, but counted in tens of thousands of ephemeral resources
 For most analysts coming from a traditional SOC, this mental-model shift is the biggest hurdle.
 notes:
 The page calls the mental-model shift from a traditional SOC into cloud the biggest hurdle for most analysts, and the one that takes the longest to internalize, because the muscle memory of network-centric monitoring is deep.
@@ -49,7 +49,7 @@ row: Forensics target | Disk image, memory capture, packet pcap | Log timeline f
 row: Contain action | Isolate the host on the network | Revoke session, rotate credential, detach IAM policy, quarantine resource
 row: Attack pattern | Phish, endpoint, lateral, exfil | Phish or token theft, IAM, resource manipulation, exfil
 row: Skillset | Packet analysis, EDR queries, malware reversing | KQL, SPL or ESQL; cloud API knowledge; IAM understanding
-Traditional SOC experience does not translate to cloud without 6-12 months of cloud-specific learning. The reverse is also true.
+The skills overlap, but moving from a traditional SOC still takes 6-12 months of cloud-specific learning. The reverse is also true.
 notes:
 Forensics in a traditional SOC targets a disk image of a host, a memory capture and a packet pcap. In cloud it is a log timeline reconstructed from CloudTrail, identity logs and app logs. Containment changes from isolating a host on the network to revoking a session, rotating a credential, detaching an IAM policy or quarantining a resource.
 
@@ -57,7 +57,7 @@ The dominant attack pattern on a traditional network runs phish, endpoint, later
 
 The overlap is real: incident response judgment, alert triage discipline, and the ability to read a log line and understand what an attacker is doing. But the page says the specific knowledge is different enough that "I ran a SOC for 10 years" does not translate to "I can run a cloud SOC" without 6-12 months of cloud-specific learning, and that the reverse is also true.
 
-== Almost every cloud detection has one shape
+== Almost every credible cloud detection has one shape
 layout: table
 section: detection-model
 This identity did this action on this resource from this context at this time, and that combination is suspicious.
@@ -65,7 +65,7 @@ row: Field | Examples
 row: Identity | User, role, service account, federated subject, automation key
 row: Action | The API call with parameters: iam:CreateAccessKey, s3:GetObject
 row: Resource | ARN, resource ID, bucket name, role name
-row: Context | Source IP, user agent, region, time, MFA used, session origin
+row: Context | Source IP, user agent, region, time, MFA used, source account, session origin
 row: Result | Succeeded, denied, rate-limited
 notes:
 The page says almost every credible cloud detection eventually reduces to one shape: this identity did this action on this resource from this context at this time, and that combination is suspicious.
@@ -141,7 +141,7 @@ layout: compare
 section: native
 col: AWS GuardDuty | CloudTrail, VPC Flow, DNS, S3, EKS audit, Lambda | Runtime Monitoring and Malware Protection | Org-wide through delegated admin
 col: Defender for Cloud | CSPM plus workload protection plans | Integrates with Sentinel | Most orgs enable workload plans on prod subscriptions only
-col: Security Command Center | Event, Container and VM Threat Detection | Standard tier free; Premium and Enterprise paid
+col: Security Command Center | Premium and Enterprise: Event, Container and VM Threat Detection | Standard tier is free and covers basic findings
 Each cloud ships a managed threat-detection service. They catch a meaningful percentage of real attacks for very little operational cost.
 notes:
 Each cloud ships its own threat-detection service, and they share more than they differ: managed, ML-driven, fed by the cloud's own internal telemetry, and delivering findings to a central console with minimal setup. The page's pragmatic answer is to turn them on, all of them, on day one.
@@ -185,7 +185,7 @@ Google Security Operations, formerly Chronicle, sells SIEM and SOAR in ingestion
 == How to pick a SIEM
 layout: checklist
 section: siem
-check: Match your observability stack: Datadog Cloud SIEM for Datadog shops, Sentinel for Microsoft
+check: Match your observability stack: Datadog Cloud SIEM for Datadog shops, Sentinel if Microsoft-heavy
 check: Price your ingest volume: Splunk's per-GB pricing punishes high-volume sources
 check: Small team? The vendor's content library outweighs query flexibility
 check: Count ramp time: the language your team already knows wins ties
@@ -200,7 +200,7 @@ The boundary is also moving from the other side. CNAPP platforms now ingest clou
 == The detection-engineering loop
 layout: checklist
 section: detection-eng
-Detection rules are code, with the same review, versioning and CI/CD as application code. Cloud SOCs depend on this more, because so many cloud detections are custom.
+Detection rules are treated as code, with the same review, versioning and CI/CD as application code. Cloud SOCs depend on this more than traditional SOCs did, because so many cloud detections are custom.
 check: Threat model the technique: where it sits in ATT&CK, what it requires
 check: Find or generate evidence with Atomic Red Team or Stratus Red Team
 check: Write the detection: a SIEM query or a portable Sigma rule
@@ -224,7 +224,7 @@ row: Sigma | Vendor-neutral format you convert to your SIEM's language; a large 
 row: Elastic detection-rules | Open, MITRE-mapped, well-maintained
 row: Microsoft Sentinel content | Microsoft-published KQL detections
 row: Splunk ESCU | Splunk's open research catalog
-row: Community researchers | Detection ideas published regularly, and rules shared in community repositories
+row: Community contributions | Researchers publish detection ideas regularly; practitioners share rules in community repositories
 Treat all of these as starting points. Every detection needs tuning to your environment before it earns a place in production.
 notes:
 Sigma is a vendor-neutral detection format that you convert to your SIEM's language, with a large open library. Elastic's detection-rules are open, MITRE-mapped and well-maintained. Microsoft publishes KQL detections as Sentinel content, and Splunk ESCU is Splunk's open research catalog.
@@ -385,7 +385,7 @@ This is a question from the page's FAQ. Ask the room how many people they think 
 == Smaller than most people assume, if it is well-tooled
 layout: answer
 section: faq
-Native detection, a modern SIEM with good content and LLM-assisted triage can credibly cover a mid-size enterprise with 5-8 humans. Larger orgs scale detection engineering and IR more than tier-1 triage.
+A 2026 cloud SOC running native detection, a modern SIEM with good content and LLM-assisted triage can credibly cover a mid-size enterprise with 5-8 humans. Larger orgs scale detection engineering and IR more than tier-1 triage.
 notes:
 Smaller than most people assume, if it is well-tooled. The page says a 2026 cloud SOC running native detection, a modern SIEM with good content and LLM-assisted triage can credibly cover a mid-size enterprise with 5-8 humans.
 
