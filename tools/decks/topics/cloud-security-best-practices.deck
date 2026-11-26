@@ -1,18 +1,18 @@
 title: Cloud Security Best Practices
 page: cloud-security-best-practices.html
 as-of: 2026-11-25
-promise: Master the first three practice areas and you will prevent the majority of cloud incidents seen in industry, according to the page.
+promise: Master the first three practice areas (identity, configuration and network) and you will prevent the majority of cloud incidents seen in industry.
 
 == Ranked by what breaks in real incidents
 layout: text
 section: top
 Most "cloud security best practices" lists are long and unranked. This one is ordered by what appears as the root cause in our breach kill chains. The later areas are where mature programs differentiate.
 notes:
-Most cloud security best practices lists are 100 items long and unranked, which the page says is the same as not having a list. The areas here are ordered by what actually appears as the root cause in the site's breach kill chains.
+Most cloud security best practices lists are 100 items long and unranked, which the page says is the same as not having a list. The areas here are ordered by what appears as the root cause in the site's breach kill chains.
 
 The page says that if you master the first three sections, you will prevent the majority of cloud incidents seen in industry. The later sections are where mature programs differentiate.
 
-The page is deliberate about scope: it calls out the high-leverage practices, and a practice left out is not necessarily one that does not matter.
+If a practice is not here, the page says that is because it calls out the ones with the biggest payoff, not because the practice does not matter.
 
 == The eight practice areas
 layout: compare
@@ -37,10 +37,10 @@ The figure shows a cloud security maturity model with four stages, from reactive
 
 The page says the practices that follow are roughly ordered by where they show up in this ladder. Start with the Stage 2 essentials, and layer Stage 3 tooling once those are in place.
 
-== Identity is the perimeter
+== Fix identity first
 layout: text
 section: identity
-The Capital One WAF role had S3 list and read across 700 buckets. If you only fix one category, fix identity. Most cloud breaches we have documented involve an identity failure somewhere in the chain.
+If you only fix one category, fix identity. Most cloud breaches we have documented involve an identity failure somewhere in the chain. At Capital One, a WAF role had S3 list and read across 700 buckets.
 notes:
 The page says that if you only fix one category, fix this one, because identity is the perimeter. Most cloud breaches the site has documented involve an identity failure somewhere in the chain.
 
@@ -97,16 +97,16 @@ section: network
 row: Control | What it does
 row: Default-deny security groups | No 0.0.0.0/0 on port 22 or 3389 except deliberate jump hosts
 row: Private endpoints | Keep managed-service traffic off the public internet
-row: Egress and DNS filtering | Catch exfiltration over HTTPS to attacker domains
+row: Egress and DNS filtering | Catch HTTPS exfiltration once log monitoring is wired up
 row: Zero trust between services | mTLS or workload-identity authorization
-row: WAF with modern rules | Explicit SSRF rule for 169.254.169.254
-Cloud networks are not on-prem perimeters, but they still limit lateral movement and exfiltration.
+row: WAF with modern rules | SSRF and OWASP Top 10 rules; defaults are not enough
+Cloud networks are not perimeters in the on-prem sense, but network controls still matter, especially for limiting lateral movement and exfiltration.
 notes:
 Cloud networks are not perimeters in the on-prem sense, but the controls still matter, especially for limiting lateral movement and exfiltration.
 
 Private Link and VPC endpoints reduce attack surface and give you flow logs you can audit. The page says most data exfiltration goes out over HTTPS to attacker-controlled domains, and that egress proxies, NAT-gateway logs and DNS filtering catch it when log monitoring is wired up.
 
-For zero trust between services, use mTLS through a service mesh or workload-identity-based authorization, and assume an attacker is already on the LAN. For WAFs, the page says defaults are not enough: add explicit rules for SSRF and the OWASP Top 10. It also covers DDoS protection on internet-facing services.
+For zero trust between services, use mTLS through a service mesh or workload-identity-based authorization, and assume an attacker is already on the LAN. For WAFs, the page says defaults are not enough: add explicit rules for SSRF, blocking requests to 169.254.169.254, and for the OWASP Top 10. It also covers DDoS protection on internet-facing services.
 
 == Data protection and secrets
 layout: checklist
@@ -118,9 +118,9 @@ check: Encrypt in transit, end to end
 check: Back up, and test the restore
 check: DLP on data egress paths
 notes:
-Classifications from Purview, Macie or Google DLP drive access policy, encryption requirements and incident-response priority. Customer-managed keys give you a rotation policy, deletion control and a stop-the-bleeding lever during an incident.
+Microsoft Purview, AWS Macie and Google DLP can find PII, PCI and PHI in storage, and the classifications drive access policy, encryption requirements and incident-response priority. Customer-managed keys give you a rotation policy, deletion control and a stop-the-bleeding lever during an incident.
 
-Use a managed secrets store, auto-rotate where supported, and run gitleaks, trufflehog or GitHub secret scanning in CI. For transit, the page says TLS 1.2 minimum and 1.3 preferred, and treats the trust store as part of the control: a bundled CA list commits you to every root in it, and short-lived certificates keep the window small.
+Use a managed secrets store, auto-rotate where supported, and run gitleaks, trufflehog or GitHub secret scanning in CI. For transit, the page says TLS 1.2 minimum and 1.3 preferred, and treats the trust store as part of the control: a bundled CA list in a container or device image commits you to every root in it, revocation often lags a compromised certificate, and short-lived certificates are what keep that window small.
 
 Untested backups do not count. Pair DLP with egress controls so the alert fires before the data leaves.
 
@@ -128,11 +128,11 @@ Untested backups do not count. Pair DLP with egress controls so the alert fires 
 layout: figure
 section: data | detection
 figure: detection-baseline
-The logging section, reduced to the order that produces a detection program.
+Logging and detection, reduced to the order that produces a detection program.
 notes:
 The figure shows four steps from the logging section: turn on native detection, centralize control-plane logs, write detections as code, then test them and rehearse.
 
-The page's caption calls this the logging section reduced to the order that actually produces a detection program.
+The page's caption calls this the logging section reduced to the order that produces a detection program.
 
 == Logging and detection
 layout: checklist
@@ -154,7 +154,7 @@ Keep Sigma, KQL or SPL detections versioned and peer-reviewed, mapped to MITRE A
 layout: checklist
 section: supply-chain
 check: Pin dependencies to exact versions
-check: SBOM for every artifact, signed with Sigstore or cosign
+check: SBOM for every artifact; sign with Sigstore/cosign
 check: Hardened, SLSA-style build pipelines
 check: OIDC, not stored credentials, for cloud deploys
 check: Scope CI tokens minimally
@@ -162,7 +162,7 @@ check: Pin GitHub Actions to a full SHA
 notes:
 The page says modern attackers pivot through your build pipeline, with SolarWinds as the canonical case and npm and PyPI typosquats and the Codecov compromise as routine.
 
-Commit lockfiles, and use Renovate or Dependabot for bumps with PR review. Use SPDX or CycloneDX for SBOMs, signed so you can prove a binary came from your build. Builds should run in isolated, hermetic environments with signed provenance attestations.
+Commit lockfiles, and use Renovate or Dependabot for bumps with PR review. Produce SBOMs in SPDX or CycloneDX format, and sign with Sigstore/cosign so you can prove a binary came from your build. Builds should run in isolated, hermetic environments with signed provenance attestations.
 
 OIDC from GitHub Actions to AWS, Azure or GCP eliminates long-lived deploy keys, so there is no secret to leak. A test-runner job does not need write access to production. Tags can be moved silently by a compromised maintainer, while SHAs cannot.
 
@@ -198,7 +198,7 @@ The page calls this the newest category and the one with the most movement, and 
 
 Prompt injection is the default vulnerability of any system that lets a model see attacker-controllable text. Guardrails help but are not sufficient. If an agent can call APIs, scope those calls to least privilege with the same discipline as IAM, because confused-deputy attacks are real.
 
-Retrieved web pages, emails and PDFs are attacker-controlled, so strip HTML and summarize through a constrained sub-call. Log model inputs, outputs and tool calls, tagged with user identity. Send production traffic to external model APIs through DLP and use enterprise tier endpoints with no-training guarantees for sensitive workloads.
+Retrieved web pages, emails and PDFs are attacker-controlled, so strip HTML, summarize through a constrained sub-call, and never feed raw retrieved content into a tool-calling context. Log model inputs, outputs and tool calls, tagged with user identity. Send production traffic to external model APIs through DLP and use enterprise tier endpoints with no-training guarantees for sensitive workloads.
 
 == Zero trust at every layer
 layout: figure
@@ -238,34 +238,34 @@ The page's caption says most cloud configuration evidence, such as CloudTrail, I
 == Anti-patterns: things to stop doing
 layout: list
 section: anti-patterns
-The page lists these and one more: no monitoring until later. Fix them before working on more sophisticated controls.
+If you see any of these in your environment, fix them before working on more sophisticated controls. The eighth: "We'll add monitoring later."
 item: Long-lived IAM access keys for service-to-service auth
 item: Public S3 buckets for convenience
 item: Wildcard IAM policies
 item: SSH into instances to debug
-item: "Just give me admin" and sort it out later
+item: "Just give me admin and I'll figure out what I need later"
 item: Using the root account for daily work
 item: Email as MFA
 notes:
 The page frames these as the flip side of the best practices: if you see any of them in your environment, fix them before working on more sophisticated controls.
 
-Use OIDC federation or workload identity instead of long-lived keys. Use signed URLs, CloudFront with OAC or proper authentication instead of public buckets. Scope even admin roles to the actions and resources actually needed. Use Session Manager, Azure Bastion or Google IAP, which leave audit trails and do not require open inbound 22.
+Use OIDC federation or workload identity instead of long-lived keys. Use signed URLs, CloudFront with OAC or proper authentication instead of public buckets. Scope even admin roles to the actions and resources that are needed. Use Session Manager, Azure Bastion or Google IAP, which leave audit trails and do not require open inbound 22.
 
 For the admin request, the right answer is to find out what is needed and grant exactly that, and IAM Access Advisor or Access Analyzer can answer that after a trial period. Lock the root credentials in a vault with hardware MFA and break glass only for billing or account closure. Email is push-bombable, phishable and account-takeover-able, so use FIDO2 or platform authenticators.
 
-The page's eighth item is that you will add monitoring later: turn on GuardDuty, Defender or Security Command Center before you turn the workload on.
+The eighth anti-pattern is "we'll add monitoring later." Moving production workloads to the cloud without GuardDuty, Defender or Security Command Center enabled means flying blind from day one, so turn it on before you turn the workload on.
 
 == Why is identity first, not last?
 layout: question
 section: identity
-Think about where most breaches in the kill chains started.
+Think about what most of the documented breach chains have in common.
 notes:
 Ask this and let the room answer before moving on.
 
 == Identity is the new perimeter
 layout: answer
 section: identity
-Most cloud breaches involve at least one identity failure, so identity is the page's first and most important category.
+In the cloud, identity is the new perimeter, and most cloud breaches involve at least one identity failure. That is why identity comes first.
 notes:
 The page's answer is that in the cloud, identity is the new perimeter, and most cloud breaches involve at least one identity failure. That is why the identity section is first, not last.
 
@@ -279,7 +279,7 @@ Ask this and let the room answer before moving on. The page names Atomic Red Tea
 == Untested rules probably do not fire
 layout: answer
 section: detection
-Detection content that has not been exercised in production conditions probably does not fire. Test it, and rehearse the response at least annually.
+Detection content that has not been exercised in production conditions probably does not fire. Test it, run tabletop exercises quarterly and real exercises at least annually.
 notes:
 The page says detection content that has not been exercised in production conditions is detection content that probably does not fire. Test with tools such as Atomic Red Team, Stratus Red Team, the GuardDuty Tester or Microsoft Attack Simulator.
 
