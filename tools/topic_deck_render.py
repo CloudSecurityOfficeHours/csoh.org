@@ -22,8 +22,9 @@ colour scheme and device scale 2. The render stops when style.css did not
 load, and a PNG of a single colour is refused as blank. The hero's art is
 hidden on article pages, so it is revealed on a solid panel the colour of
 the cover. PNGs are cached in tools/decks/topics/build/figures/<slug>/
-<target>-<hash>.png, keyed by the SVG markup's hash, so an unchanged figure
-is never rendered again; delete the directory to render everything afresh.
+<target>-<hash>.png, keyed by the SVG markup's hash (for the hero, also by
+style.css and the CSS that reveals it), so an unchanged figure is never
+rendered again; delete the directory to render everything afresh.
 
 build_topic_decks.py imports this module only on its --build and
 --self-test-render paths, so its --self-test and --check need neither
@@ -139,11 +140,24 @@ def figure_cache() -> Path:
     return bbd.outline_dir(btd.TOPIC) / "build" / "figures"
 
 
+def _hero_key(html: str, page: Path) -> str:
+    """The hero PNG's cache key. The hero's look comes from style.css and
+    HERO_CSS as well as its SVG, so a change to any of the three renders it
+    afresh."""
+    try:
+        css = (page.parent / "style.css").read_bytes()
+    except OSError:
+        css = b""
+    parts = (btd.hero_sha256(html), hashlib.sha256(css).hexdigest(), HERO_CSS)
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
 def _target_sha(html: str, target: str, page: Path) -> str:
+    """A target's cache key: a figure's SVG hash, or the hero's _hero_key."""
     if target == "hero":
         if not btd.has_hero(html):
             raise FigureError(f"{page.name} has no hero illustration")
-        return btd.hero_sha256(html)
+        return _hero_key(html, page)
     figs = btd.figures(html)
     if target not in figs:
         raise FigureError(f"{target!r} is not a figure on {page.name}; its figures are: {', '.join(figs) or 'none'}")
@@ -331,22 +345,23 @@ def _render_cover(page: _TopicPage) -> None:
 RENDERERS = {**r.RENDERERS, "figure": _render_figure}
 
 
-def _cover_alt(deck, html: str) -> str | None:
-    """The cover picture's alt text: the hero's label, else the tile's alt."""
-    if btd.has_hero(html):
-        return btd.hero_label(html)
-    tile = btd.topic_tile(deck.slug)
-    return tile[1] if tile else None
-
-
-def _cover_art(deck, html: str, art: dict[str, Path]) -> tuple[Path, str] | None:
-    """The cover's picture and alt text: the rendered hero, else the page's
-    topics.html tile; None when there is neither."""
-    if btd.has_hero(html):
+def _cover_art(deck, html: str, art: dict[str, Path]) -> tuple[Path, str]:
+    """The cover's picture and alt text, from build_topic_decks.cover_source
+    (which verify_pptx reads too): the rendered hero, else the page's
+    topics.html tile. Raises FigureError when there is nothing to show."""
+    where = f"{deck.slug}.deck (cover)"
+    source = btd.cover_source(deck.slug, html)
+    if source is None:
+        raise FigureError(f"{where}: {deck.page} has no hero illustration, and its topics.html card "
+                          "has no tile image to show instead")
+    kind, path, alt = source
+    if kind == "hero":
         path = art.get("hero")
-        return (path, btd.hero_label(html)) if path else None
-    tile = btd.topic_tile(deck.slug)
-    return tile if tile and tile[0].is_file() else None
+        if path is None:
+            raise FigureError(f"{where}: {deck.page} has a hero illustration, but no rendered picture of its hero")
+    elif not path.is_file():
+        raise FigureError(f"{where}: the topics.html tile {bbd._rel(path)} is missing")
+    return path, alt
 
 
 def render_deck(deck, out: Path, page_html: str | None = None, art: dict[str, Path] | None = None) -> Path:
@@ -362,9 +377,6 @@ def render_deck(deck, out: Path, page_html: str | None = None, art: dict[str, Pa
         wanted += [s.figure for s in deck.slides if s.layout == "figure" and s.figure in page.figures]
         art = render_figure_pngs(bbd.ROOT / deck.page, wanted, figure_cache()) if wanted else {}
     cover = _cover_art(deck, page_html, art)
-    if cover is None:
-        raise FigureError(f"{deck.slug}.deck (cover): {deck.page} has no hero illustration, and its "
-                          "topics.html card has no tile image to show instead")
     ctx = _Context(page, art, cover)
     return r.render_deck(deck, out, page_cls=functools.partial(_TopicPage, ctx=ctx), renderers=RENDERERS,
                          cover=_render_cover)
@@ -410,7 +422,8 @@ def verify_pptx(path: Path, deck, pictures: bool = True, page_html: str | None =
     if page_html is None:
         page_html = (bbd.ROOT / deck.page).read_text(encoding="utf-8")
     page = btd.parse_topic_page(page_html, deck.page)
-    cover_alt = _cover_alt(deck, page_html)
+    source = btd.cover_source(deck.slug, page_html)
+    cover_alt = source[2] if source else None
     outline = {i + 3: s for i, s in enumerate(deck.slides)}
     for n, slide in enumerate(r.reopen(path).slides, start=1):
         tag = f"{path.name} slide {n}"
@@ -632,6 +645,9 @@ def _case_cover_hero_or_tile(tmp: Path) -> None:
         assert verify_pptx(out, deck, page_html=nohero) == [], verify_pptx(out, deck, page_html=nohero)
     (pic,) = _pics(list(r.reopen(out).slides)[0])
     assert _alt(pic) == "Kube graphic" and pic.image.blob == tile.read_bytes(), _alt(pic)
+    # A page with a hero but no rendered picture of it says so, rather than
+    # that the page has no hero.
+    _layout_error(lambda: _render(tmp, deck, figs, name="nohero.pptx"), "no rendered picture of its hero")
     # Control: with no hero and no tile there is nothing to show, and it says so.
     (tmp / "topics.html").write_text("<main></main>\n", encoding="utf-8")
     with bbd._rooted(tmp):
@@ -683,6 +699,15 @@ def _case_render_png_cached_and_checked(tmp: Path) -> None:
         os.utime(p, (1, 1))
     assert render_figure_png(page, "cluster-supply-chain", out) == paths["cluster-supply-chain"]
     assert all(p.stat().st_mtime == 1 for p in paths.values()), "a cached PNG was rendered again"
+    # The hero is drawn by the stylesheet as well as its SVG, so a changed
+    # style.css renders it afresh under a new name; a figure keeps its key,
+    # the hash of its SVG markup alone.
+    with (site / "style.css").open("a", encoding="utf-8") as f:
+        f.write("/* restyled */\n")
+    again = render_figure_pngs(page, ["hero", "cluster-supply-chain"], out)
+    assert again["hero"] != paths["hero"] and check_png(again["hero"]), (again, paths)
+    assert again["cluster-supply-chain"] == paths["cluster-supply-chain"]
+    assert paths["cluster-supply-chain"].stat().st_mtime == 1, "a figure was rendered again"
     nocss = site / "nocss.html"
     nocss.write_text(f"<html><head></head><body>{body}</body></html>\n", encoding="utf-8")
     _layout_error(lambda: render_figure_pngs(nocss, ["cluster-supply-chain"], out), "stylesheet")

@@ -42,10 +42,12 @@ Outline format (what differs from a breach outline):
 - A slide cites one or two sections; three or more is a parse error.
 
 published.json maps each slug to its id, outline_sha256, page_sha256, the
-hash of each section the deck cites (sections) and the publish date. A
-section's hash covers its text and the SVG markup of its figures, so a
-redrawn diagram flags the deck; --stale names the cited sections that
-changed, and a change to a section no slide cites does not flag the deck.
+hash of the cover's art (cover_sha256), the hash of each section the deck
+cites (sections) and the publish date. A section's hash covers its text and
+the SVG markup of its figures, so a redrawn diagram flags the deck; --stale
+names the cited sections that changed, and a change to a section no slide
+cites does not flag the deck. The cover's art (the hero, or the topics.html
+tile on a page without one) sits outside <main> and is hashed on its own.
 
 --self-test and --check use the standard library only. --build and
 --self-test-render need python-pptx and Pillow, and --build needs Playwright
@@ -171,6 +173,33 @@ def topic_tile(slug: str) -> tuple[Path, str] | None:
                 alt = ALT_ATTR_RE.search(img.group(0))
                 return bbd.ROOT / htmllib.unescape(src.group(1)), htmllib.unescape(alt.group(1)) if alt else ""
     return None
+
+
+def cover_source(slug: str, page_html: str) -> tuple[str, Path | None, str] | None:
+    """What the generated cover shows: ("hero", None, its label) when the
+    page has a hero illustration, else ("tile", the image, its alt) from the
+    page's topics.html card, else None. The renderer and its verify both
+    read it, so they cannot disagree."""
+    if has_hero(page_html):
+        return "hero", None, hero_label(page_html)
+    tile = topic_tile(slug)
+    return ("tile", tile[0], tile[1]) if tile else None
+
+
+def cover_sha256(slug: str, page_html: str) -> str:
+    """A hash of the cover's art: the hero's SVG markup, or the tile's
+    image bytes, path and alt text."""
+    source = cover_source(slug, page_html)
+    if source is None:
+        return _sha("none")
+    kind, path, alt = source
+    if kind == "hero":
+        return _sha("hero\n" + _svg_key(hero_svg(page_html) or ""))
+    try:
+        image = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        image = "missing"
+    return _sha(f"tile\n{bbd._rel(path)}\n{alt}\n{image}")
 
 
 # ---------------------------------------------------------------------------
@@ -488,7 +517,7 @@ class _Walker(HTMLParser):
             if sid in self.sections:
                 raise OutlineError(f"section id {sid!r} is used twice, or is {TOP!r}, which names the text above the first h2")
         else:
-            base = sid = _slug(text)
+            base = sid = _slug(plain)
             n = 2
             while sid in self.sections:
                 sid, n = f"{base}-{n}", n + 1
@@ -686,7 +715,7 @@ def _wiz_findings(deck: bbd.BDeck, page: TopicPage) -> list[str]:
     out: list[str] = []
     shown_yet = _names_wiz([deck.title, deck.promise])
     if shown_yet and not _discloses([deck.title, deck.promise]):
-        out.append(f"{deck.slug}.deck: title or promise names Wiz first, so the promise carries "
+        out.append(f"{deck.slug}.deck: title or promise names Wiz first, so the title or the promise carries "
                    f"{NEED_DISCLOSURE}, as {page.path} does")
     notes_done = shown_yet
     for s in deck.slides:
@@ -752,22 +781,30 @@ def topic_page_findings(deck: bbd.BDeck, html: str, today: date | None = None,
 def _page_state(deck: bbd.BDeck, html: str) -> dict:
     hashes = section_hashes(html)
     cited = sorted({i for s in deck.slides for i in (s.section or []) if i in hashes})
-    return {"page_sha256": topic_page_sha256(html), "sections": {i: hashes[i] for i in cited}}
+    return {
+        "page_sha256": topic_page_sha256(html),
+        "cover_sha256": cover_sha256(deck.slug, html),
+        "sections": {i: hashes[i] for i in cited},
+    }
 
 
-def _page_changes(entry: dict, html: str) -> list[str]:
-    """The cited sections that changed or went since --record. A change
-    anywhere else on the page leaves the deck as it is."""
+def _page_changes(deck: bbd.BDeck, entry: dict, html: str) -> list[str]:
+    """Whether the cover's art changed, and which cited sections changed or
+    went, since --record. A change anywhere else on the page leaves the
+    deck as it is."""
+    when = entry.get("published")
+    out = []
+    if entry.get("cover_sha256") != cover_sha256(deck.slug, html):
+        out.append(f"cover art changed since it was published on {when}; the public deck shows "
+                   "the old picture and needs re-publishing")
     recorded = entry.get("sections")
     if not isinstance(recorded, dict) or not recorded:
-        return ["its mapping entry records no sections, so whether the page changed is unknown"]
+        return out + ["its mapping entry records no sections, so whether the page changed is unknown"]
     if entry.get("page_sha256") == topic_page_sha256(html):
-        return []
-    when = entry.get("published")
+        return out
     hashes = section_hashes(html)
     changed = [i for i in recorded if i in hashes and hashes[i] != recorded[i]]
     gone = [i for i in recorded if i not in hashes]
-    out = []
     if changed:
         out.append(f"sections changed since it was published on {when}: {', '.join(changed)}; "
                    "review the slides that cite them")
@@ -800,7 +837,7 @@ TOPIC = bbd.DeckKind(
     renderer="topic_deck_render",
     deck_line_class="page-meta",
     deck_line_place="right after the page-meta line at the top of <main>",
-    entry_keys=("id", "outline_sha256", "page_sha256", "sections", "published"),
+    entry_keys=("id", "outline_sha256", "page_sha256", "cover_sha256", "sections", "published"),
     page_state=_page_state,
     page_changes=_page_changes,
 )
@@ -1071,7 +1108,12 @@ def _case_wiz_disclosure(tmp: Path) -> None:
     # The cover counts: a promise naming Wiz needs it there.
     cover = bbd.parse_outline_text(THEADER.replace("What a managed", "Wiz on what a managed") + plain, "d.deck", TOPIC)
     f = wiz(cover)
-    assert len(f) == 1 and f[0].startswith("d.deck: title or promise"), f
+    assert len(f) == 1 and f[0].startswith("d.deck: title or promise") and "title or the promise carries" in f[0], f
+    # The disclosure may sit in either the title or the promise.
+    wiz_header = THEADER.replace("What a managed", "Wiz on what a managed")
+    for line in ("title: Kubernetes", "promise: Wiz on what a managed cluster runs."):
+        disclosed = _plant(wiz_header, line, f"{line} {DISCLOSURE}")
+        assert wiz(bbd.parse_outline_text(disclosed + plain, "d.deck", TOPIC)) == [], line
 
 
 def _case_section_cap(tmp: Path) -> None:
@@ -1306,6 +1348,56 @@ def _case_stale_names_sections(tmp: Path) -> None:
                            "the slides that cite them need another section"), gone
 
 
+TILE_CARD = (
+    '<a href="kube.html" class="card-link"><div class="resource-card"><picture>'
+    '<img class="resource-preview" src="img/thumbs/kube.jpg" alt="Kube graphic" width="1440" height="960">'
+    '</picture><h3>K</h3></div></a>\n'
+)
+
+
+def _case_stale_sees_cover(tmp: Path) -> None:
+    """The cover's art sits outside <main>, where no section hash reaches:
+    a redrawn hero, or on a page with none a changed topics.html tile,
+    makes the deck stale."""
+    outline = THEADER + _tslide("section: what-is", "Text.", heading="A")
+    nohero = _plant(PAGE, HERO, "")
+    _topic_tree(tmp, {"kube": outline}, {"kube.html": PAGE})
+    (tmp / "img" / "thumbs").mkdir(parents=True)
+    (tmp / "img" / "thumbs" / "kube.jpg").write_bytes(b"tile one")
+    (tmp / "topics.html").write_text(TILE_CARD, encoding="utf-8")
+    with _rooted(tmp):
+        deck = bbd.parse_outline(tmp / "tools/decks/topics/kube.deck", TOPIC)
+
+        def record(html: str) -> None:
+            (tmp / "kube.html").write_text(html, encoding="utf-8")
+            bbd.save_mapping({"kube": {"id": ID_A, "outline_sha256": bbd.outline_sha256(deck),
+                                       **TOPIC.page_state(deck, html), "published": "2026-01-02"}}, TOPIC)
+
+        def stale(html: str) -> list[str]:
+            (tmp / "kube.html").write_text(html, encoding="utf-8")
+            rc, out = _capture(bbd.stale_report, True, TOPIC)
+            assert rc == 0, out
+            return out.splitlines()
+
+        record(PAGE)
+        assert stale(PAGE) == ["stale check: 0 of 1 published decks changed since publishing"]
+        redrawn = _plant(PAGE, 'width="200" height="100" fill="#38bdf8"', 'width="260" height="100" fill="#38bdf8"')
+        assert stale(redrawn) == [
+            "kube: cover art changed since it was published on 2026-01-02; the public deck shows "
+            "the old picture and needs re-publishing",
+            "stale check: 1 of 1 published decks changed since publishing",
+        ]
+        # On a page with no hero the cover shows the tile: its image and its
+        # alt text both count, and the hero's absence is not a change.
+        record(nohero)
+        assert stale(nohero)[0].startswith("stale check: 0 of 1")
+        (tmp / "img" / "thumbs" / "kube.jpg").write_bytes(b"tile two")
+        assert stale(nohero)[0].startswith("kube: cover art changed")
+        record(nohero)
+        (tmp / "topics.html").write_text(TILE_CARD.replace("Kube graphic", "Cluster graphic"), encoding="utf-8")
+        assert stale(nohero)[0].startswith("kube: cover art changed")
+
+
 def _case_stamp_after_page_meta(tmp: Path) -> None:
     out = bbd.stamp_page(PAGE, ID_A, TOPIC)
     line = bbd.deck_line_html(ID_A, "        ", TOPIC)
@@ -1342,6 +1434,13 @@ def _case_stamp_idempotent(tmp: Path) -> None:
     assert swapped.count("data-topic-deck") == 1 and ID_B in swapped and ID_A not in swapped
     # A breach stamp leaves a topic deck line alone, and the reverse.
     assert bbd.stamp_page(once, None) == once
+    breach_line = bbd.deck_line_html(ID_B)
+    both = _plant(PAGE, "            <h2>Supply chain</h2>\n",
+                  "            <h2>Supply chain</h2>\n" + breach_line + "\n")
+    assert bbd.stamp_page(both, None, TOPIC) == both
+    topic = bbd.stamp_page(both, ID_A, TOPIC)
+    assert topic.count(breach_line + "\n") == 1 and topic.count("data-topic-deck") == 1, topic
+    assert bbd.stamp_page(topic, None, TOPIC) == both
 
 
 def _case_crosslink_skips_topic_deck_line(tmp: Path) -> None:
@@ -1399,19 +1498,67 @@ def _case_check_empty_tree(tmp: Path) -> None:
         assert rc == 1 and "no topic pages found" in out, out
 
 
+def _page_invariants(name: str, html: str) -> None:
+    """What holds for any page, whatever it says: it parses or raises
+    OutlineError, every figure sits in a section it lists, the extract
+    carries every section's heading line, and stamping either refuses with
+    ValueError or gives the page back unchanged once unstamped, with every
+    section hash as it was."""
+    try:
+        page = parse_topic_page(html, name)
+    except OutlineError:
+        return
+    assert all(f.section in page.sections for f in page.figures.values()), name
+    text = extract_text(html, name)
+    assert all(s.lines[0] in text.splitlines() for s in page.sections.values()), name
+    bare = bbd.stamp_page(html, None, TOPIC) if not bbd.loose_deck_markup(html, TOPIC) else html
+    try:
+        stamped = bbd.stamp_page(bare, ID_A, TOPIC)
+    except ValueError:
+        return
+    assert bbd.stamp_page(stamped, None, TOPIC) == bare, name
+    assert section_hashes(stamped) == section_hashes(bare), name
+
+
 def _case_real_pages(tmp: Path) -> None:
-    """Structure only, so a rewrite of a page's prose does not fail the
-    self-test: every topic page parses, every figure is keyed and sits in a
-    section, and every page takes a deck line and gives it back."""
+    """The invariants on every real topic page. Nothing here reads what a
+    page says, so an edit to a page cannot fail the self-test unless it
+    meets a defect in this tool; whether a page suits a deck is --check's
+    business, for the pages that have one."""
     pages = topic_pages()
     assert pages and not set(pages) & EXCLUDED, pages
     for name in pages:
-        html = (bbd.ROOT / name).read_text(encoding="utf-8")
-        secs, figs = section_hashes(html), figures(html)
-        assert "top" in secs and len(secs) > 1, name
-        for key, fig in figs.items():
-            assert fig.section in secs and fig.title and fig.caption, (name, key)
-        assert bbd.stamp_page(bbd.stamp_page(html, ID_A, TOPIC), None, TOPIC) == html, name
+        _page_invariants(name, (bbd.ROOT / name).read_text(encoding="utf-8"))
+    # Control: pages that break the deck rules (a figure with no id, no
+    # page-meta line, two sections with one id) pass the invariants.
+    for broken in (
+        _plant(PAGE, 'id="cmp-title"', ""),
+        _plant(PAGE, META_LINE + "\n", ""),
+        _plant(PAGE, '<section id="supply-chain">', '<section id="what-is">'),
+    ):
+        _page_invariants(PAGE_PATH, broken)
+
+
+def _case_slug_from_plain_text(tmp: Path) -> None:
+    """An h2 outside an id'd section takes a slug of its text, without the
+    URL the extract shows after a link in it."""
+    linked = _plant(PAGE, "<h2>Where next</h2>", '<h2>Where <a href="https://example.com/next">next</a></h2>')
+    assert list(section_hashes(linked))[-1] == "where-next", list(section_hashes(linked))
+    assert "## Where next (https://example.com/next) {#where-next}" in extract_text(linked, PAGE_PATH)
+
+
+def _case_slide_count_bounds(tmp: Path) -> None:
+    """15 to 30 slides, counting the three generated ones."""
+    def count_findings(n: int) -> list[str]:
+        body = "".join(_tslide("section: what-is", "Text.", heading=f"S{i}") for i in range(n))
+        return [f for f in bbd.style_findings(_tparse(body), TOPIC) if "slides including" in f]
+
+    for outline_slides, ok in ((11, False), (12, True), (27, True), (28, False)):
+        f = count_findings(outline_slides)
+        total = outline_slides + bbd.GENERATED_SLIDES
+        assert (f == []) == ok, (total, f)
+        if not ok:
+            _only(f, f"{total} slides", "15 to 30")
 
 
 CASES: list = [
@@ -1441,6 +1588,9 @@ CASES: list = [
     ("record_writes_sections", _case_record_writes_sections),
     ("check_empty_tree", _case_check_empty_tree),
     ("real_pages", _case_real_pages),
+    ("stale_sees_cover", _case_stale_sees_cover),
+    ("slug_from_plain_text", _case_slug_from_plain_text),
+    ("slide_count_bounds", _case_slide_count_bounds),
 ]
 
 

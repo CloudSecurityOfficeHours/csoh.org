@@ -266,8 +266,9 @@ class DeckKind:
     entry_keys: tuple[str, ...]
     # (deck, page html) -> the page-derived entry fields --record writes.
     page_state: Callable[[BDeck, str], dict]
-    # (mapping entry, page html) -> why the page moved since --record, or [].
-    page_changes: Callable[[dict, str], list[str]]
+    # (deck, mapping entry, page html) -> why the page moved since --record,
+    # or [].
+    page_changes: Callable[[BDeck, dict, str], list[str]]
 
 
 # The callables name functions defined further down; a lambda reads the name
@@ -295,7 +296,7 @@ BREACH = DeckKind(
     deck_line_place="right after the last pm-link line in inc-header",
     entry_keys=("id", "outline_sha256", "page_sha256", "published"),
     page_state=lambda deck, html: {"page_sha256": page_sha256(html)},
-    page_changes=lambda entry, html: _page_hash_changes(entry, html),
+    page_changes=lambda deck, entry, html: _page_hash_changes(entry, html),
 )
 
 
@@ -1390,7 +1391,7 @@ def _stale_reasons(slug: str, entry, path: Path | None, kind: DeckKind = BREACH)
         )
     page_path = ROOT / page_rel(slug, kind)
     try:
-        reasons += kind.page_changes(entry, page_path.read_text(encoding="utf-8"))
+        reasons += kind.page_changes(deck, entry, page_path.read_text(encoding="utf-8"))
     except (OSError, OutlineError) as e:
         reasons.append(f"page cannot be read, so whether it changed is unknown: {e}")
     return reasons

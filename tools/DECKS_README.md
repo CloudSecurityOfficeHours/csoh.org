@@ -450,9 +450,9 @@ Speaker notes, on every slide.
 - On a page that carries "(disclosure: the site's author works at Wiz)", the
   first slide that shows Wiz carries the disclosure on the slide, where the
   audience sees it. The notes never count for this: they are not shown, and
-  the PDF leaves them out. A title or promise that names Wiz puts it in the
-  promise. Separately, notes that name Wiz before any slide shows it carry
-  the disclosure too, for the presenter who reads them out.
+  the PDF leaves them out. A title or promise that names Wiz carries it in the
+  title or the promise. Separately, notes that name Wiz before any slide shows
+  it carry the disclosure too, for the presenter who reads them out.
 - Limits: 15 to 30 slides counting the generated cover, how-to-use and
   closing slides; at most 40 words of prose per slide (25 on a `figure`
   slide), 14 per typed field, 12 in a heading and 300 in the notes; no U+2013
@@ -462,14 +462,16 @@ Speaker notes, on every slide.
 
 - `--check` reports every finding above, naming the outline line, and
   validates `tools/decks/topics/published.json`: every entry has exactly
-  `id`, `outline_sha256`, `page_sha256`, `sections` (each cited section id
-  mapped to its hash) and `published`.
+  `id`, `outline_sha256`, `page_sha256`, `cover_sha256` (the cover's art),
+  `sections` (each cited section id mapped to its hash) and `published`.
 - A section's hash covers its extract text, link URLs included, and the SVG
   markup of its figures, so a redrawn diagram changes it while the
   `page-meta` date, the deck line, the nav and a glossary link do not.
   `--stale` names the cited sections that changed or are no longer on the
   page; a change to a section no slide cites leaves the deck current, so a
-  re-review reads only the named sections.
+  re-review reads only the named sections. The cover's art sits outside
+  `<main>`, so it has its own hash: a redrawn hero, or on a page without one
+  a changed tile image or alt text, makes the deck stale too.
 - The deck line is `<p class="page-meta" data-topic-deck>` with the breach
   deck line's link text, alone on its line right after the page's
   `page-meta` line at the top of `<main>`. `--stamp` and `--record` write it
@@ -488,7 +490,9 @@ load, and a picture of one colour is refused as blank. The hero illustration,
 which article pages hide, is shown for its screenshot on a panel the colour of
 the cover. PNGs are cached in `tools/decks/topics/build/figures/<slug>/`
 under the hash of their SVG markup, so an unchanged figure is never rendered
-again; delete that directory to render everything afresh.
+again. The hero's key also covers `style.css` and the CSS that reveals it,
+because the stylesheet draws the hero as well. Delete that directory to render
+everything afresh.
 
 - A `figure` slide shows its heading, its prose, then the picture on a white
   panel, scaled to fit with its aspect ratio kept and never past 1.5 image
