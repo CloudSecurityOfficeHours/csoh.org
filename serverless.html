@@ -117,7 +117,7 @@
           "name": "Should I write everything as serverless functions?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. Functions are great for event-driven, intermittent, mostly stateless workloads that finish in under 15 minutes. They get expensive at high sustained throughput, awkward for long-running work, and lock you to one cloud's event-source wiring. The \"rebuild everything as Lambdas\" pattern from 2018 burned a lot of teams. Most have since migrated steady-state services back to containers and kept serverless for the parts where it actually fits."
+            "text": "No. Functions are great for event-driven, intermittent, mostly stateless workloads that finish well inside the provider's timeout (30 minutes on Lambda). They get expensive at high sustained throughput, awkward for long-running work, and lock you to one cloud's event-source wiring. The \"rebuild everything as Lambdas\" pattern from 2018 burned a lot of teams. Most have since migrated steady-state services back to containers and kept serverless for the parts where it actually fits."
           }
         },
         {
@@ -468,7 +468,7 @@
                 <li><strong>An event configuration.</strong> Declaring what causes the function to run. HTTP routes via an API gateway, queue messages, blob/object events, scheduled timers, database streams, message-bus events, identity events.</li>
                 <li><strong>An execution role.</strong> The cloud identity the function assumes when it runs. Permissions for whatever services the code needs to call (read a row from DynamoDB, write to S3, call SQS, etc.).</li>
             </ol>
-            <p>When an event arrives, the platform allocates an isolated execution environment (a Firecracker micro-VM on AWS, and equivalents on Azure and GCP), copies your code in, runs it for at most a few minutes (varies by provider; Lambda's default cap is 15 minutes per invocation), and then keeps the environment so later invocations can reuse it, until the platform discards it. From your side: no servers visible, no nodes to patch, no operating system to maintain. The platform handles all of that.</p>
+            <p>When an event arrives, the platform allocates an isolated execution environment (a Firecracker micro-VM on AWS, and equivalents on Azure and GCP), copies your code in, runs it for a capped time (varies by provider; Lambda defaults to 3 seconds and allows up to 30 minutes per invocation), and then keeps the environment so later invocations can reuse it, until the platform discards it. From your side: no servers visible, no nodes to patch, no operating system to maintain. The platform handles all of that.</p>
             <p>The <em>serverless</em> name is a marketing term; there are obviously servers underneath. The accurate framing is <strong>functions as a service</strong>: the unit of deployment is a function, the unit of billing is the millisecond of execution, and the platform owns everything between your code and the silicon.</p>
         </section>
 
@@ -527,7 +527,7 @@
                         <tr>
                             <th scope="row">Long-running work</th>
                             <td>-</td>
-                            <td>Hard caps: Lambda 15 min, Cloud Run functions 60 min (HTTP), Azure Functions Premium 60 min default. Work that exceeds these doesn't fit.</td>
+                            <td>Hard caps: Lambda 30 min, Cloud Run functions 60 min (HTTP), Azure Functions Consumption 10 min. Work that exceeds these doesn't fit.</td>
                         </tr>
                         <tr>
                             <th scope="row">Stateful work</th>
@@ -794,8 +794,8 @@
                     <tbody>
                         <tr>
                             <th scope="row">Max execution time</th>
-                            <td>15 min</td>
-                            <td>5 min (Consumption) / unlimited (Premium &amp; Dedicated)</td>
+                            <td>30 min</td>
+                            <td>10 min (Consumption) / no maximum (Flex Consumption, Premium &amp; Dedicated)</td>
                             <td>60 min (HTTP)</td>
                         </tr>
                         <tr>
@@ -855,7 +855,7 @@
                     </tbody>
                 </table>
             </div>
-            <p>The three converge over time as each picks up the others' best ideas. The differences worth caring about: max execution time (15 min cap on Lambda is sometimes a deal-breaker), VPC attach behavior (Lambda's Hyperplane is the cleanest of the three), and how secrets are referenced (Azure's Key Vault reference syntax is the most ergonomic).</p>
+            <p>The three converge over time as each picks up the others' best ideas. The differences worth caring about: max execution time (30 min cap on Lambda is sometimes a deal-breaker), VPC attach behavior (Lambda's Hyperplane is the cleanest of the three), and how secrets are referenced (Azure's Key Vault reference syntax is the most ergonomic).</p>
         </section>
 
         <section id="hardening">
@@ -937,7 +937,7 @@
             <p>Functions-as-a-service is the specific form this page covers: Lambda, Azure Functions, Cloud Run functions. <em>Serverless</em> is the marketing umbrella that also includes serverless containers (Cloud Run, <a class="glossary-link" href="glossary.html#term-ecs">Fargate</a>, Container Apps), serverless databases (DynamoDB on-demand, Aurora Serverless, Cloud Spanner), and a growing list of "no infrastructure to manage" services. This page is FaaS-specific; the <a href="containers.html">Containers page</a> covers the serverless-container variants.</p>
 
             <h3>Should I write everything as serverless functions?</h3>
-            <p>No. Functions are great for event-driven, intermittent, mostly stateless workloads that finish in under 15 minutes. They get expensive at high sustained throughput, awkward for long-running work, and lock you to one cloud's event-source wiring. The "rebuild everything as Lambdas" pattern from 2018 burned a lot of teams. Most have since migrated steady-state services back to containers and kept serverless for the parts where it actually fits.</p>
+            <p>No. Functions are great for event-driven, intermittent, mostly stateless workloads that finish well inside the provider's timeout (30 minutes on Lambda). They get expensive at high sustained throughput, awkward for long-running work, and lock you to one cloud's event-source wiring. The "rebuild everything as Lambdas" pattern from 2018 burned a lot of teams. Most have since migrated steady-state services back to containers and kept serverless for the parts where it actually fits.</p>
 
             <h3>How is cold-start security-relevant?</h3>
             <p>Two ways. First, every cold start re-loads all dependencies, which means a compromised dependency activates on every cold start (not just at deploy). Second, init-time code paths (loading secrets, opening connections) run differently from steady-state warm code paths, so bugs that only happen during init can be harder to catch.</p>
