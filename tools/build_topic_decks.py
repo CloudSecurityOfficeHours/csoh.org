@@ -102,7 +102,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build_breach_decks as bbd  # noqa: E402
 from build_breach_decks import OutlineError, _capture, _plant, _raises, _rooted, _run_cases  # noqa: E402
-from build_howto_decks import is_contiguous_run  # noqa: E402
+from build_howto_decks import is_contiguous_run, preview_html  # noqa: E402
 
 # Carded on topics.html, but reference pages rather than teaching topics.
 EXCLUDED = frozenset({"glossary.html", "faq.html", "vendor-landscape.html"})
@@ -659,24 +659,6 @@ def extract(slug: str, only: list[str] | None = None) -> str:
 # ---------------------------------------------------------------------------
 # The deck line: right after the page-meta line at the top of <main>.
 # ---------------------------------------------------------------------------
-
-
-def preview_html(pres_id: str, attr: str, title: str) -> str:
-    """The closed slide preview --stamp writes on a topic page and on its
-    topics.html card, carrying attr. Its iframe names Google's viewer in
-    data-src and has no src: with scripts off a browser loads every iframe
-    at page load, closed panel and loading="lazy" or not. main.js copies
-    data-src into src when the panel opens, so nothing loads from Google
-    until a reader opens it. With scripts off, noscript.css hides the empty
-    frame and the open panel shows a link to the same viewer instead."""
-    src = f"https://docs.google.com/presentation/d/{pres_id}/embed"
-    ext = 'target="_blank" rel="noopener noreferrer"'
-    return (
-        f'<details class="deck-preview" {attr}><summary>Preview the slides</summary>'
-        f'<div class="deck-frame"><iframe data-src="{src}" title="{title}" allowfullscreen></iframe></div>'
-        f'<noscript><p class="deck-preview-link"><a href="{src}" {ext}>Open the slides in Google Slides</a> '
-        "(the preview here needs JavaScript).</p></noscript></details>"
-    )
 
 
 def preview_line_html(pres_id: str, indent: str) -> str:

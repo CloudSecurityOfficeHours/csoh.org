@@ -56,6 +56,7 @@ import re
 import sys
 import tempfile
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -517,6 +518,229 @@ def link_findings(slug: str, html: str, mapping: dict) -> list[str]:
     return findings
 
 
+
+# ---------------------------------------------------------------------------
+# Card hubs: a page of cards, one per page that can have a deck, where each
+# card whose page has a published deck ends with the deck's links and a
+# closed slide preview. The guides hub (cloud-security-how-to.html) is one;
+# build_breach_decks.py declares the breach timeline as another.
+# ---------------------------------------------------------------------------
+
+SLIDES_LINK = "docs.google.com/presentation"
+
+
+def preview_html(pres_id: str, attr: str, title: str) -> str:
+    """A closed slide preview carrying attr, as --stamp writes it on a topic
+    page, on a topics.html card and on a card hub's card. Its iframe names
+    Google's viewer in data-src and has no src: with scripts off a browser
+    loads every iframe at page load, closed panel and loading="lazy" or not.
+    main.js copies data-src into src when the panel opens, so nothing loads
+    from Google until a reader opens it. With scripts off, noscript.css
+    hides the empty frame and the open panel shows a link to the same viewer
+    instead."""
+    src = f"https://docs.google.com/presentation/d/{pres_id}/embed"
+    ext = 'target="_blank" rel="noopener noreferrer"'
+    return (
+        f'<details class="deck-preview" {attr}><summary>Preview the slides</summary>'
+        f'<div class="deck-frame"><iframe data-src="{src}" title="{title}" allowfullscreen></iframe></div>'
+        f'<noscript><p class="deck-preview-link"><a href="{src}" {ext}>Open the slides in Google Slides</a> '
+        "(the preview here needs JavaScript).</p></noscript></details>"
+    )
+
+
+@dataclass
+class _HubCard:
+    start: int
+    end: int
+    slug: str
+    name: str
+    ind: str
+    head: str  # the opening line and every inner line but the strip
+    tail: str  # the closing line
+    decked: bool | None  # None: neither a plain card nor a decked one
+
+
+def _first_part(name: str) -> str:
+    return name
+
+
+@dataclass(frozen=True)
+class CardHub:
+    """A hub page whose cards --stamp decks. A card opens with a line holding
+    only its <tag class="card_class" ...> and ends at the first line closing
+    tag at the same indent, so nothing read from one card can run into the
+    next. A card is read when slug_re finds the page it is for; others are
+    left alone. A decked card's last two inner lines are the strip: a
+    .deck-actions line and a closed .deck-preview, both carrying attr."""
+
+    page: str  # the hub, relative to the repository root
+    attr: str
+    tag: str
+    card_class: str
+    slug_re: re.Pattern[str]  # group "slug", searched in the card's body
+    name_re: re.Pattern[str]  # group "name", the card's title
+    noun: str  # what a card is for, in messages: "guide", "kill chain"
+    short_name: Callable[[str], str] = _first_part  # the name the preview's title uses
+
+    def _start_re(self) -> re.Pattern[str]:
+        return re.compile(
+            r"^(?P<ind>[ \t]*)<" + self.tag + r'\b[^>\n]*\bclass="' + re.escape(self.card_class)
+            + r'"[^>\n]*>[ \t]*\n', re.M)
+
+    def _strip(self, pres_id: str, ind: str, name: str) -> str:
+        base = f"https://docs.google.com/presentation/d/{pres_id}"
+        ext = 'target="_blank" rel="noopener noreferrer"'
+        title = self.short_name(name).replace('"', "&quot;")
+        return (
+            f'{ind}    <p class="deck-actions" {self.attr}><strong>Slides:</strong> '
+            f'<a href="{base}/export/pdf" {ext}>PDF</a> <a href="{base}/copy" {ext}>Editable copy</a></p>\n'
+            f'{ind}    {preview_html(pres_id, self.attr, f"Preview of the {title} slides")}\n'
+        )
+
+    def _cards(self, html: str) -> list[_HubCard]:
+        cards: list[_HubCard] = []
+        pos = 0
+        strip_re = re.compile(
+            r"[ \t]*<p class=\"deck-actions\" " + self.attr + r">(?:(?!</p>)[^\n])*</p>\n"
+            r"[ \t]*<details class=\"deck-preview\" " + self.attr + r">(?:(?!</details>)[^\n])*</details>\n")
+        for m in self._start_re().finditer(html):
+            if m.start() < pos:
+                continue
+            ind = m.group("ind")
+            close = re.compile(r"^" + re.escape(ind) + "</" + self.tag + r">[ \t]*(?:\n|\Z)", re.M).search(html, m.end())
+            body = html[m.end(): close.start() if close else len(html)]
+            slug = self.slug_re.search(body)
+            if slug is None:
+                continue
+            pos = close.end() if close else len(html)
+            named = self.name_re.search(body)
+            # Tags stripped and whitespace collapsed; entities stay as written,
+            # because the name goes back into an attribute.
+            name = " ".join(re.sub(r"<[^>]+>", "", named.group("name")).split()) if named else ""
+            lines = body.splitlines(keepends=True)
+            marked = [i for i, ln in enumerate(lines) if self.attr in ln]
+            decked: bool | None = None
+            if close is None:
+                pass
+            elif not marked:
+                decked = False
+            elif (marked == [len(lines) - 2, len(lines) - 1]
+                  and lines[-2].startswith(ind + "    <") and lines[-1].startswith(ind + "    <")
+                  and strip_re.fullmatch(lines[-2] + lines[-1])):
+                decked = True
+            keep = lines[:-2] if decked else lines
+            cards.append(_HubCard(m.start(), pos, slug.group("slug"), name, ind,
+                                  m.group(0) + "".join(keep), close.group(0) if close else "", decked))
+        return cards
+
+    def _card_html(self, c: _HubCard, pres_id: str | None) -> str:
+        """The card as it is written for pres_id: decked, or plain when None."""
+        return c.head + (self._strip(pres_id, c.ind, c.name) if pres_id else "") + c.tail
+
+    def _stray(self, html: str, cards: list[_HubCard]) -> bool:
+        """The deck attribute anywhere but inside a card. A card of neither
+        form is reported as itself, so its own lines do not count."""
+        rest, pos = [], 0
+        for c in cards:
+            rest.append(html[pos: c.start])
+            pos = c.end
+        rest.append(html[pos:])
+        return self.attr in "".join(rest)
+
+    def stamp(self, html: str, mapping: dict) -> str:
+        """The hub with every card whose page is in the mapping (with a
+        well-formed id) decked, and every other card plain. A card of
+        neither form, or the deck attribute outside a card, is an error:
+        rewriting around it would guess at what to keep."""
+        cards = self._cards(html)
+        for c in cards:
+            if c.decked is None:
+                raise ValueError(f"{self.page}: the card for {c.slug} ({c.name!r}) is neither a plain card "
+                                 "nor a decked card; fix its markup by hand")
+        if self._stray(html, cards):
+            raise ValueError(f"{self.page}: {self.attr} appears outside a {self.noun} card")
+        out, pos = [], 0
+        for c in cards:
+            out += [html[pos: c.start], self._card_html(c, _entry_id(mapping.get(c.slug)))]
+            pos = c.end
+        out.append(html[pos:])
+        return "".join(out)
+
+    def findings(self, html: str, mapping: dict) -> list[str]:
+        """Where the hub disagrees with the mapping: one finding per card
+        that differs from what stamp writes, each published page with no
+        card to carry its deck, and any Google Slides link outside a strip."""
+        found: list[str] = []
+        cards = self._cards(html)
+        for c in cards:
+            if c.decked is None:
+                found.append(f"{self.page}: the card for {c.slug} ({c.name!r}) is malformed: neither a plain "
+                             "card nor a decked card, so its deck markup cannot be read")
+                continue
+            want = _entry_id(mapping.get(c.slug))
+            if html[c.start: c.end] == self._card_html(c, want):
+                continue
+            if want and not c.decked:
+                found.append(f"{self.page}: the card for {c.slug} has no deck; its deck is published")
+            elif want:
+                found.append(f"{self.page}: the card for {c.slug} has the wrong deck markup for its published id")
+            else:
+                found.append(f"{self.page}: the card for {c.slug} carries a deck, but its deck is not published")
+        on_hub = {c.slug for c in cards}
+        for slug in sorted(mapping):
+            if _entry_id(mapping[slug]) and slug not in on_hub:
+                found.append(f"{self.page}: {slug} is published but has no card on the hub (one "
+                             f'<{self.tag} class="{self.card_class}"> per {self.noun})')
+        if self._stray(html, cards):
+            found.append(f"{self.page}: {self.attr} appears outside a {self.noun} card")
+        outside = "\n".join(ln for ln in html.splitlines() if self.attr not in ln)
+        if SLIDES_LINK in outside:
+            found.append(f"{self.page}: a {SLIDES_LINK} link sits outside a {self.noun} card's deck strip")
+        return found
+
+    def _read(self, root: Path) -> str:
+        try:
+            return (root / self.page).read_text(encoding="utf-8")
+        except OSError as e:
+            raise ValueError(f"{self.page}: cannot be read ({e.strerror or e})") from None
+
+    def plan(self, root: Path, mapping: dict) -> tuple[dict[Path, str], list[str]]:
+        """The hub's new text when --stamp would change it, or why it cannot
+        be stamped. Nothing is written."""
+        try:
+            html = self._read(root)
+            new = self.stamp(html, mapping)
+        except ValueError as e:
+            return {}, [str(e)]
+        return ({root / self.page: new} if new != html else {}), []
+
+    def check(self, root: Path, mapping: dict) -> list[str]:
+        try:
+            return self.findings(self._read(root), mapping)
+        except ValueError as e:
+            return [str(e)]
+
+
+HOWTO_HUB = CardHub(
+    page="cloud-security-how-to.html",
+    attr="data-howto-hub-deck",
+    tag="div",
+    card_class="resource-card",
+    slug_re=re.compile(r'<h3\b[^>]*>\s*<a\b[^>]*\bhref="howto/(?P<slug>[a-z0-9][a-z0-9-]*)\.html"'),
+    name_re=re.compile(r"<h3\b[^>]*>(?P<name>.*?)</h3\s*>", re.S),
+    noun="guide",
+)
+HUB = HOWTO_HUB.page
+HUB_DECK_ATTR = HOWTO_HUB.attr
+
+
+def stamp_hub(html: str, mapping: dict) -> str:
+    return HOWTO_HUB.stamp(html, mapping)
+
+
+def hub_findings(html: str, mapping: dict) -> list[str]:
+    return HOWTO_HUB.findings(html, mapping)
+
 def read_mapping() -> tuple[dict, str | None]:
     """The mapping and None, or {} and why it cannot be read. A missing file
     is an empty mapping."""
@@ -660,6 +884,7 @@ def check_all() -> int:
     if not map_problem:
         for page in pages:
             findings += link_findings(page.stem, page.read_text(encoding="utf-8"), mapping)
+        findings += HOWTO_HUB.check(ROOT, mapping)
     for f in findings:
         print(f)
     print(
@@ -735,8 +960,8 @@ def status_report() -> int:
 
 
 def plan_stamps(mapping: dict) -> tuple[dict[Path, str], list[str]]:
-    """The new text of every guide page --stamp would change, and every page
-    it cannot stamp. Nothing is written."""
+    """The new text of every guide page and of the guides hub that --stamp
+    would change, and every one it cannot stamp. Nothing is written."""
     changes: dict[Path, str] = {}
     errors: list[str] = []
     for page in guide_pages():
@@ -755,6 +980,9 @@ def plan_stamps(mapping: dict) -> tuple[dict[Path, str], list[str]]:
             continue
         if new != html:
             changes[page] = new
+    hub_changes, hub_errors = HOWTO_HUB.plan(ROOT, mapping)
+    changes.update(hub_changes)
+    errors += hub_errors
     return changes, errors
 
 
@@ -1555,9 +1783,29 @@ def _outline(slug: str, slides: int = 10) -> str:
     return f"title: T\nguide: howto/{slug}.html\npromise: P.\n\n{body}"
 
 
+def _hub_card(slug: str, name: str) -> str:
+    """One guide card as cloud-security-how-to.html writes it, without a deck."""
+    return (
+        '                <div class="resource-card" data-icon="\N{TELESCOPE}">\n'
+        f'                    <h3><a href="howto/{slug}.html">{name}</a></h3>\n'
+        f"                    <p>Learn {name} from zero.</p>\n"
+        '                    <div class="resource-tags"><span class="tag">Beginner</span></div>\n'
+        "                </div>\n"
+    )
+
+
+def _hub(*cards: str) -> str:
+    return (
+        "<html><body><main>\n            <div class=\"resource-grid\">\n"
+        + "".join(cards)
+        + "            </div>\n</main></body></html>\n"
+    )
+
+
 def _tree(root: Path, outlines: dict[str, str], pages: dict[str, str], mapping: dict | None) -> Path:
-    """A scratch repository: outlines in tools/decks/, pages in howto/, and
-    published.json when mapping is given."""
+    """A scratch repository: outlines in tools/decks/, pages in howto/, a
+    guides hub with one plain card per page, and published.json when mapping
+    is given."""
     decks = root / "tools" / "decks"
     decks.mkdir(parents=True)
     (root / "howto").mkdir()
@@ -1565,6 +1813,8 @@ def _tree(root: Path, outlines: dict[str, str], pages: dict[str, str], mapping: 
         (decks / f"{slug}.deck").write_text(text, encoding="utf-8")
     for slug, html in pages.items():
         (root / "howto" / f"{slug}.html").write_text(html, encoding="utf-8")
+    hub_cards = "".join(_hub_card(slug, f"Guide {slug}") for slug in pages)
+    (root / "cloud-security-how-to.html").write_text(_hub(hub_cards), encoding="utf-8")
     if mapping is not None:
         (decks / "published.json").write_text(
             json.dumps(mapping, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -1590,13 +1840,13 @@ def _case_stamp_all_or_nothing(tmp: Path) -> None:
     assert rc == 1 and "nothing written" in out, out
     assert "howto/aa.html" in out and "howto/cc.html" in out, out
     assert _snapshot(tmp) == before, "a refused --stamp wrote files"
-    # Control: with every page stampable, all are stamped, and a second run
-    # changes nothing.
+    # Control: with every page stampable, all are stamped, the hub with them,
+    # and a second run changes nothing.
     for s in ("aa", "cc"):
         (tmp / "howto" / f"{s}.html").write_text(INFO_PAGE, encoding="utf-8")
     with _rooted(tmp):
         rc, out = _capture(stamp_all)
-        assert rc == 0 and out.count("stamped") == 3, out
+        assert rc == 0 and out.count("stamped") == 4 and "stamped cloud-security-how-to.html" in out, out
         once = _snapshot(tmp)
         rc, out = _capture(stamp_all)
         assert rc == 0 and out == "" and _snapshot(tmp) == once, out
@@ -1624,6 +1874,169 @@ def _case_record_refusals(tmp: Path) -> None:
     m = json.loads((tmp / "tools/decks/published.json").read_text(encoding="utf-8"))
     assert m["bb"]["id"] == ID_A and _is_iso_date(m["bb"]["published"]), m
     assert deck_line_html(ID_A) in (tmp / "howto/bb.html").read_text(encoding="utf-8")
+
+
+def _strip_lines(html: str) -> list[str]:
+    return [ln for ln in html.splitlines() if "data-howto-hub-deck" in ln]
+
+
+def _case_hub_stamp_decks_mapped_cards(tmp: Path) -> None:
+    """A guide card on the hub whose guide is published ends with the deck's
+    links and a closed preview; every other card, and everything outside the
+    cards, is left exactly as it was."""
+    plain = _hub(_hub_card("kusto-kql", "Kusto Query Language (KQL)"), _hub_card("splunk-spl", "Splunk SPL &amp; more"))
+    out = stamp_hub(plain, {"kusto-kql": {"id": ID_A}})
+    strip = _strip_lines(out)
+    assert len(strip) == 2, out
+    # The id appears in the PDF and copy links, the preview's data-src and
+    # its no-script link; the preview starts closed.
+    assert out.count(ID_A) == 4 and 'title="Preview of the Kusto Query Language (KQL) slides"' in out, out
+    assert strip[0].startswith('                    <p class="deck-actions" data-howto-hub-deck><strong>Slides:</strong> ')
+    assert strip[1].startswith('                    <details class="deck-preview" data-howto-hub-deck><summary>')
+    assert " open" not in out
+    # The strip is the card's last two lines, and taking it out gives back
+    # the plain hub byte for byte.
+    lines = out.splitlines()
+    i = lines.index(strip[0])
+    assert lines[i + 1] == strip[1] and lines[i + 2] == "                </div>", lines[i - 3: i + 3]
+    assert "\n".join(ln for ln in lines if ln not in strip) + "\n" == plain
+    # The h3 keeps its entities as written.
+    both = stamp_hub(plain, {"kusto-kql": {"id": ID_A}, "splunk-spl": {"id": ID_B}})
+    assert 'title="Preview of the Splunk SPL &amp; more slides"' in both, both
+    # An entry with no well-formed id decks nothing.
+    assert stamp_hub(plain, {"kusto-kql": {"id": "short"}}) == plain
+
+
+def _case_hub_stamp_reverses_and_is_idempotent(tmp: Path) -> None:
+    plain = _hub(_hub_card("kusto-kql", "KQL"), _hub_card("splunk-spl", "SPL"))
+    once = stamp_hub(plain, {"kusto-kql": {"id": ID_A}})
+    assert once != plain and stamp_hub(once, {"kusto-kql": {"id": ID_A}}) == once
+    assert stamp_hub(once, {}) == plain
+    swapped = stamp_hub(once, {"kusto-kql": {"id": ID_B}})
+    assert swapped.count(ID_B) == 4 and ID_A not in swapped, swapped
+    # A card with more attributes on its box survives the round trip.
+    odd = plain.replace('<div class="resource-card" data-icon=', '<div class="resource-card" data-y="2" data-icon=', 1)
+    assert odd != plain and stamp_hub(stamp_hub(odd, {"kusto-kql": {"id": ID_A}}), {}) == odd
+    # A card that is not a guide card is never touched.
+    other = plain.replace("</main>", _hub_card("x", "X").replace('href="howto/x.html"', 'href="news.html"') + "</main>")
+    assert stamp_hub(other, {"x": {"id": ID_A}, "news": {"id": ID_A}}) == other
+    # The attribute outside a decked card is refused, and so is a card of neither form.
+    stray = plain.replace("<main>", '<main>\n<p class="x" data-howto-hub-deck>x</p>', 1)
+    broken = once.replace("</details>", "", 1)
+    moved = once.replace("                    <div class=\"resource-tags\">", "                    <div class=\"resource-tags\">"
+                         ).replace(_strip_lines(once)[1] + "\n", "", 1).replace(
+                         "                    <p>Learn KQL", _strip_lines(once)[1] + "\n                    <p>Learn KQL", 1)
+    for html, mapping, needle in ((stray, {}, "data-howto-hub-deck"),
+                                  (broken, {"kusto-kql": {"id": ID_A}}, "kusto-kql"),
+                                  (moved, {"kusto-kql": {"id": ID_A}}, "kusto-kql")):
+        try:
+            stamp_hub(html, mapping)
+        except ValueError as e:
+            assert needle in str(e), e
+        else:
+            raise AssertionError(f"stamp_hub accepted a hub with {needle}")
+
+
+def _case_hub_findings(tmp: Path) -> None:
+    plain = _hub(_hub_card("kusto-kql", "KQL"), _hub_card("splunk-spl", "SPL"))
+    mapping = {"kusto-kql": {"id": ID_A}}
+    good = stamp_hub(plain, mapping)
+    assert hub_findings(good, mapping) == [] and hub_findings(plain, {}) == []
+
+    def only(found: list[str], *needles: str) -> None:
+        assert len(found) == 1 and all(n in found[0] for n in needles), found
+
+    only(hub_findings(plain, mapping), "cloud-security-how-to.html", "kusto-kql", "no deck")
+    only(hub_findings(good.replace(ID_A, ID_B, 1), mapping), "kusto-kql", "wrong")
+    only(hub_findings(good, {"kusto-kql": {"id": ID_A}, "splunk-spl": {"id": ID_B}}), "splunk-spl", "no deck")
+    only(hub_findings(good, {}), "kusto-kql", "not published")
+    only(hub_findings(good.replace("Editable copy</a></p>\n", "Editable copy</a>\n", 1), mapping), "kusto-kql", "malformed")
+    link = f"https://docs.google.com/presentation/d/{ID_B}/copy"
+    only(hub_findings(good.replace("<p>Learn SPL", f'<p><a href="{link}">Slides</a> Learn SPL'), mapping),
+         "docs.google.com/presentation")
+    # A published guide with no card on the hub: the card was dropped, or no
+    # longer reads as a guide card, so nothing would show its deck.
+    only(hub_findings(good, {**mapping, "falco-rules": {"id": ID_B}}), "falco-rules", "no card")
+    gone = good.replace('<div class="resource-card" data-icon=', '<div class="resource-card resource-card--x" data-icon=')
+    found = hub_findings(gone, mapping)
+    assert any("kusto-kql" in f and "no card" in f for f in found), found
+    # Control: the strip's own links are not strays, and a clean hub stays clean.
+    assert hub_findings(good, mapping) == []
+
+
+def _case_hub_wired_into_stamp_and_check(tmp: Path) -> None:
+    """--record and --stamp rewrite the hub with the guide pages, --check
+    reads it, and a hub --stamp cannot read stops the run before anything is
+    written."""
+    pages = {"aa": INFO_PAGE, "bb": INFO_PAGE}
+    _tree(tmp, {s: _outline(s) for s in pages}, pages, {})
+    hub, mpath = tmp / "cloud-security-how-to.html", tmp / "tools/decks/published.json"
+    plain_hub = hub.read_text(encoding="utf-8")
+    with _rooted(tmp):
+        rc, out = _capture(record, "aa", ID_A)
+        assert rc == 0 and "stamped cloud-security-how-to.html" in out, out
+        decked = hub.read_text(encoding="utf-8")
+        assert decked == stamp_hub(plain_hub, {"aa": {"id": ID_A}}) and decked != plain_hub, decked
+        rc, out = _capture(check_all)
+        assert "cloud-security-how-to.html" not in out, out
+        # A hub out of step with the mapping fails --check, naming the hub.
+        hub.write_text(_plant(decked, f"d/{ID_A}/embed", f"d/{ID_B}/embed"), encoding="utf-8")
+        rc, out = _capture(check_all)
+        assert rc == 1 and "cloud-security-how-to.html" in out and "aa" in out, out
+        # A malformed hub stops --stamp before it writes the hub or any page.
+        m = json.loads(mpath.read_text(encoding="utf-8"))
+        m["aa"]["id"] = ID_B
+        mpath.write_text(json.dumps(m, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        broken = _plant(decked, "</summary>", "</summary>\n")
+        hub.write_text(broken, encoding="utf-8")
+        before = _snapshot(tmp)
+        rc, out = _capture(stamp_all)
+        assert rc == 1 and "cloud-security-how-to.html" in out and _snapshot(tmp) == before, out
+        # So does a missing hub, and --check names it too.
+        hub.unlink()
+        rc, out = _capture(stamp_all)
+        assert rc == 1 and "cloud-security-how-to.html" in out, out
+        rc, out = _capture(check_all)
+        assert rc == 1 and "cloud-security-how-to.html" in out, out
+        # Control: with the hub mended, the same --stamp moves page and hub to the new id.
+        hub.write_text(decked, encoding="utf-8")
+        rc, out = _capture(stamp_all)
+        assert rc == 0, out
+        page = (tmp / "howto/aa.html").read_text(encoding="utf-8")
+        assert ID_B in page and ID_A not in page, page
+        assert hub.read_text(encoding="utf-8") == stamp_hub(plain_hub, {"aa": {"id": ID_B}})
+
+
+def _case_crosslink_skips_hub_deck_lines(tmp: Path) -> None:
+    """The glossary cross-linker never links inside the hub strip, so
+    --check keeps matching what --stamp wrote, while the same term in the
+    hub's prose still takes its link."""
+    import crosslink_pages as cp
+
+    key = "Slides"
+    patterns, slugs = cp.build_term_regexes([key]), {key.lower(): "term-slides"}
+    link = '<a class="glossary-link" href="glossary.html#term-slides">Slides</a>'
+    hub = stamp_hub(_hub(_hub_card("kusto-kql", "KQL")), {"kusto-kql": {"id": ID_A}})
+    hub = hub.replace("</main>", "<p>Read the Slides first.</p>\n</main>")
+    strip = _strip_lines(hub)
+    assert "Slides" in strip[0], strip
+    page = tmp / "x.html"
+    old = cp.REPO_ROOT
+    cp.REPO_ROOT = tmp
+    try:
+        page.write_text(hub.replace("Preview the slides", "Preview the Slides"), encoding="utf-8")
+        cp.crosslink_page(page, patterns, slugs)
+        once = page.read_text(encoding="utf-8")
+        lines = once.splitlines()
+        assert strip[0] in lines, once
+        assert not any(link in ln for ln in lines if "data-howto-hub-deck" in ln), once
+        assert once.count(link) == 1 and link in next(ln for ln in lines if "Read the" in ln), once
+        # Control: without its attribute the strip takes the link.
+        page.write_text(hub.replace(" data-howto-hub-deck>", ">", 1), encoding="utf-8")
+        cp.crosslink_page(page, patterns, slugs)
+        assert link in next(ln for ln in page.read_text(encoding="utf-8").splitlines() if "deck-actions" in ln)
+    finally:
+        cp.REPO_ROOT = old
 
 
 def _case_paths_from_any_cwd(tmp: Path) -> None:
@@ -1848,6 +2261,11 @@ CASES: list = [
     ("mapping_findings", _case_mapping_findings),
     ("stamp_all_or_nothing", _case_stamp_all_or_nothing),
     ("record_refusals", _case_record_refusals),
+    ("hub_stamp_decks_mapped_cards", _case_hub_stamp_decks_mapped_cards),
+    ("hub_stamp_reverses_and_is_idempotent", _case_hub_stamp_reverses_and_is_idempotent),
+    ("hub_findings", _case_hub_findings),
+    ("hub_wired_into_stamp_and_check", _case_hub_wired_into_stamp_and_check),
+    ("crosslink_skips_hub_deck_lines", _case_crosslink_skips_hub_deck_lines),
     ("paths_from_any_cwd", _case_paths_from_any_cwd),
     ("empty_tree_refused", _case_empty_tree_refused),
     ("stale_report", _case_stale_report),
