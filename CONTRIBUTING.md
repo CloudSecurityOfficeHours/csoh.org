@@ -605,7 +605,7 @@ Before you submit, make sure:
   | `check-url-safety.yml` | Shortener domains, lookalike hostnames, throwaway TLDs, raw-IP hosts (redirects resolved first) | Yes |
   | `check-broken-links.yml` | lychee crawl of every link | No - it comments, but link rot never blocks a merge |
 
-  See [DEVELOPMENT.md#linting](DEVELOPMENT.md#linting-run-by-lintyml-on-every-pushpr) for the local commands.
+  See [DEVELOPMENT.md#linting](DEVELOPMENT.md#linting-run-by-lintyml-on-every-pr-and-on-push-to-main) for the local commands.
 
 
 ### What happens after your PR merges

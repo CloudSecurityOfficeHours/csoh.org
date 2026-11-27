@@ -169,7 +169,7 @@ fails validation.
 - `search-index.json` - site-wide search index, lazy-loaded by `search-init.js`
 - `resources-index.json` - the resources hub's search index and `#card-` link forwarding (`resources-hub.js`)
 
-The same four-file allowlist is enforced a second time in `tools/site-publish.filter`, which decides what is uploaded to the object-storage origins at all. Static object hosting has no request-time access rules, so on AWS and Azure the rule is "never upload it" rather than "return 403".
+The same five-file allowlist is enforced a second time in `tools/site-publish.filter`, which decides what is uploaded to the object-storage origins at all. Static object hosting has no request-time access rules, so on AWS and Azure the rule is "never upload it" rather than "return 403".
 
 Directory listing is disabled globally (`Options -Indexes` / `autoindex off`).
 
