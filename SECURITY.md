@@ -72,8 +72,6 @@ Key points:
 - **No wildcards** - every external domain is explicitly listed (`docs.google.com`/`drive.google.com` are present only to allow the embedded Google Slides decks on `presentations.html`)
 - **`frame-ancestors 'none'`** - supersedes `X-Frame-Options` for modern browsers
 - **`object-src 'none'`** - blocks Flash, Java applets, and other plugin content
-- Only YouTube and Web Archive are allowed as iframe sources
-- Only YouTube thumbnail domains are allowed as external image sources
 - `csoh.goatcounter.com` is allowed in `img-src` + `connect-src` for cookieless, privacy-friendly analytics; the loader is self-hosted at `/vendor/goatcounter-count.js`, so `script-src` stays `'self'`
 - The CSP string is byte-identical in all three sources listed above (`rules.tf`, `nginx-security-headers.conf`, `cloudfront.tf`). Drift between the repo and the live edge is a CI failure, not a silent regression - see [Edge header drift is a CI gate](#edge-header-drift-is-a-ci-gate)
 
